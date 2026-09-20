@@ -1,0 +1,33 @@
+# Hooks for developing grip itself. Install with:
+#   pre-commit install --hook-type pre-commit --hook-type pre-push
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # grip dogfoods itself: contributors are quizzed before pushing.
+  - repo: local
+    hooks:
+      - id: grip
+        name: grip (quiz before push)
+        entry: grip hook pre-push
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        verbose: true

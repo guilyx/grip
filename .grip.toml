@@ -1,0 +1,3 @@
+# grip configuration for this repository. See https://guilyx.github.io/grip/configuration/
+passing_score = 70
+difficulty = "normal"

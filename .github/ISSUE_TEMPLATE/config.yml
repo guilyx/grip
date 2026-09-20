@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://guilyx.github.io/grip/
+    about: Installation, configuration and how grip works.
+  - name: Security report
+    url: https://github.com/guilyx/grip/security/advisories/new
+    about: Report a vulnerability privately.
