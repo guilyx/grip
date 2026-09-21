@@ -10,30 +10,9 @@ choose. Below the mark, nothing goes upstream.
 [![Python](https://img.shields.io/pypi/pyversions/grip-hook)](https://pypi.org/project/grip-hook/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
-```text
-╭─────────────────────────────── grip ───────────────────────────────╮
-│ 5 questions about your staged changes (pre-commit). Pass mark: 70/100 │
-│                                                                        │
-│ src/billing/refund.py                                                  │
-│ tests/test_refund.py                                                   │
-╰────────────────────── keep a grip on your code ──────────────────────╯
+![grip blocking a commit with lazy answers, then letting it through after real ones](docs/assets/demo.gif)
 
-Q1/5 (behaviour) What does refund() now do when the charge was already refunded?
-> It returns the existing refund instead of raising, so retries are idempotent.
-
-Q2/5 (edge case) Why is the currency check done before the amount comparison?
-> ...
-
-┏━━━┳━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ # ┃ Focus     ┃ Score ┃ Feedback                                           ┃
-┡━━━╇━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ 1 │ behaviour │ 20/20 │ Correct, and you named the idempotency motivation. │
-│ 2 │ edge case │ 12/20 │ Right order, but missed that mixed currencies ...  │
-...
-╭────────────────────────────────────────────╮
-│ Grip Score: 84/100  PASS (pass mark 70)    │
-╰────────────────────────────────────────────╯
-```
+<sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.webm). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
 
 ## Why
 

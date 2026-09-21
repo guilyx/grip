@@ -58,6 +58,13 @@ grip quiz --provider fake
 Templated questions and a length-based grader. It exists so you can try the flow, write
 tests, or demo grip without a network. Never use it as your real provider.
 
+Two environment variables shape it:
+
+| Variable | Effect |
+| --- | --- |
+| `GRIP_FAKE_SCRIPT` | Path to a JSON file with a summary, five questions, substring grading rules and verdicts. The demo recording uses `scripts/demo/scenario.json`. |
+| `GRIP_FAKE_DELAY` | Seconds to sleep per call, so the spinner is visible in recordings. |
+
 ## Writing your own
 
 Implement the `Provider` protocol (two methods) and register a factory in

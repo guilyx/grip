@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+from pathlib import Path
 from typing import Any
 
 import anthropic
@@ -57,6 +58,62 @@ def test_fake_provider_grading() -> None:
     ]
     sheet = provider.grade(DIFF, qs.questions, answers, Difficulty.NORMAL)
     assert [g.score for g in sheet.grades] == [0, 10, 20, 20, 0]
+
+
+SCRIPT = {
+    "summary": "Scripted summary.",
+    "questions": [
+        {
+            "question": f"q{i}",
+            "rubric": "r",
+            "focus": "f",
+            "rules": [
+                {"match": "Idempotent", "score": 20, "feedback": "full"},
+                {"match": "retry", "score": 10, "feedback": "half"},
+            ],
+            "default": {"score": 2, "feedback": "nope"},
+        }
+        for i in range(QUESTION_COUNT)
+    ],
+    "verdicts": [{"min": 0, "text": "low"}, {"min": 50, "text": "high"}],
+}
+
+
+def test_fake_provider_scripted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "script.json"
+    path.write_text(json.dumps(SCRIPT))
+    monkeypatch.setenv("GRIP_FAKE_SCRIPT", str(path))
+    monkeypatch.setenv("GRIP_FAKE_DELAY", "0")
+    provider = FakeProvider(Config(provider="fake"))
+    qs = provider.generate_questions(DIFF, Difficulty.NORMAL)
+    assert qs.summary == "Scripted summary."
+    assert [q.question for q in qs.questions] == [f"q{i}" for i in range(QUESTION_COUNT)]
+    answers = [
+        Answer(question_index=0, text="it is IDEMPOTENT now"),
+        Answer(question_index=1, text="on retry"),
+        Answer(question_index=2, text="idempotent retry"),  # first rule wins
+        Answer(question_index=3, text=""),
+    ]
+    sheet = provider.grade(DIFF, qs.questions, answers, Difficulty.NORMAL)
+    assert [g.score for g in sheet.grades] == [20, 10, 20, 2, 2]
+    assert [g.feedback for g in sheet.grades][:2] == ["full", "half"]
+    assert sheet.verdict == "high"
+    low = provider.grade(DIFF, qs.questions, [], Difficulty.NORMAL)
+    assert low.verdict == "low"
+
+
+def test_fake_provider_bad_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "script.json"
+    path.write_text('{"summary": "x", "questions": []}')
+    monkeypatch.setenv("GRIP_FAKE_SCRIPT", str(path))
+    with pytest.raises(ProviderError, match="GRIP_FAKE_SCRIPT"):
+        FakeProvider(Config(provider="fake"))
+    monkeypatch.setenv("GRIP_FAKE_SCRIPT", str(tmp_path / "missing.json"))
+    with pytest.raises(ProviderError):
+        FakeProvider(Config(provider="fake"))
+    monkeypatch.delenv("GRIP_FAKE_SCRIPT")
+    monkeypatch.setenv("GRIP_FAKE_DELAY", "not-a-number")
+    assert FakeProvider(Config(provider="fake")).delay == 0
 
 
 # --- OpenAI-compatible -----------------------------------------------------------------

@@ -4,10 +4,9 @@
 before you commit or push it. Five questions, a Grip Score out of 100, and a pass mark
 you choose. Below the mark, nothing goes upstream.
 
-```text
-Q1/5 (behaviour) What does refund() now do when the charge was already refunded?
-> It returns the existing refund instead of raising, so retries are idempotent.
-```
+![grip blocking a commit with lazy answers, then letting it through after real ones](assets/demo.gif)
+
+<sub>A commit blocked at 12/100, then accepted at 92/100. Recorded with the offline scripted provider.</sub>
 
 ## Why grip exists
 

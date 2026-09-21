@@ -151,8 +151,16 @@ def _run(
         return 0
     raise QuizFailed(
         f"Grip Score {outcome.report.score}/{MAX_SCORE} is below the pass mark of "
-        f"{cfg.passing_score}. Re-read your change and try again. Report: {saved}"
+        f"{cfg.passing_score}. Re-read your change and try again. Report: {_pretty_path(saved)}"
     )
+
+
+def _pretty_path(path: Path) -> str:
+    """Relative to the working directory when the path is inside it, else absolute."""
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
 
 
 @click.group(cls=_Group, context_settings={"help_option_names": ["-h", "--help"]})
