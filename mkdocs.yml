@@ -1,0 +1,93 @@
+site_name: grip
+site_description: Keep a grip on your code. A git hook that quizzes you on your diff before it goes upstream.
+site_url: https://guilyx.github.io/grip/
+repo_url: https://github.com/guilyx/grip
+repo_name: guilyx/grip
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Erwin L.
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - How it works: how-it-works.md
+  - Configuration: configuration.md
+  - Providers: providers.md
+  - Command line: cli.md
+  - FAQ: faq.md
+  - Contributing: contributing.md
+  - Code of conduct: CODE_OF_CONDUCT.md
+  - Changelog: changelog.md
+  - API reference:
+      - reference/index.md
+      - config: reference/config.md
+      - git: reference/git.md
+      - models: reference/models.md
+      - providers: reference/providers.md
+      - quiz: reference/quiz.md
+      - hooks: reference/hooks.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+
+watch:
+  - src
+  - README.md
+  - CHANGELOG.md

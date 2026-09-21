@@ -1,0 +1,31 @@
+# Hook definitions consumed by the pre-commit framework (https://pre-commit.com).
+#
+#   repos:
+#     - repo: https://github.com/guilyx/grip
+#       rev: v0.1.0
+#       hooks:
+#         - id: grip            # quiz before every push (recommended)
+#         # - id: grip-commit   # quiz before every commit
+#
+# Remember to run `pre-commit install --hook-type pre-push` for the push hook.
+- id: grip
+  name: grip (quiz before push)
+  description: Quiz yourself about the commits you are about to push.
+  entry: grip hook pre-push
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  verbose: true
+  minimum_pre_commit_version: "3.2.0"
+
+- id: grip-commit
+  name: grip (quiz before commit)
+  description: Quiz yourself about the changes you are about to commit.
+  entry: grip hook pre-commit
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  verbose: true
+  minimum_pre_commit_version: "3.2.0"
