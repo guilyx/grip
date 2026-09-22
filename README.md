@@ -6,8 +6,7 @@ choose. Below the mark, nothing goes upstream.
 
 [![CI](https://github.com/guilyx/grip/actions/workflows/ci.yml/badge.svg)](https://github.com/guilyx/grip/actions/workflows/ci.yml)
 [![Docs](https://github.com/guilyx/grip/actions/workflows/docs.yml/badge.svg)](https://guilyx.github.io/grip/)
-[![PyPI](https://img.shields.io/pypi/v/grip-hook)](https://pypi.org/project/grip-hook/)
-[![Python](https://img.shields.io/pypi/pyversions/grip-hook)](https://pypi.org/project/grip-hook/)
+[![Release](https://img.shields.io/github/v/release/guilyx/grip?sort=semver)](https://github.com/guilyx/grip/releases/latest)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
 ![grip blocking a commit with lazy answers, then letting it through after real ones](docs/assets/demo.gif)
@@ -24,11 +23,17 @@ a rubric it wrote from the diff.
 
 ## Install
 
-grip is a Python CLI. Install it once, globally:
+One command, no Python or package manager needed. It downloads the prebuilt binary for
+your OS and CPU from the [latest release](https://github.com/guilyx/grip/releases/latest),
+verifies its checksum, and puts `grip` (and a `git grip` alias) in `~/.local/bin`:
 
 ```bash
-pipx install grip-hook        # or: uv tool install grip-hook
+curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
 ```
+
+Pin a version with `sh -s -- --version v0.1.0`, change the directory with `--dir`, remove
+it with `--uninstall`. Linux and macOS, x86_64 and arm64. On Windows use the pre-commit
+framework route below.
 
 Then pick one of two ways to wire it into git.
 
