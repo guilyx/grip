@@ -161,7 +161,7 @@ def test_openai_compat_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
         verdict="v",
     )
     opener = _opener_returning(_chat_payload(sheet.model_dump_json()))
-    provider = OpenAICompatibleProvider(Config(provider="openai"), opener=opener)
+    provider = OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"), opener=opener)
     assert provider.grade(DIFF, QUESTIONS, ANSWERS, Difficulty.NORMAL).total == 75
 
 
@@ -176,9 +176,12 @@ def test_ollama_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert opener.calls[0].get_header("Authorization") is None
 
 
-def test_openai_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openai_requires_key_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(ProviderError, match="OPENAI_API_KEY"):
+        OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"))
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    with pytest.raises(ProviderError, match="needs a model"):
         OpenAICompatibleProvider(Config(provider="openai"))
 
 
@@ -188,19 +191,19 @@ def test_openai_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def http_error(request: Any, timeout: float) -> Any:
         raise urllib.error.HTTPError(request.full_url, 500, "boom", {}, io.BytesIO(b"nope"))  # type: ignore[arg-type]
 
-    provider = OpenAICompatibleProvider(Config(provider="openai"), opener=http_error)
+    provider = OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"), opener=http_error)
     with pytest.raises(ProviderError, match="500"):
         provider.generate_questions(DIFF, Difficulty.NORMAL)
 
     def url_error(request: Any, timeout: float) -> Any:
         raise urllib.error.URLError("refused")
 
-    provider = OpenAICompatibleProvider(Config(provider="openai"), opener=url_error)
+    provider = OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"), opener=url_error)
     with pytest.raises(ProviderError, match="could not reach"):
         provider.generate_questions(DIFF, Difficulty.NORMAL)
 
     provider = OpenAICompatibleProvider(
-        Config(provider="openai"), opener=_opener_returning({"error": "weird"})
+        Config(provider="openai", model="gpt-x"), opener=_opener_returning({"error": "weird"})
     )
     with pytest.raises(ProviderError, match="unexpected response shape"):
         provider.generate_questions(DIFF, Difficulty.NORMAL)
@@ -208,7 +211,7 @@ def test_openai_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def bad_json(request: Any, timeout: float) -> _Resp:
         return _Resp(b"not json")
 
-    provider = OpenAICompatibleProvider(Config(provider="openai"), opener=bad_json)
+    provider = OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"), opener=bad_json)
     with pytest.raises(ProviderError, match="invalid JSON"):
         provider.generate_questions(DIFF, Difficulty.NORMAL)
 

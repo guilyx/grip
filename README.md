@@ -58,8 +58,16 @@ pre-commit install --hook-type pre-push
 
 ### Provider
 
-By default grip talks to Anthropic. Export `ANTHROPIC_API_KEY` (or run `ant auth login`).
-For a local, free setup use Ollama:
+Already using Claude Code, Codex or Gemini CLI? grip can reuse it, so there is no API key
+and no extra bill:
+
+```toml
+# .grip.toml
+provider = "claude-code"      # or "codex", or "gemini"
+```
+
+Otherwise grip talks to Anthropic by default: export `ANTHROPIC_API_KEY` (or run
+`ant auth login`). For a local, free setup use Ollama:
 
 ```toml
 # .grip.toml
@@ -95,8 +103,8 @@ variables (`GRIP_PASSING_SCORE=80`) and flags (`--passing-score 80`) override fi
 ```toml
 passing_score = 70            # 0-100, the Grip Score you need
 difficulty = "normal"         # easy | normal | hard
-provider = "anthropic"        # anthropic | openai | ollama | fake
-model = "claude-opus-5"
+provider = "anthropic"        # anthropic | claude-code | codex | gemini | openai | ollama | fake
+model = ""                    # empty = provider default (claude-opus-5 for anthropic)
 effort = "medium"             # low | medium | high | xhigh | max | none
 exclude = ["*.lock", "*.snap"]
 max_diff_bytes = 200000

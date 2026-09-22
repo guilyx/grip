@@ -39,8 +39,12 @@ class OpenAICompatibleProvider:
     name = "openai"
 
     def __init__(self, cfg: Config, opener: Any = None) -> None:
-        self.model = cfg.model
         self.name = cfg.provider.lower()
+        if not cfg.model:
+            raise ProviderError(
+                f"the {self.name} provider needs a model: set `model = ...` in .grip.toml"
+            )
+        self.model = cfg.model
         default_url = OLLAMA_URL if self.name == "ollama" else OPENAI_URL
         self._base_url = (cfg.base_url or default_url).rstrip("/")
         default_key_env = "OLLAMA_API_KEY" if self.name == "ollama" else "OPENAI_API_KEY"

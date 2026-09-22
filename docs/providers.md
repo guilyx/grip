@@ -4,6 +4,54 @@ A provider turns a diff into questions and answers into grades. All of them use 
 prompts and the same JSON schemas, so the quality of the quiz depends on the model you
 pick, not on the transport.
 
+## Coding agents you already have
+
+If Claude Code, Codex or Gemini CLI is installed and signed in, grip can drive it in
+non-interactive mode. No API key, no extra bill: the quiz rides on the subscription you
+already pay for.
+
+=== "Claude Code"
+
+    ```toml
+    provider = "claude-code"   # or "claude"
+    # model = "sonnet"         # optional; empty means the CLI's default
+    ```
+
+    Runs `claude -p --output-format json --json-schema ...` with tools disabled and no
+    session persistence. Install with `npm install -g @anthropic-ai/claude-code`.
+
+=== "Codex"
+
+    ```toml
+    provider = "codex"
+    # model = "gpt-5-codex"    # optional
+    ```
+
+    Runs `codex exec --sandbox read-only --output-schema ...`. Install with
+    `npm install -g @openai/codex`, then `codex login`.
+
+=== "Gemini CLI"
+
+    ```toml
+    provider = "gemini"
+    # model = "gemini-2.5-pro" # optional
+    ```
+
+    Runs `gemini --output-format json`. Gemini CLI has no schema flag, so the JSON schema
+    is included in the prompt and the object is extracted from the reply. Install with
+    `npm install -g @google/gemini-cli`.
+
+Every agent starts in an empty temporary directory with tools disabled where the CLI
+allows it, so it cannot read your repository, run commands, or pick up project
+instructions and hooks. It only sees the diff and your answers, exactly like the API
+providers. `timeout` applies to the whole agent run; agents are slower than a direct API
+call, so raise it if you see timeouts.
+
+!!! tip "Which one?"
+    Claude Code and Codex enforce the JSON schema themselves, so their output is always
+    well-formed. Gemini usually complies but can occasionally answer with prose, which
+    grip reports as a provider error (retry, or set `fail_open = true`).
+
 ## Anthropic (default)
 
 Uses the official `anthropic` SDK with structured outputs, so the questions and grades

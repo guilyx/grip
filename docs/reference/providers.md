@@ -8,4 +8,6 @@
 
 ::: grip_hook.providers.openai_compat
 
+::: grip_hook.providers.agents
+
 ::: grip_hook.providers.fake
