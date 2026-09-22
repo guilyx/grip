@@ -42,6 +42,11 @@ dev = [
   "ruff>=0.5",
   "pre-commit>=3.7",
 ]
+demo = [
+  "pyte>=0.8",
+  "pillow>=10.0",
+  "fonttools>=4.40",
+]
 docs = [
   "mkdocs>=1.6,<2",
   "mkdocs-material>=9.5",
@@ -70,6 +75,7 @@ packages = ["src/grip_hook"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["scripts/demo/fixture"]
 target-version = "py311"
 src = ["src", "tests"]
 
@@ -84,6 +90,7 @@ pydocstyle = { convention = "google" }
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "PLR", "S101", "PT018"]
+"scripts/**" = ["PLR0915"]
 
 [tool.mypy]
 python_version = "3.11"

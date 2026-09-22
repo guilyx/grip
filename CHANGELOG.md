@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Demo recording (`docs/assets/demo.gif`, `.webm`, `.cast`) and the script that
+  regenerates it, `scripts/demo/make_demo.py`.
+- Scripted mode for the `fake` provider through `GRIP_FAKE_SCRIPT`, plus `GRIP_FAKE_DELAY`
+  for artificial latency.
+
+### Changed
+
+- The score table uses rounded borders, matching the panels.
+- The "blocked" message prints the report path relative to the working directory.
+
 ## [0.1.0] - 2026-09-20
 
 ### Added

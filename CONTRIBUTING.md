@@ -53,6 +53,21 @@ Implement the `Provider` protocol from `grip_hook.providers.base`, register a fa
 (see `tests/test_providers.py` for the pattern). Keep new runtime dependencies to a
 minimum; optional ones belong in an extra.
 
+## Regenerating the demo
+
+The README animation is produced from a scripted, offline session so it is reproducible:
+
+```bash
+pip install -e ".[demo]"
+python scripts/demo/make_demo.py all   # record -> docs/assets/demo.cast, render -> .gif + .webm
+```
+
+`record` builds a throwaway repository, installs the hook with the `fake` provider driven
+by `scripts/demo/scenario.json`, and types the answers in `make_demo.py` into a real
+`bash` session. `render` replays the asciinema-format cast through `pyte` and Pillow.
+Edit the scenario or the answers, re-run, and commit the three assets together. The
+cast also plays with `asciinema play docs/assets/demo.cast`.
+
 ## Releasing (maintainers)
 
 1. Bump `__version__` in `src/grip_hook/__init__.py` and move the `Unreleased` section

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from rich import box
 from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
@@ -77,7 +78,9 @@ def render_result(
 ) -> None:
     """Print the score table and verdict."""
     console = term.console
-    table = Table(show_header=True, header_style="bold", expand=False, pad_edge=False)
+    table = Table(
+        show_header=True, header_style="bold", expand=False, pad_edge=False, box=box.ROUNDED
+    )
     table.add_column("#", justify="right")
     table.add_column("Focus")
     table.add_column("Score", justify="right")
