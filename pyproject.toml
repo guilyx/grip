@@ -42,6 +42,9 @@ dev = [
   "ruff>=0.5",
   "pre-commit>=3.7",
 ]
+build = [
+  "pyinstaller>=6.10",
+]
 demo = [
   "pyte>=0.8",
   "pillow>=10.0",
@@ -63,6 +66,7 @@ Documentation = "https://guilyx.github.io/grip/"
 Repository = "https://github.com/guilyx/grip"
 Issues = "https://github.com/guilyx/grip/issues"
 Changelog = "https://github.com/guilyx/grip/blob/main/CHANGELOG.md"
+Releases = "https://github.com/guilyx/grip/releases"
 
 [tool.hatch.version]
 path = "src/grip_hook/__init__.py"

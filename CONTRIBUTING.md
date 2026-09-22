@@ -70,8 +70,15 @@ cast also plays with `asciinema play docs/assets/demo.cast`.
 
 ## Releasing (maintainers)
 
+Releases are prebuilt binaries on GitHub Releases; nothing goes to PyPI.
+
 1. Bump `__version__` in `src/grip_hook/__init__.py` and move the `Unreleased` section
    of `CHANGELOG.md` under the new version.
 2. Commit, tag `vX.Y.Z`, push the tag.
-3. The `release` workflow builds the package, publishes it to PyPI through trusted
-   publishing and creates the GitHub release with the changelog section.
+3. The `release` workflow builds single-file binaries with PyInstaller for Linux and
+   macOS (x86_64 and arm64), writes `SHA256SUMS`, and creates the GitHub release with the
+   changelog section as notes. `install.sh` fetches from there.
+
+To build a binary locally: `pip install -e ".[build]" && scripts/build/package.sh`, then
+`GRIP_DOWNLOAD_BASE=file://$PWD/some-dir sh install.sh` to exercise the installer against
+it (CI does exactly this on every push).
