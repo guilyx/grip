@@ -47,18 +47,21 @@ FPS = 12
 PROMPT = "❯ "  # noqa: RUF001 - deliberate prompt glyph
 
 LAZY_ANSWERS = [
-    "it refunds twice i think",
+    "it stops i guess",
     "",
-    "dunno",
-    "the gateway",
-    "run it and see",
+    "nothing",
+    "the lidar",
+    "drive it around",
 ]
 GOOD_ANSWERS = [
-    "The second call finds the existing refund via find_refund and returns its id, no new charge",
-    "A currency mismatch is a cheap local check, better to fail fast before the lookup",
-    "Without a key there is no lookup, so the retry issues a second refund and double-counts",
-    "gateway.find_refund is new; if it raises, refund() propagates before any money moves",
-    "A fake gateway that records calls: assert one refund call and the same id on the retry",
+    "A zero Twist: with no scan for scan_timeout the watchdog stops the robot instead of "
+    "trusting old data",
+    "Because _on_scan never runs once scans stop; the check has to live on the path that "
+    "still executes",
+    "It won't move even though the lidar is healthy: age is header.stamp against the node clock",
+    "stop_distance; at 0 the min_range < stop_distance test can never be true, so the "
+    "obstacle stop is off",
+    "Publish synthetic LaserScans from a test node, stop, send a command, assert /cmd_vel is zero",
 ]
 
 # --------------------------------------------------------------------------- recording
@@ -120,7 +123,7 @@ class Session:
 
 
 def _build_repo(workdir: Path, grip_bin: Path) -> Path:
-    repo = workdir / "acme-billing"
+    repo = workdir / "amr-safety"
     repo.mkdir()
     env = _git_env()
 
@@ -128,12 +131,14 @@ def _build_repo(workdir: Path, grip_bin: Path) -> Path:
         subprocess.run(["git", *args], cwd=repo, env=env, check=True, capture_output=True)
 
     git("init", "-q", "-b", "main")
-    (repo / "billing").mkdir()
-    (repo / "billing" / "__init__.py").write_text("")
-    (repo / "billing" / "refund.py").write_text((HERE / "fixture" / "refund_before.py").read_text())
+    pkg = repo / "amr_safety"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    fixture = HERE / "fixture"
+    (pkg / "cmd_vel_filter.py").write_text((fixture / "cmd_vel_filter_before.py").read_text())
     (repo / ".grip.toml").write_text('provider = "fake"\npassing_score = 70\n')
     git("add", "-A")
-    git("commit", "-q", "-m", "billing: initial refund flow")
+    git("commit", "-q", "-m", "safety: lidar stop in the cmd_vel filter")
     subprocess.run(
         [str(grip_bin), "install", "--stage", "pre-commit"],
         cwd=repo,
@@ -142,7 +147,7 @@ def _build_repo(workdir: Path, grip_bin: Path) -> Path:
         capture_output=True,
     )
     # The change under quiz.
-    (repo / "billing" / "refund.py").write_text((HERE / "fixture" / "refund_after.py").read_text())
+    (pkg / "cmd_vel_filter.py").write_text((fixture / "cmd_vel_filter_after.py").read_text())
     git("add", "-A")
     return repo
 
@@ -231,7 +236,7 @@ def _drive(s: Session) -> None:
     s.idle(1.2)
 
     # Attempt 1: lazy answers, blocked.
-    s.type('git commit -m "billing: make refund() idempotent on retries"')
+    s.type('git commit -m "safety: stop when the scan goes stale"')
     for answer in LAZY_ANSWERS:
         s.wait_for("> ")
         s.idle(0.5)
@@ -243,7 +248,7 @@ def _drive(s: Session) -> None:
     s.type("git diff --cached --stat")
     s.wait_for(PROMPT)
     s.idle(1.0)
-    s.type('git commit -m "billing: make refund() idempotent on retries"')
+    s.type('git commit -m "safety: stop when the scan goes stale"')
     for answer in GOOD_ANSWERS:
         s.wait_for("> ")
         s.idle(0.6)

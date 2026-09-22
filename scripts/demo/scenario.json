@@ -1,67 +1,69 @@
 {
-  "summary": "refund() gains an idempotency key: a retried refund returns the existing refund id instead of charging the gateway twice, and the balance check now reports the remaining amount.",
+  "summary": "The cmd_vel safety filter gains a scan watchdog: with no LaserScan for scan_timeout it publishes a zero Twist instead of forwarding commands on stale data, and the hard-coded stop distance becomes the stop_distance parameter.",
   "questions": [
     {
       "focus": "behaviour",
-      "question": "What happens now when refund() is called twice with the same idempotency key?",
-      "rubric": "The second call finds the existing refund through gateway.find_refund and returns its id; no second gateway refund, no double decrement of refunded_cents.",
+      "question": "What does the node publish on /cmd_vel once no /scan message has arrived for longer than scan_timeout?",
+      "rubric": "A zero Twist (full stop) from the watchdog branch in _on_cmd_vel, with a throttled warning; it never forwards the incoming command or repeats the last one.",
       "rules": [
-        {"match": "existing", "score": 20, "feedback": "Correct: the second call returns the existing refund id without touching the gateway again."},
-        {"match": "same refund", "score": 20, "feedback": "Correct: the second call returns the existing refund id without touching the gateway again."},
-        {"match": "once", "score": 14, "feedback": "Right outcome, but say how: find_refund short-circuits before the gateway is called."},
-        {"match": "twice", "score": 0, "feedback": "The opposite: the idempotency key is exactly what prevents a second refund."}
+        {"match": "zero", "score": 20, "feedback": "Correct: the watchdog publishes an empty Twist, a full stop, not the incoming command."},
+        {"match": "watchdog", "score": 20, "feedback": "Correct: the watchdog publishes an empty Twist, a full stop, not the incoming command."},
+        {"match": "stop", "score": 8, "feedback": "Right outcome; say what it publishes: a zero Twist, not the last command."},
+        {"match": "last", "score": 0, "feedback": "The opposite: it publishes Twist(), never the last command."}
       ],
-      "default": {"score": 0, "feedback": "No answer that describes the idempotent path."}
+      "default": {"score": 0, "feedback": "No answer that describes the watchdog output."}
     },
     {
       "focus": "motivation",
-      "question": "Why does the currency check stay before the idempotency lookup?",
-      "rubric": "The lookup is a gateway (network) call; validating cheap local invariants first avoids a round trip and never returns a refund id for a request that is invalid.",
+      "question": "Why is the staleness check done in the cmd_vel callback rather than in the scan callback?",
+      "rubric": "The scan callback never runs once scans stop arriving, so a check there could not fire; the cmd_vel path keeps executing as long as someone is driving, so that is where the watchdog must live.",
       "rules": [
-        {"match": "gateway", "score": 20, "feedback": "Yes: fail fast on local invariants before paying for a gateway round trip."},
-        {"match": "network", "score": 20, "feedback": "Yes: fail fast on local invariants before paying for a gateway round trip."},
-        {"match": "mismatch", "score": 12, "feedback": "Partly: it also avoids a network call and never returns an id for an invalid request."}
+        {"match": "never", "score": 20, "feedback": "Yes: once scans stop, _on_scan never runs, so the check has to live on the path that still executes."},
+        {"match": "still", "score": 20, "feedback": "Yes: the cmd_vel callback keeps running while _on_scan goes silent."},
+        {"match": "timer", "score": 12, "feedback": "A timer would work too; the point is that _on_scan cannot detect its own absence."}
       ],
-      "default": {"score": 0, "feedback": "Missed: the lookup is a network call, so cheap checks go first."}
+      "default": {"score": 0, "feedback": "Missed: a callback that has stopped firing cannot notice that it stopped."}
     },
     {
       "focus": "edge case",
-      "question": "A caller passes no idempotency_key and retries after a timeout. What do they get?",
-      "rubric": "Without a key there is no lookup, so the retry performs a second refund and refunded_cents is decremented twice; idempotency is opt-in.",
+      "question": "The lidar is healthy but its clock runs a few seconds behind the robot's. What does the robot do?",
+      "rubric": "Age is computed from header.stamp against the node clock, so every scan looks older than scan_timeout: the watchdog fires on each command and the robot refuses to move.",
       "rules": [
-        {"match": "second refund", "score": 20, "feedback": "Exactly: without a key the retry refunds again, so idempotency is opt-in."},
-        {"match": "double", "score": 20, "feedback": "Exactly: without a key the retry refunds again, so idempotency is opt-in."},
-        {"match": "twice", "score": 20, "feedback": "Exactly: without a key the retry refunds again, so idempotency is opt-in."},
-        {"match": "opt-in", "score": 12, "feedback": "Right that it is opt-in; spell out the consequence: a second refund goes through."}
+        {"match": "stale", "score": 20, "feedback": "Exactly: every scan looks stale because age is header.stamp against the node clock, so it never moves."},
+        {"match": "refuse", "score": 20, "feedback": "Exactly: the watchdog fires on every command and the robot refuses to move."},
+        {"match": "move", "score": 12, "feedback": "Right, and the consequence: every scan looks older than scan_timeout, so the watchdog fires on every single command."},
+        {"match": "nothing", "score": 0, "feedback": "It matters: the age check uses header.stamp, not arrival time."}
       ],
-      "default": {"score": 0, "feedback": "Missed: without a key nothing prevents a second refund on retry."}
+      "default": {"score": 0, "feedback": "Missed: age comes from header.stamp, so clock skew changes behaviour."}
     },
     {
       "focus": "risk",
-      "question": "Which gateway method does this change rely on that did not exist before, and what if it raises?",
-      "rubric": "gateway.find_refund is new; if it raises, refund() propagates the exception before any refund is attempted, so callers must handle a new failure mode.",
+      "question": "Which new parameter controls the obstacle stop, and what happens if it is set to 0?",
+      "rubric": "stop_distance replaces the STOP_DISTANCE constant; at 0 the min_range < stop_distance test can never be true, so the obstacle stop is silently disabled.",
       "rules": [
-        {"match": "find_refund", "score": 20, "feedback": "Correct: find_refund is new and its errors now surface from refund() before any money moves."},
-        {"match": "gateway", "score": 8, "feedback": "Name it: find_refund. Its exceptions now propagate out of refund()."}
+        {"match": "stop_distance", "score": 20, "feedback": "Correct: stop_distance, and at 0 the comparison can never be true, so the obstacle stop is off."},
+        {"match": "disable", "score": 14, "feedback": "Right consequence; name it: stop_distance."},
+        {"match": "parameter", "score": 6, "feedback": "Name it: stop_distance. At 0 the obstacle stop is silently disabled."}
       ],
-      "default": {"score": 0, "feedback": "Missed: refund() now depends on gateway.find_refund."}
+      "default": {"score": 0, "feedback": "Missed: stop_distance is new and 0 turns the obstacle stop off."}
     },
     {
       "focus": "testing",
-      "question": "How would you verify the idempotent path without hitting the real gateway?",
-      "rubric": "Use a fake or stub gateway that records calls and returns a refund id for a known key; assert the second call returns the same id and gateway.refund was called once.",
+      "question": "How would you test the watchdog without a real lidar?",
+      "rubric": "Publish synthetic LaserScan messages from a test node, stop publishing, send a cmd_vel_raw and assert /cmd_vel is a zero Twist; launch_testing or an rclpy test with a fake or sim clock keeps it repeatable.",
       "rules": [
-        {"match": "fake", "score": 20, "feedback": "Good: a fake gateway that records calls lets you assert one refund and the same id twice."},
-        {"match": "stub", "score": 20, "feedback": "Good: a stub gateway that records calls lets you assert one refund and the same id twice."},
-        {"match": "mock", "score": 20, "feedback": "Good: a mock gateway lets you assert one refund call and the same id twice."},
-        {"match": "run", "score": 4, "feedback": "Running it by hand is not a repeatable check; use a fake gateway in a test."}
+        {"match": "launch_testing", "score": 20, "feedback": "Good: launch_testing with a synthetic scan publisher makes the watchdog a repeatable check."},
+        {"match": "synthetic", "score": 20, "feedback": "Good: publish fake scans, stop, send a command, assert a zero Twist on /cmd_vel."},
+        {"match": "fake", "score": 20, "feedback": "Good: publish fake scans, stop, send a command, assert a zero Twist on /cmd_vel."},
+        {"match": "sim", "score": 14, "feedback": "Simulation works; a small test node publishing scans is faster and runs in CI."},
+        {"match": "drive", "score": 4, "feedback": "Driving it by hand is not a repeatable check; publish synthetic scans in a test."}
       ],
       "default": {"score": 0, "feedback": "No verification strategy given."}
     }
   ],
   "verdicts": [
-    {"min": 0, "text": "You could not explain what this change does or what it depends on. Read the diff again before sending it upstream."},
+    {"min": 0, "text": "You could not explain what this node does when its inputs go quiet. Read the diff again before sending it upstream."},
     {"min": 50, "text": "You understand the happy path; brush up on the failure modes before pushing."},
-    {"min": 80, "text": "Solid grasp of the change, its motivation and its new dependency. Ship it."}
+    {"min": 80, "text": "Solid grasp of the watchdog, its clock assumptions and the new parameter. Ship it."}
   ]
 }
