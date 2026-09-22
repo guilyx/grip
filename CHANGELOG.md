@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The demo now quizzes a ROS 2 change: a `cmd_vel` safety filter gaining a lidar scan
+  watchdog, instead of a payment refund.
 - Distribution: `install.sh` (`curl -fsSL .../install.sh | sh`) downloads a prebuilt,
   checksum-verified binary from GitHub Releases into `~/.local/bin`. The release workflow
   builds binaries for Linux and macOS (x86_64 and arm64) with PyInstaller; nothing is
