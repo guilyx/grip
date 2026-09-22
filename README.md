@@ -61,6 +61,17 @@ repos:
 pre-commit install --hook-type pre-push
 ```
 
+### Inside Claude Code
+
+```text
+/plugin marketplace add guilyx/grip
+/plugin install grip@grip
+```
+
+`/grip:quiz` has Claude relay the five questions to you and grade your answers, and a
+hook blocks `git push` until the diff has passed. Codex and Gemini CLI can drive the same
+flow through `grip ask` / `grip grade`; see the [docs](https://guilyx.github.io/grip/agents/).
+
 ### Provider
 
 Already using Claude Code, Codex or Gemini CLI? grip can reuse it, so there is no API key

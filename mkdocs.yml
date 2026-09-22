@@ -41,6 +41,7 @@ nav:
   - How it works: how-it-works.md
   - Configuration: configuration.md
   - Providers: providers.md
+  - Coding agents: agents.md
   - Command line: cli.md
   - FAQ: faq.md
   - Contributing: contributing.md
@@ -52,6 +53,7 @@ nav:
       - git: reference/git.md
       - models: reference/models.md
       - providers: reference/providers.md
+      - agent: reference/agent.md
       - quiz: reference/quiz.md
       - hooks: reference/hooks.md
 

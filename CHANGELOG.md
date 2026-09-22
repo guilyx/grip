@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format follows
   needed: `claude-code` (alias `claude`), `codex` and `gemini`. Each runs the CLI in
   non-interactive mode with tools disabled, in an empty scratch directory.
 
+- Claude Code plugin, served from this repository as a marketplace
+  (`/plugin marketplace add guilyx/grip`): `/grip:quiz` relays the quiz through Claude and
+  a `PreToolUse` hook blocks `git push` until the diff has passed.
+- `grip ask`, `grip grade`, `grip check` and `grip agent-hook`: the quiz as
+  non-interactive JSON steps so any coding agent can drive it.
+
 ### Changed
 
 - Distribution: `install.sh` (`curl -fsSL .../install.sh | sh`) downloads a prebuilt,

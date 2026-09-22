@@ -1,0 +1,12 @@
+{
+  "name": "grip",
+  "description": "Quiz yourself on your diff before Claude pushes it. /grip:quiz asks five questions about the change and scores you out of 100; a hook blocks `git push` until the diff has passed.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Erwin L."
+  },
+  "homepage": "https://guilyx.github.io/grip/agents/",
+  "repository": "https://github.com/guilyx/grip",
+  "license": "BSD-3-Clause",
+  "keywords": ["git", "hook", "quiz", "code-review", "understanding"]
+}
