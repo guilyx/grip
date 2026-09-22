@@ -31,6 +31,27 @@ printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$(git 
 Accepts the same `--passing-score`, `--provider`, `--model`, `--difficulty` and
 `--report` flags as `grip quiz`.
 
+## `grip ask` / `grip grade` / `grip check`
+
+The quiz in three non-interactive steps, for coding agents. `ask` prints the questions as
+JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
+remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
+`--unpushed` and `--range` selectors as `grip quiz`. See [Coding agents](agents.md).
+
+```bash
+grip ask --unpushed
+grip grade --answers - <<'EOF'
+["answer 1", "answer 2", "answer 3", "answer 4", "answer 5"]
+EOF
+grip check --unpushed && git push
+```
+
+## `grip agent-hook claude-code [--gate push|commit|both]`
+
+Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git push`
+(and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
+[plugin](agents.md#claude-code-plugin).
+
 ## `grip install` / `grip uninstall`
 
 ```bash

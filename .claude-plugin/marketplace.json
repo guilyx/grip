@@ -1,0 +1,24 @@
+{
+  "name": "grip",
+  "owner": {
+    "name": "Erwin L.",
+    "url": "https://github.com/guilyx"
+  },
+  "description": "grip: keep a grip on your code. A quiz on your own diff before it goes upstream.",
+  "plugins": [
+    {
+      "name": "grip",
+      "source": "./plugins/claude-code",
+      "description": "Quiz yourself on your diff before Claude pushes it. /grip:quiz asks five questions; a hook blocks `git push` until the diff has passed.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Erwin L."
+      },
+      "homepage": "https://guilyx.github.io/grip/agents/",
+      "repository": "https://github.com/guilyx/grip",
+      "license": "BSD-3-Clause",
+      "category": "Development",
+      "keywords": ["git", "hook", "quiz", "code-review", "understanding"]
+    }
+  ]
+}

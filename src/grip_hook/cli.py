@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from collections.abc import Callable
@@ -13,6 +14,17 @@ from rich.console import Console
 from rich.table import Table
 
 from grip_hook import MAX_SCORE, __version__
+from grip_hook.agent import (
+    Gate,
+    PendingStore,
+    ask,
+    claude_code_decision,
+    grade,
+    hook_request,
+    parse_answers,
+    questions_payload,
+    report_payload,
+)
 from grip_hook.config import Config, describe, load_config
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
 from grip_hook.git import Diff, Git, PushedRef
@@ -183,21 +195,160 @@ def quiz(
     """Run the quiz now, without a hook."""
     git = Git()
     cfg = _config(git, **overrides)
+    diff = _select_diff(git, cfg, mode, rev_range)
+    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
+
+
+def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Diff:
+    """The diff for ``--staged`` (default), ``--unpushed`` or ``--range BASE..HEAD``."""
     if rev_range:
         base, sep, head = rev_range.partition("..")
         if not sep or not base:
             raise click.BadParameter("expected BASE..HEAD", param_hint="--range")
-        diff = git.range_diff(base, head or "HEAD", cfg.exclude, cfg.max_diff_bytes)
-    elif mode == "unpushed":
+        return git.range_diff(base, head or "HEAD", cfg.exclude, cfg.max_diff_bytes)
+    if mode == "unpushed":
         head_sha = git.run("rev-parse", "HEAD").strip()
         base_sha = git.unpushed_base(head_sha)
         if base_sha is None:
-            _skip("every commit is already on a remote, nothing to quiz.")
-            sys.exit(0)
-        diff = git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes)
-    else:
-        diff = git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
-    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
+            return Diff("unpushed commits", "", "", ())
+        return git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes)
+    return git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
+
+
+def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
+    decorators = [
+        click.option("--staged", "mode", flag_value="staged", default=True, help="Staged changes."),
+        click.option(
+            "--unpushed", "mode", flag_value="unpushed", help="Commits not on any remote."
+        ),
+        click.option("--range", "rev_range", default=None, help="An explicit BASE..HEAD range."),
+    ]
+    for decorator in reversed(decorators):
+        fn = decorator(fn)
+    return fn
+
+
+def _emit(payload: dict[str, Any]) -> None:
+    click.echo(json.dumps(payload, indent=2))
+
+
+@cli.command(name="ask")
+@_diff_options
+@quiz_options
+def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overrides: Any) -> None:
+    """Write the questions as JSON for a coding agent to relay (no terminal needed).
+
+    The rubrics stay in .git/grip/pending.json. Follow up with `grip grade`.
+    """
+    git = Git()
+    cfg = _config(git, **overrides)
+    diff = _select_diff(git, cfg, mode, rev_range)
+    if diff.is_empty:
+        _emit({"status": "nothing-to-quiz", "message": "no changes found"})
+        return
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    if memory.has_passed(diff.digest):
+        _emit({"status": "already-passed", "message": "this exact diff passed recently"})
+        return
+    pending = ask(diff, cfg, get_provider(cfg), Stage.MANUAL)
+    PendingStore(git.git_dir()).save(pending)
+    _emit(questions_payload(pending, cfg))
+
+
+@cli.command(name="grade")
+@click.option(
+    "--answers",
+    "answers_path",
+    type=click.Path(dir_okay=False, allow_dash=True, path_type=Path),
+    required=True,
+    help='JSON file with ["answer 1", ...] or {"answers": [...]}; "-" reads stdin.',
+)
+@quiz_options
+def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) -> None:
+    """Grade answers to the questions from `grip ask` and remember a pass."""
+    git = Git()
+    cfg = _config(git, **overrides)
+    store = PendingStore(git.git_dir())
+    pending = store.load()
+    if pending is None:
+        raise GripError("no pending quiz; run `grip ask` first")
+    text = sys.stdin.read() if str(answers_path) == "-" else answers_path.read_text("utf-8")
+    answers = parse_answers(text)
+    report = grade(pending, answers, cfg, get_provider(cfg))
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    saved = memory.save_report(report)
+    if report_path is not None:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(report.model_dump_json(indent=2), "utf-8")
+    store.clear()
+    _emit(report_payload(report, saved))
+    if report.passed:
+        memory.record_pass(report.diff_digest)
+        return
+    sys.exit(QuizFailed.exit_code)
+
+
+@cli.command(name="check")
+@_diff_options
+def check_cmd(mode: str, rev_range: str | None) -> None:
+    """Exit 0 when the diff already passed a quiz (or there is nothing to quiz), else 1."""
+    git = Git()
+    cfg = _config(git)
+    verdict = _check(git, cfg, mode, rev_range)
+    if verdict is None:
+        _out.print("[green]grip:[/green] ok")
+        return
+    _err.print(f"[bold red]grip:[/bold red] {verdict}")
+    sys.exit(1)
+
+
+def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | None:
+    """``None`` when the diff may go through, otherwise why it may not."""
+    diff = _select_diff(git, cfg, mode, rev_range)
+    if diff.is_empty:
+        return None
+    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
+        return None
+    what = "unpushed commits" if mode == "unpushed" else "staged changes"
+    return f"the {what} have not passed a grip quiz yet ({len(diff.files)} files)."
+
+
+@cli.command(name="agent-hook")
+@click.argument("agent", type=click.Choice(["claude-code"]))
+@click.option(
+    "--gate",
+    type=click.Choice(["push", "commit", "both"]),
+    default="push",
+    show_default=True,
+    help="Which git commands need a passed quiz.",
+)
+def agent_hook_cmd(agent: str, gate: Gate) -> None:
+    """Claude Code PreToolUse hook: deny `git push` until the diff passed a quiz.
+
+    Reads the hook payload from stdin and prints a decision when one is needed. Honours
+    GRIP_SKIP and CI like the git hooks do. Always exits 0 so a missing repository or a
+    broken payload never blocks the agent by accident.
+    """
+    if _truthy(os.environ.get(SKIP_ENV)) or _truthy(os.environ.get("CI")):
+        return
+    request = hook_request(sys.stdin.read(), gate)
+    if request is None:
+        return
+    mode, cwd = request
+    try:
+        git = Git(cwd)
+        verdict = _check(git, _config(git), mode, None)
+    except GripError:
+        return
+    if verdict is None:
+        return
+    _emit(
+        claude_code_decision(
+            f"grip: {verdict} Ask the developer to run /grip:quiz"
+            f"{' --unpushed' if mode == 'unpushed' else ''} and answer the questions "
+            f"themselves, then retry. Do not answer for them. GRIP_SKIP=1 bypasses once."
+        )
+    )
 
 
 @cli.command()
