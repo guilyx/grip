@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,8 @@ def _stub(bin_dir: Path, name: str, body: str) -> Path:
 
 @pytest.fixture
 def bin_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    if sys.platform == "win32":
+        pytest.skip("stub executables are POSIX shell scripts")
     directory = tmp_path / "bin"
     directory.mkdir()
     monkeypatch.setenv("PATH", f"{directory}{os.pathsep}{os.environ.get('PATH', '')}")
