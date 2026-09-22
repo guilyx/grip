@@ -28,6 +28,24 @@ def _openai(cfg: Config) -> Provider:
     return OpenAICompatibleProvider(cfg)
 
 
+def _claude_code(cfg: Config) -> Provider:
+    from grip_hook.providers.agents import ClaudeCodeProvider  # noqa: PLC0415
+
+    return ClaudeCodeProvider(cfg)
+
+
+def _codex(cfg: Config) -> Provider:
+    from grip_hook.providers.agents import CodexProvider  # noqa: PLC0415
+
+    return CodexProvider(cfg)
+
+
+def _gemini(cfg: Config) -> Provider:
+    from grip_hook.providers.agents import GeminiProvider  # noqa: PLC0415
+
+    return GeminiProvider(cfg)
+
+
 def _fake(cfg: Config) -> Provider:
     from grip_hook.providers.fake import FakeProvider  # noqa: PLC0415
 
@@ -38,9 +56,17 @@ REGISTRY: dict[str, ProviderFactory] = {
     "anthropic": _anthropic,
     "openai": _openai,
     "ollama": _openai,
+    "claude-code": _claude_code,
+    "claude": _claude_code,
+    "codex": _codex,
+    "gemini": _gemini,
     "fake": _fake,
 }
-"""Provider name to factory. ``ollama`` is an alias of ``openai`` with a local default URL."""
+"""Provider name to factory.
+
+``ollama`` is ``openai`` with a local default URL; ``claude`` is an alias of ``claude-code``.
+The agent providers shell out to a CLI that is already installed and signed in.
+"""
 
 
 def get_provider(cfg: Config) -> Provider:

@@ -56,10 +56,11 @@ class Config:
     """Minimum Grip Score (0-100) required to let the commit or push through."""
 
     provider: str = "anthropic"
-    """Provider name: ``anthropic``, ``openai`` (any OpenAI-compatible API) or ``fake``."""
+    """Provider name: ``anthropic``, ``openai``, ``ollama``, ``claude-code``, ``codex``,
+    ``gemini`` or ``fake``."""
 
-    model: str = DEFAULT_MODEL
-    """Model identifier passed to the provider."""
+    model: str = ""
+    """Model identifier passed to the provider. Empty means the provider's default."""
 
     effort: str = "medium"
     """Reasoning effort for providers that support it. ``none`` disables the parameter."""
@@ -205,7 +206,7 @@ def describe(cfg: Config) -> list[tuple[str, str]]:
         elif isinstance(value, Difficulty):
             text = value.value
         else:
-            text = str(value) if value != "" else "(default)"
+            text = str(value) if value != "" else "(provider default)"
         rows.append((f.name, text))
     return rows
 

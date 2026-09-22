@@ -70,5 +70,6 @@ def test_no_root() -> None:
 def test_describe_renders_every_field() -> None:
     rows = dict(describe(Config()))
     assert rows["difficulty"] == "normal"
-    assert rows["api_key_env"] == "(default)"
+    assert rows["api_key_env"] == "(provider default)"
+    assert rows["model"] == "(provider default)"
     assert "*.lock" in rows["exclude"]

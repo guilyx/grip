@@ -8,7 +8,7 @@ from typing import TypeVar
 import anthropic
 from pydantic import BaseModel
 
-from grip_hook.config import Config
+from grip_hook.config import DEFAULT_MODEL, Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
@@ -31,7 +31,7 @@ class AnthropicProvider:
     name = "anthropic"
 
     def __init__(self, cfg: Config, client: anthropic.Anthropic | None = None) -> None:
-        self.model = cfg.model
+        self.model = cfg.model or DEFAULT_MODEL
         self._effort = cfg.effort.strip().lower()
         self._client = client or self._build_client(cfg)
 

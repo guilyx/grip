@@ -15,8 +15,8 @@ grip reads configuration from four places. Higher in the list wins.
 | --- | --- | --- |
 | `passing_score` | `70` | Minimum Grip Score (0 to 100) required to let the commit or push through. |
 | `difficulty` | `"normal"` | `easy`, `normal` or `hard`. Changes both the questions and the grading strictness. |
-| `provider` | `"anthropic"` | `anthropic`, `openai` (any OpenAI-compatible API), `ollama` or `fake`. |
-| `model` | `"claude-opus-5"` | Model identifier passed to the provider. |
+| `provider` | `"anthropic"` | `anthropic`, `openai` (any OpenAI-compatible API), `ollama`, `claude-code`, `codex`, `gemini` or `fake`. |
+| `model` | provider default | Model identifier passed to the provider. Empty uses the provider's default (`claude-opus-5` for Anthropic, the CLI's own default for coding agents). Required for `openai` and `ollama`. |
 | `effort` | `"medium"` | Reasoning effort for models that support it: `low`, `medium`, `high`, `xhigh`, `max`, or `none` to omit the parameter. Ignored for Haiku 4.5 and non-Anthropic providers. |
 | `api_key_env` | provider default | Name of the environment variable holding the API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY`). |
 | `base_url` | provider default | Override the API base URL, for proxies or self-hosted servers. |

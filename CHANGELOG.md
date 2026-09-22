@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format follows
   regenerates it, `scripts/demo/make_demo.py`.
 - Scripted mode for the `fake` provider through `GRIP_FAKE_SCRIPT`, plus `GRIP_FAKE_DELAY`
   for artificial latency.
+- Providers that reuse a coding agent already installed and signed in, so no API key is
+  needed: `claude-code` (alias `claude`), `codex` and `gemini`. Each runs the CLI in
+  non-interactive mode with tools disabled, in an empty scratch directory.
 
 ### Changed
 
@@ -19,6 +22,8 @@ All notable changes to this project are documented here. The format follows
   checksum-verified binary from GitHub Releases into `~/.local/bin`. The release workflow
   builds binaries for Linux and macOS (x86_64 and arm64) with PyInstaller; nothing is
   published to PyPI anymore.
+- `model` now defaults to empty, meaning the provider's own default (`claude-opus-5` for
+  Anthropic, the CLI's default for coding agents). `openai` and `ollama` require it.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 

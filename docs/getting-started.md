@@ -34,7 +34,15 @@ grip --version
 
 ## 2. Give it a model
 
-By default grip uses Anthropic's API.
+Already have Claude Code, Codex or Gemini CLI installed and signed in? Reuse it, no key
+needed:
+
+```toml
+# .grip.toml at the root of your repository
+provider = "claude-code"   # or "codex", or "gemini"
+```
+
+Otherwise grip uses Anthropic's API by default:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
@@ -48,7 +56,8 @@ provider = "ollama"
 model = "qwen3:14b"
 ```
 
-See [Providers](providers.md) for OpenAI-compatible servers and proxies.
+See [Providers](providers.md) for the full list, including OpenAI-compatible servers
+and proxies.
 
 ## 3. Wire it into git
 
