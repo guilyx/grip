@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Distribution: `install.sh` (`curl -fsSL .../install.sh | sh`) downloads a prebuilt,
+  checksum-verified binary from GitHub Releases into `~/.local/bin`. The release workflow
+  builds binaries for Linux and macOS (x86_64 and arm64) with PyInstaller; nothing is
+  published to PyPI anymore.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 

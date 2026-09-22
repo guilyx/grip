@@ -2,25 +2,24 @@
 
 ## 1. Install the CLI
 
-grip is a Python 3.11+ command-line tool. Install it once per machine:
+One command. It downloads the prebuilt binary for your OS and CPU from the latest GitHub
+release, checks its SHA-256 against the published `SHA256SUMS`, and installs `grip` plus a
+`git-grip` alias into `~/.local/bin`:
 
-=== "pipx"
+```bash
+curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
+```
 
-    ```bash
-    pipx install grip-hook
-    ```
+Options go after `sh -s --`:
 
-=== "uv"
+| Option | Effect |
+| --- | --- |
+| `--version v0.1.0` | Install a specific release instead of the latest. |
+| `--dir DIR` | Install somewhere other than `~/.local/bin`. |
+| `--uninstall` | Remove `grip` and `git-grip` from the install directory. |
 
-    ```bash
-    uv tool install grip-hook
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install --user grip-hook
-    ```
+Supported: Linux and macOS, x86_64 and arm64. There is no Windows binary yet; use the
+pre-commit framework route in step 3, which installs grip into its own environment.
 
 Check it works:
 
@@ -28,9 +27,10 @@ Check it works:
 grip --version
 ```
 
-!!! note "Why is the package called grip-hook?"
-    The name `grip` on PyPI belongs to an unrelated Markdown previewer. The package is
-    `grip-hook`; the command it installs is `grip` (and `git grip`).
+!!! note "Nothing to do with Python on your side"
+    grip is written in Python, but the binary bundles everything it needs. No `pip`, no
+    virtualenv, and nothing is published to PyPI. To upgrade, run the install command
+    again.
 
 ## 2. Give it a model
 

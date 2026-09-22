@@ -73,6 +73,32 @@ jobs:
           name: dist
           path: dist/
 
+  binary:
+    name: Binary and installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v7
+      - run: uv pip install --system -e ".[build]"
+      - run: scripts/build/package.sh
+      - name: Install from the built tarball with install.sh
+        run: |
+          mkdir -p fake-release/latest/download
+          cp dist/grip-*.tar.gz fake-release/latest/download/
+          (cd fake-release/latest/download && { sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz; } > SHA256SUMS)
+          GRIP_DOWNLOAD_BASE="file://$PWD/fake-release" sh install.sh --dir "$PWD/installed"
+          "$PWD/installed/grip" --version
+          "$PWD/installed/git-grip" --version
+          cd "$(mktemp -d)" && git init -q && "$OLDPWD/installed/grip" install && "$OLDPWD/installed/grip" status
+          sh "$OLDPWD/install.sh" --dir "$OLDPWD/installed" --uninstall
+
   docs:
     name: Build docs
     runs-on: ubuntu-latest

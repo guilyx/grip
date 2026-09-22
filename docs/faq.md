@@ -1,5 +1,15 @@
 # FAQ
 
+## Do I need Python installed?
+
+No. `install.sh` fetches a self-contained binary. Python only matters if you contribute to
+grip or run it through the pre-commit framework, which manages its own environment.
+
+## How do I upgrade or uninstall?
+
+Run the install command again to upgrade to the latest release, or
+`sh -s -- --uninstall` (or `sh install.sh --uninstall`) to remove it.
+
 ## Can I bypass it?
 
 Yes. `GRIP_SKIP=1 git push` skips once, and git's own `--no-verify` skips every hook.
