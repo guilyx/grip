@@ -4,7 +4,11 @@
 before you commit or push it. Five questions, a Grip Score out of 100, and a pass mark
 you choose. Below the mark, nothing goes upstream.
 
-![grip blocking a commit with lazy answers, then letting it through after real ones](assets/demo.gif)
+<video controls muted playsinline width="100%" poster="assets/launch/grip-producthunt-1270x760.png">
+  <source src="assets/demo.mp4" type="video/mp4">
+  <source src="assets/demo.webm" type="video/webm">
+  ![grip blocking a commit with lazy answers, then letting it through after real ones](assets/demo.gif)
+</video>
 
 <sub>A commit blocked at 12/100, then accepted at 92/100. Recorded with the offline scripted provider.</sub>
 

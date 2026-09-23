@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/launch/grip-thumbnail-240.png" alt="grip" width="96"></p>
+
 # grip
 
 **Keep a grip on your code.** grip is a git hook that quizzes you about your own diff
@@ -11,7 +13,7 @@ choose. Below the mark, nothing goes upstream.
 
 ![grip blocking a commit with lazy answers, then letting it through after real ones](docs/assets/demo.gif)
 
-<sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.webm). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
+<sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.mp4). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
 
 ## Why
 
@@ -146,6 +148,14 @@ saved to `.git/grip/last-report.json`.
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
 development setup, and [SECURITY.md](SECURITY.md) for what data grip touches.
+
+## Media
+
+A [launch video](docs/assets/launch/grip-launch-1080p.mp4), the
+[Product Hunt image](docs/assets/launch/grip-producthunt-1270x760.png) and the icon live
+under `docs/assets/launch/`, all generated from the demo recording by
+`scripts/launch/make_launch.py`. Use them freely. More on the
+[media page](https://guilyx.github.io/grip/media/).
 
 ## License
 

@@ -60,6 +60,7 @@ The README animation is produced from a scripted, offline session so it is repro
 ```bash
 pip install -e ".[demo]"
 python scripts/demo/make_demo.py all   # record -> docs/assets/demo.cast, render -> .gif + .webm
+python scripts/launch/make_launch.py   # demo.mp4 + the launch image, icon and video under docs/assets/launch
 ```
 
 `record` builds a throwaway repository, installs the hook with the `fake` provider driven
