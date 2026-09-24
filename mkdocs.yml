@@ -57,6 +57,7 @@ nav:
       - agent: reference/agent.md
       - quiz: reference/quiz.md
       - hooks: reference/hooks.md
+      - study: reference/study.md
 
 markdown_extensions:
   - admonition
