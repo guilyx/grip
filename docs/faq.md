@@ -47,6 +47,13 @@ keep large diffs in check, or Ollama for zero cost.
 Only to the provider you configured, and only the diff plus your answers. See
 [How it works](how-it-works.md#what-leaves-your-machine) and `SECURITY.md`.
 
+grip also keeps a local log of every graded quiz in `.git/grip/history.jsonl` and a list
+of quizzed repositories under `~/.local/share/grip/`, so that `grip study export` can
+build one anonymised file of your scores across repositories, for a study platform. That
+file is only written when you run the command, contains no code, paths, question text,
+answers or feedback, and goes nowhere unless you upload it. See
+[`grip study`](cli.md#grip-study-export-grip-study-status).
+
 ## Can questions be multiple choice?
 
 Not currently. Free-text answers are a much better signal of understanding than

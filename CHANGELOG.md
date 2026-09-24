@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
   a `PreToolUse` hook blocks `git push` until the diff has passed.
 - `grip ask`, `grip grade`, `grip check` and `grip agent-hook`: the quiz as
   non-interactive JSON steps so any coding agent can drive it.
+- `grip study export` and `grip study status`: an anonymised JSON summary of every quiz
+  taken on the machine (scores and per-question focus only, never code, paths, questions,
+  answers or feedback) for study platforms. Graded quizzes are now appended to
+  `.git/grip/history.jsonl` and the repository is recorded in
+  `$XDG_DATA_HOME/grip/repos.json`. Nothing is uploaded by grip.
 
 ### Changed
 

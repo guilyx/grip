@@ -2,6 +2,10 @@
 
 State lives in ``<git dir>/grip/passed.json``: a map from diff digest to the UTC
 timestamp of the pass. Entries expire after ``Config.remember_passes_hours``.
+
+The same directory holds ``last-report.json`` (the most recent report) and
+``history.jsonl`` (one line per graded quiz, appended forever; ``grip study export``
+reads it).
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ class PassMemory:
         self.dir = git_dir / "grip"
         self.path = self.dir / "passed.json"
         self.report_path = self.dir / "last-report.json"
+        self.history_path = self.dir / "history.jsonl"
         self.ttl = timedelta(hours=ttl_hours)
 
     @property
@@ -76,6 +81,14 @@ class PassMemory:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.report_path.write_text(report.model_dump_json(indent=2), "utf-8")
         return self.report_path
+
+    def append_history(self, report: Report) -> Path:
+        """Append ``report`` as one JSON line to ``history.jsonl`` and return its path."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(report.model_dump(mode="json"), sort_keys=True)
+        with self.history_path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+        return self.history_path
 
 
 __all__ = ["PassMemory"]

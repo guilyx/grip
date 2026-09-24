@@ -54,8 +54,10 @@ your answers. No history, no other files, no telemetry. The diff is wrapped in `
 delimiters and the model is told to treat anything inside as data, never as instructions.
 
 Reports (`questions`, `answers`, `grades`, `score`) are written to
-`.git/grip/last-report.json`, or to the path given with `--report`. Passed digests live in
-`.git/grip/passed.json`.
+`.git/grip/last-report.json`, or to the path given with `--report`, and appended to
+`.git/grip/history.jsonl`. Passed digests live in `.git/grip/passed.json`. The history
+feeds [`grip study export`](cli.md#grip-study-export-grip-study-status), which is the
+only thing that reads it and only runs when you ask.
 
 ## When grip steps aside
 

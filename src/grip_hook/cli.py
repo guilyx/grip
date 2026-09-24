@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +32,16 @@ from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFail
 from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.memory import PassMemory
-from grip_hook.models import Difficulty, Stage
+from grip_hook.models import Difficulty, Report, Stage
 from grip_hook.providers import REGISTRY, get_provider
 from grip_hook.quiz import run_quiz
+from grip_hook.study import (
+    DEFAULT_SINCE_DAYS,
+    EXCLUDED_FIELDS,
+    INCLUDED_FIELDS,
+    Registry,
+    build_export,
+)
 from grip_hook.terminal import open_terminal
 
 _err = Console(stderr=True, highlight=False)
@@ -154,7 +163,7 @@ def _run(
     finally:
         term.close()
 
-    saved = memory.save_report(outcome.report)
+    saved = _record(git, memory, outcome.report)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(outcome.report.model_dump_json(indent=2), "utf-8")
@@ -165,6 +174,19 @@ def _run(
         f"Grip Score {outcome.report.score}/{MAX_SCORE} is below the pass mark of "
         f"{cfg.passing_score}. Re-read your change and try again. Report: {_pretty_path(saved)}"
     )
+
+
+def _record(git: Git, memory: PassMemory, report: Report) -> Path:
+    """Persist a graded quiz: last-report.json, history.jsonl and the study registry.
+
+    Returns the path of ``last-report.json``. The registry lives in the user's data
+    directory, so a failure to write it (read-only home, sandbox) never blocks the quiz.
+    """
+    saved = memory.save_report(report)
+    memory.append_history(report)
+    with contextlib.suppress(OSError):
+        Registry().add(git.git_dir())
+    return saved
 
 
 def _pretty_path(path: Path) -> str:
@@ -276,7 +298,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     answers = parse_answers(text)
     report = grade(pending, answers, cfg, get_provider(cfg))
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
-    saved = memory.save_report(report)
+    saved = _record(git, memory, report)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report.model_dump_json(indent=2), "utf-8")
@@ -487,6 +509,79 @@ def forget() -> None:
     git = Git()
     PassMemory(git.git_dir(), 1).forget()
     _out.print("[green]grip:[/green] forgot all remembered passes.")
+
+
+@cli.group()
+def study() -> None:
+    """Export an anonymised summary of your quiz history for a study platform.
+
+    Nothing leaves the machine unless you upload the file yourself. `grip study status`
+    shows exactly which fields an export contains.
+    """
+
+
+def _since_option(fn: Callable[..., Any]) -> Callable[..., Any]:
+    return click.option(
+        "--since",
+        type=click.IntRange(0),
+        default=DEFAULT_SINCE_DAYS,
+        show_default=True,
+        help="Only quizzes from the last N days; 0 for all of them.",
+    )(fn)
+
+
+def _since_delta(days: int) -> timedelta | None:
+    return None if days == 0 else timedelta(days=days)
+
+
+@study.command(name="export")
+@_since_option
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Where to write the JSON document. Defaults to grip-export-<YYYYMMDD>.json here.",
+)
+def study_export_cmd(since: int, out_path: Path | None) -> None:
+    """Write every quiz you took, across all repositories, as anonymised JSON."""
+    registry = Registry()
+    if not registry.prune():
+        _out.print(
+            "[yellow]grip:[/yellow] no repositories have been quizzed yet, nothing to export."
+        )
+        return
+    now = datetime.now(UTC)
+    export = build_export(registry, _since_delta(since), now)
+    if out_path is None:
+        out_path = Path.cwd() / f"grip-export-{now:%Y%m%d}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(export.model_dump_json(indent=2) + "\n", "utf-8")
+    _out.print(
+        f"[green]grip:[/green] {len(export.quizzes)} quizzes from {export.repo_count} repos, "
+        f"written to {_pretty_path(out_path)}"
+    )
+
+
+@study.command(name="status")
+@_since_option
+def study_status_cmd(since: int) -> None:
+    """Show what `grip study export` would write and which fields it contains."""
+    registry = Registry()
+    repos = registry.prune()
+    export = build_export(registry, _since_delta(since))
+    window = "all time" if since == 0 else f"the last {since} days"
+    _out.print(f"registered repositories: {len(repos)} ({registry.path})")
+    _out.print(
+        f"quizzes to export: {len(export.quizzes)} from {export.repo_count} repos ({window})"
+    )
+    _out.print(f"installation id: {export.installation_id}")
+    _out.print("\n[bold]included[/bold] per quiz:")
+    for field in INCLUDED_FIELDS:
+        _out.print(f"  [green]+[/green] {field}")
+    _out.print("\n[bold]never exported[/bold]:")
+    for field in EXCLUDED_FIELDS:
+        _out.print(f"  [red]-[/red] {field}")
 
 
 def main(argv: list[str] | None = None) -> None:

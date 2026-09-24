@@ -77,3 +77,22 @@ Prints the effective configuration after merging files, environment and defaults
 ## `grip forget`
 
 Clears remembered passes so the next commit or push is quizzed again.
+
+## `grip study export` / `grip study status`
+
+Every graded quiz is appended to `.git/grip/history.jsonl` and the repository is noted in
+`~/.local/share/grip/repos.json` (`$XDG_DATA_HOME/grip`, or `GRIP_DATA_HOME`). `export`
+collects that history from every repository on the machine into one anonymised JSON file
+you can upload to a study platform yourself; grip never uploads anything.
+
+```bash
+grip study status                 # how many repos and quizzes, and the exact field list
+grip study export                 # last 45 days -> grip-export-<YYYYMMDD>.json
+grip study export --since 0 --out ~/all-quizzes.json
+```
+
+The export carries, per quiz: an opaque id, an opaque per-repository hash, the time,
+stage, provider, model, pass mark, score, pass/fail, and for each question its `focus`
+label and points. It never contains the diff, file paths, repository names, question
+text, rubrics, your answers, feedback or the verdict. `grip study status` prints both
+lists so you can check before sharing.

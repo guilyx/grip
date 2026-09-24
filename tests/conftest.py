@@ -25,6 +25,14 @@ def _git(cwd: Path, *args: str, input_text: str | None = None) -> str:
     ).stdout
 
 
+@pytest.fixture(autouse=True)
+def data_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep the study registry out of the real home directory."""
+    home = tmp_path / "data-home"
+    monkeypatch.setenv("GRIP_DATA_HOME", str(home))
+    return home
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A fresh git repository with one commit."""
