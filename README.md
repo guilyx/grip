@@ -113,6 +113,20 @@ GRIP_SKIP=1 git push          # bypass once (git's --no-verify also works)
 A diff that passed is remembered for 24 hours, so a pre-push right after a pre-commit
 does not ask again.
 
+## Practice on Keep A Grip
+
+[Keep A Grip](https://keepagrip.vercel.app) is a catalogue of ROS 2, robotics and AI
+problems built for this loop: solve one with any assistant, then let grip quiz you on the
+diff. Scores land on your dashboard; anyone can add a problem.
+
+```bash
+grip login kag_…                   # token from your dashboard
+grip solve cmd-vel-safety-filter   # a repo with PROBLEM.md, pass mark preset
+grip submit                        # tests, five questions, score reported
+```
+
+Only the score leaves your machine. See the [docs](https://guilyx.github.io/grip/keepagrip/).
+
 ## Configure
 
 `.grip.toml` at the repository root, or `[tool.grip]` in `pyproject.toml`. Environment

@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Keep A Grip, the problem platform: `grip login`, `grip logout`, `grip whoami`,
+  `grip problems`, `grip solve SLUG` and `grip submit`. Solve a problem with any assistant,
+  get quizzed on the diff, have the score reported with an API token. `Diff` gained a
+  `context` field that the prompts pass to the model as data, and `Git.worktree_diff` diffs
+  everything since a base commit, uncommitted work included.
+
 - Demo recording (`docs/assets/demo.gif`, `.webm`, `.cast`) and the script that
   regenerates it, `scripts/demo/make_demo.py`.
 - Scripted mode for the `fake` provider through `GRIP_FAKE_SCRIPT`, plus `GRIP_FAKE_DELAY`
