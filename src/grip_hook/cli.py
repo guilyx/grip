@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import os
+import subprocess
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -33,6 +35,23 @@ from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.memory import PassMemory
 from grip_hook.models import Difficulty, Report, Stage
+from grip_hook.platform import (
+    DEFAULT_URL,
+    URL_ENV,
+    Client,
+    Credentials,
+    PlatformError,
+    Problem,
+    SolveState,
+    attempt_payload,
+    forget_credentials,
+    load_credentials,
+    problem_context,
+    problem_markdown,
+    read_state,
+    save_credentials,
+    write_state,
+)
 from grip_hook.providers import REGISTRY, get_provider
 from grip_hook.quiz import run_quiz
 from grip_hook.study import (
@@ -582,6 +601,190 @@ def study_status_cmd(since: int) -> None:
     _out.print("\n[bold]never exported[/bold]:")
     for field in EXCLUDED_FIELDS:
         _out.print(f"  [red]-[/red] {field}")
+
+
+# --------------------------------------------------------------------------- Keep A Grip
+
+
+def _platform_url() -> str:
+    creds = load_credentials()
+    return os.environ.get(URL_ENV, "").strip() or (creds.url if creds else DEFAULT_URL)
+
+
+@cli.command(name="login")
+@click.argument("token")
+@click.option(
+    "--url",
+    default=None,
+    help=f"Keep A Grip base URL. Defaults to ${URL_ENV} or {DEFAULT_URL}.",
+)
+def login_cmd(token: str, url: str | None) -> None:
+    """Store a Keep A Grip API token for `grip solve` and `grip submit`.
+
+    Create the token on your dashboard. It is kept under your data home, readable by you
+    only, and is used for nothing but reporting scores.
+    """
+    base = (url or os.environ.get(URL_ENV, "") or DEFAULT_URL).strip().rstrip("/")
+    token = token.strip()
+    who = Client(base, token).whoami()
+    login = str(who.get("github_login") or "")
+    path = save_credentials(Credentials(url=base, token=token, github_login=login))
+    _out.print(f"[green]grip:[/green] logged in to {base} as {login or 'unknown'} ({path})")
+
+
+@cli.command(name="logout")
+def logout_cmd() -> None:
+    """Forget the stored Keep A Grip token."""
+    if forget_credentials():
+        _out.print("[green]grip:[/green] logged out.")
+    else:
+        _out.print("[yellow]grip:[/yellow] no stored token.")
+
+
+@cli.command(name="whoami")
+def whoami_cmd() -> None:
+    """Show which Keep A Grip account the stored token belongs to."""
+    creds = load_credentials()
+    who = Client.from_credentials(creds).whoami()
+    assert creds is not None  # from_credentials raised otherwise
+    _out.print(f"{who.get('github_login', 'unknown')} at {creds.url}")
+
+
+@cli.command(name="problems")
+@click.option("--category", default=None, help="Only this category slug, e.g. ros2.")
+def problems_cmd(category: str | None) -> None:
+    """List Keep A Grip problems you can `grip solve`."""
+    rows = Client(_platform_url()).problems(category)
+    if not rows:
+        _out.print("[yellow]grip:[/yellow] no problems found.")
+        return
+    table = Table(show_header=True, header_style="bold")
+    for column in ("slug", "title", "level", "category", "solvers", "pass"):
+        table.add_column(column, no_wrap=column == "slug")
+    for row in rows:
+        rate = row.get("pass_rate")
+        table.add_row(
+            str(row.get("slug", "")),
+            str(row.get("title", "")),
+            str(row.get("difficulty", "")),
+            str(row.get("category_slug", "")),
+            str(row.get("solvers", 0)),
+            "-" if rate is None else f"{round(float(rate) * 100)}%",
+        )
+    _out.print(table)
+
+
+def _init_solve_repo(root: Path, problem: Problem) -> Git:
+    """Clone the starter repo or start an empty one, then commit the problem files."""
+    if problem.starter_repo:
+        args = ["clone", "--quiet"]
+        if problem.starter_ref:
+            args += ["--branch", problem.starter_ref]
+        Git(root.parent).run(*args, problem.starter_repo, str(root))
+    else:
+        root.mkdir(parents=True, exist_ok=True)
+        Git(root).run("init", "--quiet", "--initial-branch", "main")
+    git = Git(root)
+    (root / "PROBLEM.md").write_text(problem_markdown(problem), "utf-8")
+    grip_toml = root / ".grip.toml"
+    if not grip_toml.exists():
+        grip_toml.write_text(f"passing_score = {problem.passing_score}\n", "utf-8")
+    identity: list[str] = []
+    if not git.run("config", "--get", "user.email", check=False).strip():
+        identity = ["-c", "user.name=grip", "-c", "user.email=grip@localhost"]
+    git.run("add", "--all", ".")
+    git.run(*identity, "commit", "--quiet", "-m", f"keepagrip: start {problem.slug}")
+    return git
+
+
+@cli.command(name="solve")
+@click.argument("slug")
+@click.option(
+    "--dir",
+    "target",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Directory to create. Defaults to ./<slug>.",
+)
+def solve_cmd(slug: str, target: Path | None) -> None:
+    """Start a Keep A Grip problem: set up a repository with the statement in PROBLEM.md."""
+    url = _platform_url()
+    problem = Client(url).problem(slug)
+    root = (target or Path.cwd() / slug).resolve()
+    if root.exists() and any(root.iterdir()):
+        raise PlatformError(f"{root} exists and is not empty.")
+    git = _init_solve_repo(root, problem)
+    state = SolveState(
+        url=url,
+        problem=problem.slug,
+        title=problem.title,
+        base=git.run("rev-parse", "HEAD").strip(),
+        passing_score=problem.passing_score,
+        focus=problem.focus,
+        tests_command=problem.tests_command,
+    )
+    write_state(git.git_dir(), state)
+    _out.print(f"[green]grip:[/green] {problem.title} ({problem.difficulty}) is in {root}")
+    _out.print(f"  read   {root / 'PROBLEM.md'}")
+    _out.print("  solve  with whatever you like, commit as you go")
+    _out.print("  then   grip submit")
+
+
+def _run_tests(root: Path, command: str) -> bool:
+    """Run the problem's test command and return whether it passed."""
+    _out.print(f"[dim]grip: running tests: {command}[/dim]")
+    proc = subprocess.run(command, shell=True, cwd=root, check=False, timeout=1800)
+    passed = proc.returncode == 0
+    _out.print("[green]grip:[/green] tests passed." if passed else "[red]grip:[/red] tests failed.")
+    return passed
+
+
+@cli.command(name="submit")
+@click.option("--no-tests", is_flag=True, help="Skip the problem's test command.")
+@click.option("--dry-run", is_flag=True, help="Quiz, then print the payload instead of sending it.")
+@quiz_options
+def submit_cmd(no_tests: bool, dry_run: bool, report_path: Path | None, **overrides: Any) -> None:
+    """Finish a Keep A Grip problem: run its tests, take the quiz, report the score."""
+    git = Git()
+    state = read_state(git.git_dir())
+    cfg = _config(git, **overrides)
+    diff = git.worktree_diff(state.base, cfg.exclude, cfg.max_diff_bytes)
+    if diff.is_empty:
+        raise PlatformError("nothing has changed since `grip solve` set this repository up.")
+    diff = dataclasses.replace(
+        diff, description=f"solution to {state.problem}", context=problem_context(state)
+    )
+    # Check the login before the quiz so a missing token never wastes a graded attempt.
+    client = None if dry_run else Client.from_credentials(load_credentials())
+    tests_passed = None
+    if state.tests_command and not no_tests:
+        tests_passed = _run_tests(git.root(), state.tests_command)
+
+    term = open_terminal()
+    try:
+        provider = get_provider(cfg)
+        outcome = run_quiz(diff=diff, cfg=cfg, provider=provider, term=term, stage=Stage.MANUAL)
+    finally:
+        term.close()
+    _record(git, PassMemory(git.git_dir(), cfg.remember_passes_hours), outcome.report)
+    if report_path is not None:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(outcome.report.model_dump_json(indent=2), "utf-8")
+
+    payload = attempt_payload(state, outcome.report, diff, tests_passed)
+    if client is None:
+        _emit(payload)
+        return
+    result = client.submit(payload)
+    verdict = "[bold green]solved[/bold green]" if result.passed else "[bold red]not yet[/bold red]"
+    extra = f", +{result.points} points" if result.points else ""
+    _out.print(
+        f"[green]grip:[/green] {state.title}: {verdict}. Score {result.score}/{MAX_SCORE} "
+        f"(pass mark {result.passing_score}, your best {result.best_score}{extra})."
+    )
+    _out.print(f"  {client.url}/problems/{state.problem}")
+    if not result.passed:
+        raise QuizFailed("recorded. Re-read what the assistant wrote and try again.")
 
 
 def main(argv: list[str] | None = None) -> None:

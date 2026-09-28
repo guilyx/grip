@@ -60,6 +60,9 @@ class Diff:
 
     truncated: bool = False
 
+    context: str = ""
+    """Optional text about the task the diff solves, shown to the model as data."""
+
     @property
     def is_empty(self) -> bool:
         """``True`` when there is nothing to quiz about."""
@@ -187,6 +190,13 @@ class Git:
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
         return self._collect(f"{base[:12]}..{head[:12]}", [base, head], exclude, max_bytes)
+
+    def worktree_diff(
+        self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
+    ) -> Diff:
+        """Everything since ``base``: commits plus staged and unstaged changes."""
+        self.run("add", "--intent-to-add", "--all", ".")
+        return self._collect(f"{base[:12]}..worktree", [base], exclude, max_bytes)
 
     def push_diff(
         self,

@@ -96,3 +96,20 @@ stage, provider, model, pass mark, score, pass/fail, and for each question its `
 label and points. It never contains the diff, file paths, repository names, question
 text, rubrics, your answers, feedback or the verdict. `grip study status` prints both
 lists so you can check before sharing.
+
+## `grip login` / `grip solve SLUG` / `grip submit`
+
+The [Keep A Grip](keepagrip.md) commands. `login TOKEN [--url URL]` verifies and stores an
+API token from your dashboard (`logout` forgets it, `whoami` shows the account).
+`problems [--category SLUG]` lists the catalogue. `solve SLUG [--dir PATH]` sets up a
+repository with `PROBLEM.md` and the problem's pass mark, and remembers the base commit.
+`submit [--no-tests] [--dry-run]` runs the problem's test command, quizzes you on everything
+since that base commit (uncommitted work included) and reports the score; `--dry-run` prints
+the payload instead of sending it.
+
+```bash
+grip login kag_…
+grip solve cmd-vel-safety-filter
+cd cmd-vel-safety-filter            # solve it, commit as you go
+grip submit --provider claude
+```
