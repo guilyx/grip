@@ -1,7 +1,3 @@
-<p align="center"><img src="docs/assets/launch/grip-thumbnail-240.png" alt="grip" width="96"></p>
-
-# grip
-
 **Keep a grip on your code.** grip is a git hook that quizzes you about your own diff
 before you commit or push it. Five questions, a Grip Score out of 100, and a pass mark you
 choose. Below the mark, nothing goes upstream.
