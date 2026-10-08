@@ -17,7 +17,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from grip_hook import MAX_SCORE, __version__
+from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, __version__
 from grip_hook.agent import (
     Gate,
     PendingStore,
@@ -826,6 +826,47 @@ def statusline_cmd(as_json: bool) -> None:
         parts.append("paused")
     if len(parts) > 1:
         click.echo(" ".join(parts))
+
+
+@cli.command(name="last")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable: the `grip grade` payload.")
+def last_cmd(as_json: bool) -> None:
+    """Show the last graded quiz: questions, your answers, scores and feedback.
+
+    The rubrics stay out of the plain view; `--json` prints the same payload `grip grade`
+    prints, for skills that build on your answers (such as a commit message).
+    """
+    git = Git()
+    cfg = _config(git)
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    report = memory.last_report()
+    if report is None:
+        raise GripError("no quiz has been graded in this repository yet")
+    if as_json:
+        payload = report_payload(report, memory.report_path)
+        payload["summary"] = report.summary
+        payload["answers"] = [
+            a.text for a in sorted(report.answers, key=lambda a: a.question_index)
+        ]
+        payload["questions"] = [q.question for q in report.questions]
+        payload["at"] = report.created_at.isoformat()
+        _emit(payload)
+        return
+    verdict = "[green]PASS[/green]" if report.passed else "[red]FAIL[/red]"
+    _out.print(
+        f"[bold]Grip Score {report.score}/{MAX_SCORE}[/bold] {verdict}, "
+        f"{_ago(report.created_at)} ({report.stage.value}, {report.provider})"
+    )
+    _out.print(f"[dim]{report.summary}[/dim]\n")
+    by_index = {a.question_index: a.text for a in report.answers}
+    for grade_ in report.grades:
+        q = report.questions[grade_.question_index]
+        number = f"[bold cyan]Q{grade_.question_index + 1}[/bold cyan]"
+        _out.print(f"{number} [dim]({q.focus})[/dim] {q.question}")
+        answer = by_index.get(grade_.question_index, "") or "(no answer)"
+        _out.print(f"  [bold]>[/bold] {answer}")
+        _out.print(f"  {grade_.score}/{POINTS_PER_QUESTION}: {grade_.feedback}\n")
+    _out.print(report.verdict)
 
 
 @cli.command()

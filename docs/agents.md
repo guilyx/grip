@@ -61,6 +61,19 @@ In Markdown files the developer owns, grip appends one block between
 markers. The rules files for Cursor, Windsurf and Cline are grip's own. The Claude Code
 settings file is merged key by key. Re-running refreshes the block text after an upgrade.
 
+## Two more skills
+
+Installed by the same `npx skills add guilyx/grip -g` and by the plugin.
+
+**`/grip-review BASE..HEAD`** (or a branch name): the reviewer's side of the table. grip
+writes five questions about the range; you answer them before approving, and the agent
+grades you. With `--questions-only` it stops after printing the questions, formatted to
+paste into the pull request for the author to answer.
+
+**`/grip-explain`**: turns your answers from the last quiz into a commit message
+(`--pr` for a pull request description, `--short` for the subject only). The agent edits
+your words, adds nothing, and never commits on its own. It reads `grip last --json`.
+
 ## Claude Code plugin
 
 The repository is also a Claude Code plugin marketplace. Install once:

@@ -281,3 +281,7 @@ def test_plugin_manifests() -> None:
     assert skill.startswith("---\nname: grip\n")
     assert "grip ask" in skill and "grip grade" in skill
     assert "/grip:quiz" not in skill
+    for name in ("grip-review", "grip-explain"):
+        text = (plugin_dir / "skills" / name / "SKILL.md").read_text()
+        assert text.startswith(f"---\nname: {name}\n"), name
+        assert "disable-model-invocation: true" in text

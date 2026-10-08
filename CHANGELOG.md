@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Two more skills: `grip-review` quizzes a reviewer on a range of commits (or prints the
+  questions for the author with `--questions-only`), `grip-explain` turns the developer's
+  answers from the last quiz into a commit message or pull request description. `grip last`
+  shows the last graded quiz, with `--json` for skills to build on.
 - An evals harness under `evals/`: eight fixture diffs with author notes, three answer
   arms (blank, generic, notes), repeated grading for noise, a committed fake-provider
   snapshot the tests keep current, and a Markdown summary. A "Honest numbers" docs page

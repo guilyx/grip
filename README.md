@@ -136,7 +136,9 @@ npx skills add guilyx/grip -g
 ```
 
 Then type `/grip` before you push. The agent relays the five questions, you answer, grip
-grades; the skill forbids the agent from answering for you. Claude Code users can take the
+grades; the skill forbids the agent from answering for you. `/grip-review main..feat`
+quizzes a reviewer on someone else's branch, `/grip-explain` turns your answers into the
+commit message. Claude Code users can take the
 plugin instead, which also blocks `git push` until the diff has passed:
 
 ```text
