@@ -196,6 +196,38 @@ def load_config(
     return cfg.validate()
 
 
+TEMPLATE = """\
+# grip: keep a grip on your code. Every option: https://guilyx.github.io/grip/configuration/
+
+# Grip Score out of 100 needed before a commit or push goes through.
+passing_score = {passing_score}
+
+# easy | normal | hard
+difficulty = "{difficulty}"
+
+# anthropic | claude-code | codex | gemini | openai | ollama | fake
+provider = "{provider}"
+
+# model = ""                   # empty: the provider's default
+# remember_passes_hours = 24   # a passed diff is not quizzed again for this long
+# fail_open = false            # let the commit through when the provider is down
+"""
+
+
+def render_template(
+    *, provider: str, passing_score: int = DEFAULT_PASSING_SCORE, difficulty: str = "normal"
+) -> str:
+    """The commented ``.grip.toml`` that ``grip init`` writes."""
+    cfg = _apply(
+        Config(),
+        {"provider": provider, "passing_score": passing_score, "difficulty": difficulty},
+        "grip init",
+    ).validate()
+    return TEMPLATE.format(
+        passing_score=cfg.passing_score, difficulty=cfg.difficulty.value, provider=cfg.provider
+    )
+
+
 def describe(cfg: Config) -> list[tuple[str, str]]:
     """Return ``(name, value)`` pairs for display."""
     rows: list[tuple[str, str]] = []
@@ -215,7 +247,9 @@ __all__ = [
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
+    "TEMPLATE",
     "Config",
     "describe",
     "load_config",
+    "render_template",
 ]

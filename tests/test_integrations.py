@@ -211,6 +211,7 @@ def test_cli_detected_default(in_repo: Path) -> None:
     assert result.exit_code == 0, result.output
     assert (in_repo / "AGENTS.md").exists()
     assert not (in_repo / "GEMINI.md").exists()
+    assert not (in_repo / "CLAUDE.md").exists()  # the real PATH is not consulted
     assert "written" in result.output and "skills add" in result.output
 
 

@@ -33,7 +33,15 @@ Pin a version with `sh -s -- --version v0.1.0`, change the directory with `--dir
 it with `--uninstall`. Linux and macOS, x86_64 and arm64. On Windows use the pre-commit
 framework route below.
 
-Then pick one of two ways to wire it into git.
+Then, in your repository:
+
+```bash
+grip init
+```
+
+That writes a commented `.grip.toml`, installs the pre-push hook and tells the coding
+agents on your machine to run the quiz before they push. Commit the files and the team
+shares the setup. Prefer to do it by hand? Two ways to wire it into git:
 
 ### Option A: native git hook
 
