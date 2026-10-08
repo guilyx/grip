@@ -40,7 +40,7 @@ from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFail
 from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect, is_installed
-from grip_hook.memory import PassMemory
+from grip_hook.memory import PassMemory, SkipState
 from grip_hook.models import Difficulty, Report, Stage
 from grip_hook.platform import (
     DEFAULT_URL,
@@ -385,6 +385,8 @@ def agent_hook_cmd(agent: str, gate: Gate) -> None:
     mode, cwd = request
     try:
         git = Git(cwd)
+        if SkipState(git.git_dir()).consume():
+            return
         verdict = _check(git, _config(git), mode, None)
     except GripError:
         return
@@ -420,6 +422,9 @@ def hook(
         return
 
     git = Git()
+    if reason := SkipState(git.git_dir()).consume():
+        _skip(f"{reason}, skipping the quiz. `grip resume` cancels a pause.")
+        return
     cfg = _config(git, **overrides)
     stage_enum = Stage(stage)
     if stage_enum is Stage.PRE_COMMIT:
@@ -667,7 +672,51 @@ def status_cmd() -> None:
         _out.print(
             "[dim]pre-commit config detected: grip may also run via .pre-commit-config.yaml[/dim]"
         )
-    _print_config(_config(git))
+    cfg = _config(git)
+    _print_activity(git, cfg)
+    _print_config(cfg)
+
+
+def _ago(when: datetime, now: datetime | None = None) -> str:
+    """``3 hours ago`` style text for a UTC timestamp."""
+    delta = (now or datetime.now(UTC)) - when
+    seconds = max(0, int(delta.total_seconds()))
+    for unit, size in (("day", 86_400), ("hour", 3_600), ("minute", 60)):
+        count = seconds // size
+        if count:
+            return f"{count} {unit}{'s' if count != 1 else ''} ago"
+    return "just now"
+
+
+def _diff_state(git: Git, cfg: Config, mode: str) -> str:
+    """``nothing``, ``passed`` or ``not quizzed`` for the staged or unpushed diff."""
+    try:
+        diff = _select_diff(git, cfg, mode, None)
+    except GripError as exc:
+        return f"[yellow]could not check[/yellow] ({exc})"
+    if diff.is_empty:
+        return "[dim]nothing[/dim]"
+    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
+        return "[green]passed[/green], remembered"
+    return f"[yellow]not quizzed yet[/yellow] ({len(diff.files)} files)"
+
+
+def _print_activity(git: Git, cfg: Config) -> None:
+    table = Table(title="activity", show_header=False, box=None, pad_edge=False)
+    table.add_column(style="bold")
+    table.add_column()
+    report = PassMemory(git.git_dir(), cfg.remember_passes_hours).last_report()
+    if report is None:
+        table.add_row("last quiz", "[dim]none yet[/dim]")
+    else:
+        verdict = "[green]PASS[/green]" if report.passed else "[red]FAIL[/red]"
+        when = f"{_ago(report.created_at)} ({report.stage.value})"
+        table.add_row("last quiz", f"{report.score}/{MAX_SCORE} {verdict}, {when}")
+    table.add_row("staged changes", _diff_state(git, cfg, "staged"))
+    table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    skip = SkipState(git.git_dir()).describe()
+    table.add_row("skipping", f"[yellow]{skip}[/yellow]" if skip else "[dim]no[/dim]")
+    _out.print(table)
 
 
 @cli.command(name="config")
@@ -683,6 +732,100 @@ def _print_config(cfg: Config) -> None:
     for name, value in describe(cfg):
         table.add_row(name, value)
     _out.print(table)
+
+
+@cli.command(name="skip")
+@click.option(
+    "--hours",
+    type=click.FloatRange(min=0, min_open=True),
+    default=None,
+    help="Pause every hook run for this long instead of skipping only the next one.",
+)
+def skip_cmd(hours: float | None) -> None:
+    """Skip the next commit or push hook once, or pause hooks for a while.
+
+    For the IDE push button and every other place where GRIP_SKIP=1 is awkward to set. A
+    manual `grip quiz` is never affected. `grip resume` cancels a pause early.
+    """
+    git = Git()
+    state = SkipState(git.git_dir())
+    if hours is None:
+        state.set_once()
+        _out.print("[yellow]grip:[/yellow] the next commit or push hook is skipped once.")
+        return
+    until = datetime.now(UTC) + timedelta(hours=hours)
+    state.set_until(until)
+    _out.print(
+        f"[yellow]grip:[/yellow] hooks paused until {until:%Y-%m-%d %H:%M} UTC. "
+        "`grip resume` ends it early."
+    )
+
+
+@cli.command(name="resume")
+def resume_cmd() -> None:
+    """Cancel `grip skip`: hooks quiz again from the next run."""
+    git = Git()
+    state = SkipState(git.git_dir())
+    had = state.describe() is not None
+    state.clear()
+    _out.print(
+        "[green]grip:[/green] hooks resume from the next run."
+        if had
+        else "[dim]grip: nothing was skipped.[/dim]"
+    )
+
+
+def _stdin_cwd() -> Path | None:
+    """The ``cwd`` of a JSON payload on stdin (Claude Code status line), if any."""
+    if sys.stdin.isatty():
+        return None
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except (OSError, json.JSONDecodeError):
+        return None
+    cwd = payload.get("cwd") if isinstance(payload, dict) else None
+    return Path(cwd) if isinstance(cwd, str) and cwd else None
+
+
+@cli.command(name="statusline")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+def statusline_cmd(as_json: bool) -> None:
+    """One short line for an editor or Claude Code status line.
+
+    Prints the last Grip Score, pass or fail, and whether hooks are paused. Reads an
+    optional JSON payload on stdin and uses its "cwd" (that is what Claude Code sends).
+    Never fails: outside a repository, or before any quiz, it prints nothing and exits 0.
+    """
+    try:
+        git = Git(_stdin_cwd())
+        git_dir = git.git_dir()
+        cfg = _config(git)
+    except GripError:
+        if as_json:
+            _emit({"repo": False})
+        return
+    report = PassMemory(git_dir, cfg.remember_passes_hours).last_report()
+    skip = SkipState(git_dir).describe()
+    if as_json:
+        _emit(
+            {
+                "repo": True,
+                "score": None if report is None else report.score,
+                "max_score": MAX_SCORE,
+                "passed": None if report is None else report.passed,
+                "passing_score": cfg.passing_score,
+                "at": None if report is None else report.created_at.isoformat(),
+                "skipping": skip,
+            }
+        )
+        return
+    parts = ["grip"]
+    if report is not None:
+        parts.append(f"{report.score}/{MAX_SCORE} {'pass' if report.passed else 'fail'}")
+    if skip:
+        parts.append("paused")
+    if len(parts) > 1:
+        click.echo(" ".join(parts))
 
 
 @cli.command()
