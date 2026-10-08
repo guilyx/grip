@@ -1,11 +1,11 @@
 ---
-name: quiz
-description: Quiz the developer on the current diff with grip. Five questions about the change, graded to a Grip Score out of 100. Run it before committing or pushing code the developer did not write line by line.
+name: grip
+description: Quiz the developer on the current diff with grip before it is committed or pushed. Five questions about the change, graded to a Grip Score out of 100. Use for /grip, "quiz me", "do I have a grip on this", or before pushing code the developer did not write line by line.
 disable-model-invocation: true
 allowed-tools: Bash(grip *)
 ---
 
-# grip quiz
+# grip
 
 You are the messenger, not the student. grip writes the questions and grades the
 answers; you relay them. The developer answers.
@@ -38,7 +38,7 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
    Then the Grip Score against the pass mark and the verdict.
    - Exit code 0: they passed. The diff is remembered, so `git push` goes through.
    - Exit code 1: they failed. Suggest what to re-read from the feedback and offer to
-     run `/grip:quiz` again for a fresh set of questions.
+     run `/grip` again for a fresh set of questions.
 
 ## Notes
 
@@ -48,3 +48,5 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
 - Configuration lives in `.grip.toml` at the repository root: `passing_score`,
   `difficulty`, `provider`, `model`. With `provider = "claude-code"` grip drives the
   `claude` CLI itself, so no API key is needed.
+- `grip check --unpushed` exits 0 when the unpushed diff already passed. Run it before
+  `git push` when no hook does it for you.

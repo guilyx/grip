@@ -23,8 +23,11 @@ All notable changes to this project are documented here. The format follows
   non-interactive mode with tools disabled, in an empty scratch directory.
 
 - Claude Code plugin, served from this repository as a marketplace
-  (`/plugin marketplace add guilyx/grip`): `/grip:quiz` relays the quiz through Claude and
+  (`/plugin marketplace add guilyx/grip`): `/grip` relays the quiz through Claude and
   a `PreToolUse` hook blocks `git push` until the diff has passed.
+- The quiz skill lives at `skills/grip/SKILL.md` in the Agent Skills layout, so
+  `npx skills add guilyx/grip` installs it into any agent that reads `SKILL.md` files.
+  The plugin is served from the repository root (`hooks/hooks.json`, `skills/`).
 - `grip ask`, `grip grade`, `grip check` and `grip agent-hook`: the quiz as
   non-interactive JSON steps so any coding agent can drive it.
 - `grip study export` and `grip study status`: an anonymised JSON summary of every quiz

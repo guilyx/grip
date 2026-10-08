@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "grip",
-      "source": "./plugins/claude-code",
-      "description": "Quiz yourself on your diff before Claude pushes it. /grip:quiz asks five questions; a hook blocks `git push` until the diff has passed.",
+      "source": "./",
+      "description": "Quiz yourself on your diff before Claude pushes it. /grip asks five questions; a hook blocks `git push` until the diff has passed.",
       "version": "0.1.0",
       "author": {
         "name": "Erwin L."
