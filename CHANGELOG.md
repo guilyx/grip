@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `grip init`: one command that writes a commented `.grip.toml` (defaulting to an
+  installed coding agent as provider), installs the pre-push hook and writes the agent
+  rule files. `--provider`, `--passing-score`, `--difficulty`, `--stage`, `--no-hook`,
+  `--no-agents`, `--force`. `config.render_template` produces the file.
 - `grip agents`: detects the coding agents installed on the machine (Claude Code, Codex,
   Gemini CLI, Cursor, Windsurf, Cline, Copilot, OpenCode) and writes, inside the
   repository, the rule file each one reads so it runs `grip check` before pushing.

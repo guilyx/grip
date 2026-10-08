@@ -29,11 +29,17 @@ from grip_hook.agent import (
     questions_payload,
     report_payload,
 )
-from grip_hook.config import Config, describe, load_config
+from grip_hook.config import (
+    DEFAULT_PASSING_SCORE,
+    Config,
+    describe,
+    load_config,
+    render_template,
+)
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
 from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
-from grip_hook.integrations import AGENTS, Action, agent, apply, detect
+from grip_hook.integrations import AGENTS, Action, agent, apply, detect, is_installed
 from grip_hook.memory import PassMemory
 from grip_hook.models import Difficulty, Report, Stage
 from grip_hook.platform import (
@@ -443,6 +449,93 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
             return Diff("push", "", "", ())
         return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
     return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
+
+
+def _default_provider() -> str:
+    """The provider ``grip init`` picks: a signed-in coding agent when there is one."""
+    for key in ("claude-code", "codex", "gemini"):
+        if is_installed(agent(key)):
+            return key
+    return "anthropic"
+
+
+@cli.command(name="init")
+@click.option(
+    "--provider",
+    type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+    default=None,
+    help="Provider for .grip.toml. Defaults to an installed coding agent, else anthropic.",
+)
+@click.option(
+    "--passing-score",
+    type=click.IntRange(0, MAX_SCORE),
+    default=None,
+    help=f"Pass mark out of {MAX_SCORE} to write into .grip.toml.",
+)
+@click.option(
+    "--difficulty",
+    type=click.Choice([d.value for d in Difficulty], case_sensitive=False),
+    default=None,
+    help="Difficulty to write into .grip.toml.",
+)
+@click.option(
+    "--stage",
+    "stages",
+    multiple=True,
+    type=_stage_choice(),
+    help="Hook stage(s) to install. Defaults to pre-push.",
+)
+@click.option("--no-hook", is_flag=True, help="Do not install a git hook.")
+@click.option("--no-agents", is_flag=True, help="Do not write coding-agent rule files.")
+@click.option("--force", is_flag=True, help="Overwrite an existing .grip.toml.")
+def init_cmd(
+    *,
+    provider: str | None,
+    passing_score: int | None,
+    difficulty: str | None,
+    stages: tuple[str, ...],
+    no_hook: bool,
+    no_agents: bool,
+    force: bool,
+) -> None:
+    """Set a repository up in one go: .grip.toml, the git hook and the agent rule files.
+
+    Picks a provider you will not need a key for when Claude Code, Codex or Gemini CLI is
+    installed. Everything it writes is meant to be committed so the whole team shares it.
+    """
+    git = Git()
+    root = git.root()
+    toml_path = root / ".grip.toml"
+    if toml_path.exists() and not force:
+        _out.print(
+            f"[dim]grip: {_pretty_path(toml_path)} exists, keeping it (--force overwrites)[/dim]"
+        )
+    else:
+        chosen = (provider or _default_provider()).lower()
+        text = render_template(
+            provider=chosen,
+            passing_score=DEFAULT_PASSING_SCORE if passing_score is None else passing_score,
+            difficulty=difficulty or Difficulty.NORMAL.value,
+        )
+        toml_path.write_text(text, "utf-8")
+        _out.print(f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {chosen})")
+    if not no_hook:
+        for stage in stages or (Stage.PRE_PUSH.value,):
+            result = install(git, Stage(stage), append=True)
+            how = "appended to" if result.appended else "installed at"
+            _out.print(f"[green]grip:[/green] {stage} hook {how} {_pretty_path(result.path)}")
+    if not no_agents:
+        changes = apply(root, detect())
+        for change in changes:
+            if change.action is not Action.UNCHANGED:
+                _out.print(
+                    f"[green]grip:[/green] {change.action.value} {_pretty_path(change.path)} "
+                    f"for {', '.join(change.agents)}"
+                )
+    _out.print(
+        "\n[dim]Try it: grip quiz --provider fake. Commit the files above so your team gets "
+        "the same setup. grip status shows what is active.[/dim]"
+    )
 
 
 @cli.command(name="agents")

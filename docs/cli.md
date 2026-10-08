@@ -52,6 +52,21 @@ Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git
 (and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
 [plugin](agents.md#claude-code-plugin).
 
+## `grip init`
+
+Sets a repository up in one go: writes a commented `.grip.toml`, installs the pre-push hook
+(chaining after an existing hook rather than failing) and runs `grip agents` for the
+coding agents it detects. The provider defaults to `claude-code`, `codex` or `gemini` when
+that CLI is installed, `anthropic` otherwise.
+
+```bash
+grip init                                   # detect, write, install
+grip init --provider ollama --passing-score 80 --difficulty hard
+grip init --stage pre-commit --stage pre-push
+grip init --no-hook --no-agents             # only .grip.toml
+grip init --force                           # overwrite an existing .grip.toml
+```
+
 ## `grip agents`
 
 Writes the file each installed coding agent reads so it runs the quiz before pushing:

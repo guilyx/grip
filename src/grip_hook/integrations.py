@@ -162,17 +162,18 @@ def _home_match(home: Path, pattern: str) -> bool:
 def is_installed(
     target: Agent,
     home: Path | None = None,
-    which: Callable[[str], str | None] = shutil.which,
+    which: Callable[[str], str | None] | None = None,
 ) -> bool:
     """Whether ``target`` looks installed: a binary on ``PATH`` or a directory under home."""
     home = home or Path.home()
+    which = which or shutil.which
     return any(which(b) for b in target.binaries) or any(
         _home_match(home, d) for d in target.home_dirs
     )
 
 
 def detect(
-    home: Path | None = None, which: Callable[[str], str | None] = shutil.which
+    home: Path | None = None, which: Callable[[str], str | None] | None = None
 ) -> list[Agent]:
     """The agents that look installed, plus the always-on generic ``AGENTS.md``."""
     return [a for a in AGENTS if a.always or is_installed(a, home, which)]

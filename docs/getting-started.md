@@ -65,7 +65,20 @@ and proxies.
 
 ## 3. Wire it into git
 
-Choose one of the two approaches.
+The quick way does steps 2, 3 and 5 at once:
+
+```bash
+cd your-repo
+grip init
+```
+
+It writes a commented `.grip.toml` (picking `claude-code`, `codex` or `gemini` as the
+provider when that CLI is installed, `anthropic` otherwise), installs the pre-push hook,
+and writes the rule file for every [coding agent](agents.md) found on your machine. Commit
+what it wrote and the team shares it. Flags: `--provider`, `--passing-score`,
+`--difficulty`, `--stage`, `--no-hook`, `--no-agents`, `--force`.
+
+To do it by hand, choose one of the two approaches.
 
 === "Native git hook"
 
