@@ -295,3 +295,30 @@ def test_main_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(SystemExit) as exc:
         cli_module.main(["status"])
     assert exc.value.code == 2
+
+
+def test_last_shows_the_graded_quiz(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    result = runner.invoke(cli, ["last"])
+    assert result.exit_code == 2
+    assert "no quiz has been graded" in result.output
+
+    stage_change("a.py", "x = 1\n")
+    terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+
+    result = runner.invoke(cli, ["last"])
+    assert result.exit_code == 0, result.output
+    assert "Grip Score 100/100" in result.output and "PASS" in result.output
+    assert "Q1" in result.output and GOOD[0] in result.output
+    assert "rubric" not in result.output.lower()
+
+    data = json.loads(runner.invoke(cli, ["last", "--json"]).output)
+    assert data["status"] == "pass" and data["score"] == 100
+    assert data["answers"] == GOOD and len(data["questions"]) == 5
+    assert "summary" in data and "at" in data
+    assert "rubric" not in json.dumps(data).lower()

@@ -132,6 +132,13 @@ it prints nothing and exits 0. It reads an optional JSON payload on stdin and us
 
 Prints the effective configuration after merging files, environment and defaults.
 
+## `grip last`
+
+Shows the last graded quiz in this repository: each question with its focus, your answer,
+the points and the feedback, then the verdict. Rubrics are not shown. `--json` prints the
+same payload as `grip grade` plus `summary`, `questions`, `answers` and `at`; the
+`/grip-explain` skill builds a commit message from it.
+
 ## `grip forget`
 
 Clears remembered passes so the next commit or push is quizzed again.
