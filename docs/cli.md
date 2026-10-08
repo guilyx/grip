@@ -52,6 +52,23 @@ Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git
 (and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
 [plugin](agents.md#claude-code-plugin).
 
+## `grip agents`
+
+Writes the file each installed coding agent reads so it runs the quiz before pushing:
+`AGENTS.md`, `CLAUDE.md` and `.claude/settings.json`, `GEMINI.md`, `.cursor/rules/grip.mdc`,
+`.windsurf/rules/grip.md`, `.clinerules/grip.md`, `.github/copilot-instructions.md`.
+Detection looks for the agent's binary on `PATH` or its directory under your home.
+
+```bash
+grip agents --list                  # detected agents and what each would get
+grip agents                         # write for the detected ones
+grip agents --all                   # write for every known agent
+grip agents --agent gemini --dry-run
+grip agents --remove                # strip the blocks, leave the rest of each file
+```
+
+See [Coding agents](agents.md#one-command-for-every-agent).
+
 ## `grip install` / `grip uninstall`
 
 ```bash

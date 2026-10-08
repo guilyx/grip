@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `grip agents`: detects the coding agents installed on the machine (Claude Code, Codex,
+  Gemini CLI, Cursor, Windsurf, Cline, Copilot, OpenCode) and writes, inside the
+  repository, the rule file each one reads so it runs `grip check` before pushing.
+  Marked blocks in `AGENTS.md`, `CLAUDE.md` and `GEMINI.md`, grip-owned rules files for
+  Cursor, Windsurf and Cline, and the plugin enablement merged into
+  `.claude/settings.json`. `--list`, `--all`, `--agent`, `--dry-run` and `--remove`.
 - Keep A Grip, the problem platform: `grip login`, `grip logout`, `grip whoami`,
   `grip problems`, `grip solve SLUG` and `grip submit`. Solve a problem with any assistant,
   get quizzed on the diff, have the score reported with an API token. `Diff` gained a

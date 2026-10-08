@@ -58,6 +58,7 @@ nav:
       - agent: reference/agent.md
       - quiz: reference/quiz.md
       - hooks: reference/hooks.md
+      - integrations: reference/integrations.md
       - study: reference/study.md
       - platform: reference/platform.md
 
