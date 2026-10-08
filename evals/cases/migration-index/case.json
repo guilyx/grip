@@ -1,0 +1,16 @@
+{
+  "title": "Partial index on open orders and NOT NULL on customer_id",
+  "description": "staged changes",
+  "tags": [
+    "sql",
+    "migration",
+    "database"
+  ],
+  "notes": {
+    "what": "Adds a partial index on orders(customer_id) for rows where status is open or paid, backfills customer_id from the legacy customers_orders table, then makes the column NOT NULL. The down migration reverses all three.",
+    "why": "The dashboard query that lists a customer's open orders was scanning the whole table; 97% of rows are closed. Nullable customer_id let orphan orders in and broke the join.",
+    "edge": "If any order still has no matching legacy row after the backfill, the NOT NULL step fails and the whole migration rolls back, which is the intended safety net. The index is created CONCURRENTLY so it cannot run inside the transaction block; it is in its own statement with its own transaction marker.",
+    "risk": "CONCURRENTLY leaves an invalid index behind if it is interrupted; the runbook says to drop and re-run. The backfill updates every open row, so it takes a lock per row for a few minutes on the big tenant. Code that inserted orders without a customer now errors.",
+    "test": "Run up then down on a copy of production, compare row counts, EXPLAIN the dashboard query and confirm the index is used, and insert an order without customer_id expecting a NOT NULL violation."
+  }
+}

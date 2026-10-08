@@ -1,0 +1,17 @@
+{
+  "title": "Rename fetch_user to load_user across callers, no behaviour change",
+  "description": "staged changes",
+  "tags": [
+    "python",
+    "refactor",
+    "annoyance",
+    "rename"
+  ],
+  "notes": {
+    "what": "fetch_user is renamed load_user in the repository module and its two callers; nothing else changes. The old name is kept as a deprecated alias that warns.",
+    "why": "The team convention is load_ for database reads and fetch_ for HTTP; this one read from Postgres and kept confusing new people.",
+    "edge": "Code that imported fetch_user still works but emits a DeprecationWarning once per call site; test suites that turn warnings into errors will fail until they migrate.",
+    "risk": "Any dynamic lookup by string (getattr, a registry keyed by function name) would miss the rename; a grep for the string found none. The alias keeps third-party plugins working for one release.",
+    "test": "The existing repository tests pass unchanged after the import rename; one new test asserts the alias warns and returns the same object."
+  }
+}

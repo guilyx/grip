@@ -1,0 +1,16 @@
+{
+  "title": "Optional clamp on add()",
+  "description": "staged changes",
+  "tags": [
+    "python",
+    "small",
+    "behaviour-change"
+  ],
+  "notes": {
+    "what": "add() takes an optional clamp keyword; when given, the sum is capped at that value so add(3, 4, clamp=5) returns 5. Without clamp nothing changes.",
+    "why": "Callers in the budget module were clamping the result themselves in three places, each slightly differently; one of them clamped before adding.",
+    "edge": "A negative clamp or a clamp below both operands still applies: add(3, 4, clamp=-1) returns -1, which is what min() does. clamp=None is the same as no clamp.",
+    "risk": "Any caller passing a positional third argument would now hit the keyword-only marker and fail at call time; a grep found none. The docstring example doubles as a doctest.",
+    "test": "Three new unit tests: no clamp, clamp above the sum (no effect), clamp below the sum. The doctest line runs under pytest --doctest-modules."
+  }
+}

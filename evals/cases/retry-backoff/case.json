@@ -1,0 +1,16 @@
+{
+  "title": "HTTP client retries with jittered backoff and context cancellation",
+  "description": "staged changes",
+  "tags": [
+    "go",
+    "networking",
+    "reliability"
+  ],
+  "notes": {
+    "what": "Do() retries idempotent requests up to maxRetries times on 5xx and transport errors, sleeping base*2^attempt plus random jitter, and stops as soon as the request context is cancelled. 4xx responses are returned immediately.",
+    "why": "The fleet API flaps for a few seconds during deploys; every caller had its own retry loop, two of them retried POSTs, and none honoured cancellation so shutdown hung.",
+    "edge": "A 503 with a body is drained and closed before retrying so the connection can be reused. If the context deadline fires during the sleep, the last error is wrapped with the context error. maxRetries of 0 means exactly one attempt.",
+    "risk": "Only GET, HEAD, PUT and DELETE are retried; POST callers that relied on their own loops lose retries, which is intended. Jitter uses math/rand, fine here, not for anything security related. Total worst-case latency grows to roughly base*(2^n - 1).",
+    "test": "An httptest server that fails N times then succeeds, asserting attempt counts for GET and POST, a cancelled context returning context.Canceled quickly, and a 404 returning after one attempt."
+  }
+}

@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- An evals harness under `evals/`: eight fixture diffs with author notes, three answer
+  arms (blank, generic, notes), repeated grading for noise, a committed fake-provider
+  snapshot the tests keep current, and a Markdown summary. A "Honest numbers" docs page
+  says what is measured, what is not, and where grip gets in the way.
 - `CITATION.cff` and a Cite section in the README; `.github/FUNDING.yml`. The README opens
   with a three-tile summary and a before/after comparison, and its Why section cites the
   METR, GitClear, DORA and Stack Overflow findings on AI-assisted code.

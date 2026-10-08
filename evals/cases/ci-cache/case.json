@@ -1,0 +1,15 @@
+{
+  "title": "CI: cache keyed on the lockfile, Windows added to the test matrix",
+  "description": "staged changes",
+  "tags": [
+    "yaml",
+    "ci"
+  ],
+  "notes": {
+    "what": "The dependency cache key now hashes uv.lock instead of pyproject.toml, with a restore-keys fallback on the OS prefix, and the test matrix gains windows-latest on Python 3.13.",
+    "why": "Editing pyproject.toml for metadata was busting the cache on every release PR, and two Windows path bugs shipped because nothing ran there.",
+    "edge": "When uv.lock is missing the key degrades to the OS prefix and restores whatever is newest, which may be stale; the install step is still exact because uv resolves from the lockfile. A cache hit on Windows still needs the per-OS prefix or it would restore a Linux venv.",
+    "risk": "Windows roughly doubles wall-clock time for the job; fail-fast is off so a Windows failure does not cancel the Linux runs. The cache action version bump changes the save behaviour to only-on-primary-key-miss.",
+    "test": "Push a branch that changes only pyproject.toml and confirm a cache hit in the job log; push one that changes uv.lock and confirm a miss then a save; check the Windows job appears and passes."
+  }
+}

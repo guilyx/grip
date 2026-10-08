@@ -1,0 +1,16 @@
+{
+  "title": "Docs: wording and a corrected default in the configuration page",
+  "description": "staged changes",
+  "tags": [
+    "docs",
+    "annoyance",
+    "tiny"
+  ],
+  "notes": {
+    "what": "Two wording fixes in the configuration page and the documented default for remember_passes_hours corrected from 12 to 24, which is what the code does.",
+    "why": "A reader opened an issue because the page said 12 hours and the tool remembered for 24.",
+    "edge": "None in code. The only way this is wrong is if the code default changes again without the page.",
+    "risk": "No runtime effect. The docs build is strict, so a broken link would have failed the build; none were touched.",
+    "test": "Build the docs locally and read the page; grep the source for the default to confirm 24."
+  }
+}

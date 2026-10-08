@@ -1,0 +1,1276 @@
+{
+  "grip_version": "0.1.0",
+  "generated_at": "2026-10-08T07:07:26+00:00",
+  "provider": "fake",
+  "model": "fake",
+  "difficulty": "normal",
+  "passing_score": 70,
+  "max_score": 100,
+  "question_count": 5,
+  "repeats": 2,
+  "cases": [
+    {
+      "name": "ci-cache",
+      "title": "CI: cache keyed on the lockfile, Windows added to the test matrix",
+      "tags": [
+        "yaml",
+        "ci"
+      ],
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "patch_bytes": 774,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to .github/workflows/ci.yml do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to .github/workflows/ci.yml needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to .github/workflows/ci.yml misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to .github/workflows/ci.yml?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to .github/workflows/ci.yml works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "The dependency cache key now hashes uv.lock instead of pyproject.toml, with a restore-keys fallback on the OS prefix, and the test matrix gains windows-latest on Python 3.13.",
+            "Editing pyproject.toml for metadata was busting the cache on every release PR, and two Windows path bugs shipped because nothing ran there.",
+            "When uv.lock is missing the key degrades to the OS prefix and restores whatever is newest, which may be stale; the install step is still exact because uv resolves from the lockfile. A cache hit on Windows still needs the per-OS prefix or it would restore a Linux venv.",
+            "Windows roughly doubles wall-clock time for the job; fail-fast is off so a Windows failure does not cancel the Linux runs. The cache action version bump changes the save behaviour to only-on-primary-key-miss.",
+            "Push a branch that changes only pyproject.toml and confirm a cache hit in the job log; push one that changes uv.lock and confirm a miss then a save; check the Windows job appears and passes."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "clamp-add",
+      "title": "Optional clamp on add()",
+      "tags": [
+        "python",
+        "small",
+        "behaviour-change"
+      ],
+      "files": [
+        "calc/ops.py",
+        "tests/test_ops.py"
+      ],
+      "patch_bytes": 903,
+      "summary": "Fake summary of 2 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to calc/ops.py do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to tests/test_ops.py needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to calc/ops.py misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to tests/test_ops.py?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to calc/ops.py works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "add() takes an optional clamp keyword; when given, the sum is capped at that value so add(3, 4, clamp=5) returns 5. Without clamp nothing changes.",
+            "Callers in the budget module were clamping the result themselves in three places, each slightly differently; one of them clamped before adding.",
+            "A negative clamp or a clamp below both operands still applies: add(3, 4, clamp=-1) returns -1, which is what min() does. clamp=None is the same as no clamp.",
+            "Any caller passing a positional third argument would now hit the keyword-only marker and fail at call time; a grep found none. The docstring example doubles as a doctest.",
+            "Three new unit tests: no clamp, clamp above the sum (no effect), clamp below the sum. The doctest line runs under pytest --doctest-modules."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "cmd-vel-watchdog",
+      "title": "Scan watchdog in the cmd_vel safety filter",
+      "tags": [
+        "python",
+        "ros2",
+        "safety"
+      ],
+      "files": [
+        "safety/cmd_vel_filter.py"
+      ],
+      "patch_bytes": 1808,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to safety/cmd_vel_filter.py do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to safety/cmd_vel_filter.py needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to safety/cmd_vel_filter.py misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to safety/cmd_vel_filter.py?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to safety/cmd_vel_filter.py works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "When no LaserScan has arrived for longer than scan_timeout, the filter publishes a zero Twist instead of forwarding the command, with a throttled warning. The hard-coded stop distance becomes the stop_distance parameter.",
+            "A dead lidar used to look like an empty world: the last scan showed no obstacle so commands kept flowing. The check lives in the cmd_vel callback because the scan callback stops running the moment scans stop.",
+            "Scan age is header.stamp against the node clock, so a lidar whose clock runs behind makes every scan look stale and the robot refuses to move. stop_distance set to 0 silently disables the obstacle stop since min_range can never be below it.",
+            "Launch files that relied on the constant must now pass stop_distance; the default keeps the old value. The watchdog adds a clock read per command, negligible. Throttled logging hides repeated stops in bag replays.",
+            "Publish synthetic LaserScan messages from a test node, stop publishing, send a cmd_vel_raw and assert /cmd_vel is a zero Twist; launch_testing with a sim clock keeps it repeatable."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "debounce-leading",
+      "title": "debounce() gains a leading option and stops leaking timers",
+      "tags": [
+        "javascript",
+        "behaviour-change"
+      ],
+      "files": [
+        "src/util/debounce.js"
+      ],
+      "patch_bytes": 724,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to src/util/debounce.js do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to src/util/debounce.js needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to src/util/debounce.js misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to src/util/debounce.js?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to src/util/debounce.js works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "debounce(fn, wait, {leading}) now calls fn immediately on the first call in a burst when leading is true, then suppresses calls until wait ms of silence. The returned function gets a cancel() method that clears the pending timer.",
+            "The search box needed the first keystroke to fire instantly for perceived speed, and unmounted components kept firing stale timers because there was no way to cancel.",
+            "With leading true and a single call, fn runs once and never again at the trailing edge, so the trailing call is skipped when nothing happened during the wait. Calling cancel() twice is a no-op. wait of 0 still defers to the next tick in trailing mode.",
+            "Existing callers get identical trailing behaviour since leading defaults to false. The timer handle is kept in a closure, so each debounced function holds one timer at most; React effects must call cancel() in cleanup.",
+            "Fake timers in the unit test: assert one call at t=0 with leading, none during the burst, one trailing call without leading, and that cancel() prevents the trailing call."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "docs-typos",
+      "title": "Docs: wording and a corrected default in the configuration page",
+      "tags": [
+        "docs",
+        "annoyance",
+        "tiny"
+      ],
+      "files": [
+        "docs/configuration.md"
+      ],
+      "patch_bytes": 748,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to docs/configuration.md do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to docs/configuration.md needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to docs/configuration.md misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to docs/configuration.md?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to docs/configuration.md works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "Two wording fixes in the configuration page and the documented default for remember_passes_hours corrected from 12 to 24, which is what the code does.",
+            "A reader opened an issue because the page said 12 hours and the tool remembered for 24.",
+            "None in code. The only way this is wrong is if the code default changes again without the page.",
+            "No runtime effect. The docs build is strict, so a broken link would have failed the build; none were touched.",
+            "Build the docs locally and read the page; grep the source for the default to confirm 24."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "migration-index",
+      "title": "Partial index on open orders and NOT NULL on customer_id",
+      "tags": [
+        "sql",
+        "migration",
+        "database"
+      ],
+      "files": [
+        "db/migrations/0041_orders_customer.sql"
+      ],
+      "patch_bytes": 700,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to db/migrations/0041_orders_customer.sql do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to db/migrations/0041_orders_customer.sql needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to db/migrations/0041_orders_customer.sql misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to db/migrations/0041_orders_customer.sql?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to db/migrations/0041_orders_customer.sql works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "Adds a partial index on orders(customer_id) for rows where status is open or paid, backfills customer_id from the legacy customers_orders table, then makes the column NOT NULL. The down migration reverses all three.",
+            "The dashboard query that lists a customer's open orders was scanning the whole table; 97% of rows are closed. Nullable customer_id let orphan orders in and broke the join.",
+            "If any order still has no matching legacy row after the backfill, the NOT NULL step fails and the whole migration rolls back, which is the intended safety net. The index is created CONCURRENTLY so it cannot run inside the transaction block; it is in its own statement with its own transaction marker.",
+            "CONCURRENTLY leaves an invalid index behind if it is interrupted; the runbook says to drop and re-run. The backfill updates every open row, so it takes a lock per row for a few minutes on the big tenant. Code that inserted orders without a customer now errors.",
+            "Run up then down on a copy of production, compare row counts, EXPLAIN the dashboard query and confirm the index is used, and insert an order without customer_id expecting a NOT NULL violation."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "rename-only",
+      "title": "Rename fetch_user to load_user across callers, no behaviour change",
+      "tags": [
+        "python",
+        "refactor",
+        "annoyance",
+        "rename"
+      ],
+      "files": [
+        "app/api.py",
+        "app/jobs.py",
+        "app/repo.py"
+      ],
+      "patch_bytes": 935,
+      "summary": "Fake summary of 3 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to app/api.py do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to app/jobs.py needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to app/repo.py misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to app/api.py?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to app/jobs.py works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "fetch_user is renamed load_user in the repository module and its two callers; nothing else changes. The old name is kept as a deprecated alias that warns.",
+            "The team convention is load_ for database reads and fetch_ for HTTP; this one read from Postgres and kept confusing new people.",
+            "Code that imported fetch_user still works but emits a DeprecationWarning once per call site; test suites that turn warnings into errors will fail until they migrate.",
+            "Any dynamic lookup by string (getattr, a registry keyed by function name) would miss the rename; a grep for the string found none. The alias keeps third-party plugins working for one release.",
+            "The existing repository tests pass unchanged after the import rename; one new test asserts the alias warns and returns the same object."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    },
+    {
+      "name": "retry-backoff",
+      "title": "HTTP client retries with jittered backoff and context cancellation",
+      "tags": [
+        "go",
+        "networking",
+        "reliability"
+      ],
+      "files": [
+        "client/client.go"
+      ],
+      "patch_bytes": 1272,
+      "summary": "Fake summary of 1 changed file(s) at normal difficulty.",
+      "questions": [
+        {
+          "focus": "behaviour",
+          "question": "What does the change to client/client.go do, in one or two sentences?",
+          "note": "what"
+        },
+        {
+          "focus": "motivation",
+          "question": "Why was the change to client/client.go needed?",
+          "note": "why"
+        },
+        {
+          "focus": "edge case",
+          "question": "Which input or situation could make the change to client/client.go misbehave?",
+          "note": "edge"
+        },
+        {
+          "focus": "risk",
+          "question": "What else in the codebase could be affected by the change to client/client.go?",
+          "note": "risk"
+        },
+        {
+          "focus": "testing",
+          "question": "How would you verify the change to client/client.go works as intended?",
+          "note": "test"
+        }
+      ],
+      "arms": {
+        "blank": {
+          "answers": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "per_question": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "passed": false,
+          "always_passed": false,
+          "mean": 0.0,
+          "min": 0,
+          "max": 0,
+          "stdev": 0.0
+        },
+        "generic": {
+          "answers": [
+            "It refactors the code to make it cleaner, more readable and easier to maintain.",
+            "The change was needed to fix a bug users reported and to improve reliability.",
+            "An edge case would be unexpected input such as null or empty values, which the new code should handle gracefully.",
+            "Other parts of the codebase that call this code could be affected, so the callers should be checked for regressions.",
+            "I would verify it by running the existing test suite and adding unit tests for the new behaviour."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        },
+        "notes": {
+          "answers": [
+            "Do() retries idempotent requests up to maxRetries times on 5xx and transport errors, sleeping base*2^attempt plus random jitter, and stops as soon as the request context is cancelled. 4xx responses are returned immediately.",
+            "The fleet API flaps for a few seconds during deploys; every caller had its own retry loop, two of them retried POSTs, and none honoured cancellation so shutdown hung.",
+            "A 503 with a body is drained and closed before retrying so the connection can be reused. If the context deadline fires during the sleep, the last error is wrapped with the context error. maxRetries of 0 means exactly one attempt.",
+            "Only GET, HEAD, PUT and DELETE are retried; POST callers that relied on their own loops lose retries, which is intended. Jitter uses math/rand, fine here, not for anything security related. Total worst-case latency grows to roughly base*(2^n - 1).",
+            "An httptest server that fails N times then succeeds, asserting attempt counts for GET and POST, a cancelled context returning context.Canceled quickly, and a 404 returning after one attempt."
+          ],
+          "scores": [
+            100,
+            100
+          ],
+          "per_question": [
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ],
+            [
+              20,
+              20,
+              20,
+              20,
+              20
+            ]
+          ],
+          "passed": true,
+          "always_passed": true,
+          "mean": 100.0,
+          "min": 100,
+          "max": 100,
+          "stdev": 0.0
+        }
+      },
+      "seconds": {
+        "questions": 0.0,
+        "grade_blank": 0.0,
+        "grade_generic": 0.0,
+        "grade_notes": 0.0
+      }
+    }
+  ],
+  "summary": {
+    "arms": {
+      "blank": {
+        "pass_rate": 0.0,
+        "mean_score": 0.0,
+        "mean_stdev": 0.0
+      },
+      "generic": {
+        "pass_rate": 1.0,
+        "mean_score": 100.0,
+        "mean_stdev": 0.0
+      },
+      "notes": {
+        "pass_rate": 1.0,
+        "mean_score": 100.0,
+        "mean_stdev": 0.0
+      }
+    },
+    "cases": 8,
+    "separation": 0.0,
+    "focus_coverage": {
+      "what": 8,
+      "why": 8,
+      "edge": 8,
+      "risk": 8,
+      "test": 8,
+      "other": 0
+    }
+  }
+}
