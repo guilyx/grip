@@ -5,27 +5,49 @@ sharper: do *you* understand what is about to be pushed? Inside an agent there i
 terminal for grip to talk to, so the agent relays the quiz instead. It shows you the
 questions, you answer, grip grades.
 
+Two ways in. The **skill** works in every agent that reads `SKILL.md` files. The
+**Claude Code plugin** adds a `git push` gate on top.
+
+## The skill, in any agent
+
+grip ships as an [Agent Skill](https://agentskills.io): `skills/grip/SKILL.md` in this
+repository. Install it into every agent on your machine with one command:
+
+```bash
+npx skills add guilyx/grip -g
+```
+
+That puts the skill where Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Cline,
+Copilot and the other agents the `skills` CLI knows about look for it. Then type `/grip`
+(`$grip` in Codex) before you push, or say "quiz me on this diff". The skill tells the
+agent to run `grip ask`, show you the five questions verbatim, wait for your answers, run
+`grip grade`, and never answer for you.
+
+You need the `grip` binary too:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
+```
+
 ## Claude Code plugin
 
-The repository is a Claude Code plugin marketplace. Install once:
+The repository is also a Claude Code plugin marketplace. Install once:
 
 ```text
 /plugin marketplace add guilyx/grip
 /plugin install grip@grip
 ```
 
-You need the `grip` binary too (`curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh`).
-
 The plugin adds two things.
 
-**`/grip:quiz`**: Claude runs `grip ask`, shows you the five questions, waits for your
+**`/grip`**: Claude runs `grip ask`, shows you the five questions, waits for your
 answers, then runs `grip grade` and reports the score. The skill tells Claude not to
-answer, hint or open the code for you. `/grip:quiz --unpushed` quizzes every commit not
-on a remote, `/grip:quiz --range BASE..HEAD` an explicit range.
+answer, hint or open the code for you. `/grip --unpushed` quizzes every commit not on a
+remote, `/grip --range BASE..HEAD` an explicit range.
 
 **A `git push` gate**: a `PreToolUse` hook runs `grip agent-hook claude-code` before
 every Bash command. When the command is a `git push` and the unpushed diff has not passed
-a quiz, the push is denied and Claude is told to ask you to run `/grip:quiz --unpushed`.
+a quiz, the push is denied and Claude is told to ask you to run `/grip --unpushed`.
 Once you pass, the diff is remembered and the push goes through. `GRIP_SKIP=1` bypasses
 the gate, as does `CI=true`.
 
@@ -62,7 +84,7 @@ To turn the plugin on for a whole team, add it to the repository's `.claude/sett
 
 ## Any other agent
 
-The plugin is a thin wrapper over three commands that any agent can call:
+The skill is a thin wrapper over three commands that any agent can call:
 
 | Command | What it does |
 | --- | --- |
@@ -70,7 +92,8 @@ The plugin is a thin wrapper over three commands that any agent can call:
 | `grip grade --answers FILE` | Grades a JSON list of answers, prints the scores, remembers a pass. Exit 1 on fail. |
 | `grip check [--unpushed]` | Exit 0 when the diff already passed (or is empty), 1 otherwise. |
 
-For Codex or Gemini CLI, paste this into `AGENTS.md` or `GEMINI.md`:
+For an agent without skill support, paste this into `AGENTS.md`, `CLAUDE.md` or
+`GEMINI.md`:
 
 ```markdown
 ## grip

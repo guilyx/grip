@@ -60,7 +60,7 @@ See [Providers](providers.md) for the full list, including OpenAI-compatible ser
 and proxies.
 
 !!! tip "Using Claude Code?"
-    Install the [plugin](agents.md) as well: `/grip:quiz` runs the quiz inside the agent
+    Install the [plugin](agents.md) as well: `/grip` runs the quiz inside the agent
     and a hook keeps Claude from pushing a diff you have not passed.
 
 ## 3. Wire it into git

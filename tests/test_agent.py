@@ -204,7 +204,7 @@ def test_agent_hook_denies_push_until_passed(
     decision = _json(result)["hookSpecificOutput"]
     assert isinstance(decision, dict)
     assert decision["permissionDecision"] == "deny"
-    assert "/grip:quiz --unpushed" in str(decision["permissionDecisionReason"])
+    assert "/grip --unpushed" in str(decision["permissionDecisionReason"])
 
     assert runner.invoke(cli, ["ask", "--unpushed"]).exit_code == 0
     assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
@@ -236,7 +236,7 @@ def test_agent_hook_gate_commit(
     stage_change("a.py", "x = 1\n")
     result = runner.invoke(cli, ["agent-hook", "claude-code", "--gate", "both"], input=payload)
     assert "deny" in result.output
-    assert "/grip:quiz and" in result.output
+    assert "/grip and" in result.output
 
 
 def test_agent_hook_skip_envs_and_outside_repo(
@@ -275,6 +275,9 @@ def test_plugin_manifests() -> None:
     hooks = json.loads((plugin_dir / "hooks" / "hooks.json").read_text())
     command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     assert "grip agent-hook claude-code" in command
-    skill = (plugin_dir / "skills" / "quiz" / "SKILL.md").read_text()
-    assert skill.startswith("---\nname: quiz\n")
+    # The plugin is served from the repository root, in the Agent Skills layout.
+    assert plugin_dir.resolve() == ROOT.resolve()
+    skill = (plugin_dir / "skills" / "grip" / "SKILL.md").read_text()
+    assert skill.startswith("---\nname: grip\n")
     assert "grip ask" in skill and "grip grade" in skill
+    assert "/grip:quiz" not in skill

@@ -59,16 +59,26 @@ repos:
 pre-commit install --hook-type pre-push
 ```
 
-### Inside Claude Code
+### Inside a coding agent
+
+grip is an [Agent Skill](https://agentskills.io). One command installs it into Claude
+Code, Codex, Gemini CLI, Cursor, Windsurf, Cline, Copilot and friends:
+
+```bash
+npx skills add guilyx/grip -g
+```
+
+Then type `/grip` before you push. The agent relays the five questions, you answer, grip
+grades; the skill forbids the agent from answering for you. Claude Code users can take the
+plugin instead, which also blocks `git push` until the diff has passed:
 
 ```text
 /plugin marketplace add guilyx/grip
 /plugin install grip@grip
 ```
 
-`/grip:quiz` has Claude relay the five questions to you and grade your answers, and a
-hook blocks `git push` until the diff has passed. Codex and Gemini CLI can drive the same
-flow through `grip ask` / `grip grade`; see the [docs](https://guilyx.github.io/grip/agents/).
+See the [docs](https://guilyx.github.io/grip/agents/) for the raw `grip ask` / `grip grade`
+flow any agent can drive.
 
 ### Provider
 

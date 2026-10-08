@@ -385,7 +385,7 @@ def agent_hook_cmd(agent: str, gate: Gate) -> None:
         return
     _emit(
         claude_code_decision(
-            f"grip: {verdict} Ask the developer to run /grip:quiz"
+            f"grip: {verdict} Ask the developer to run /grip"
             f"{' --unpushed' if mode == 'unpushed' else ''} and answer the questions "
             f"themselves, then retry. Do not answer for them. GRIP_SKIP=1 bypasses once."
         )
