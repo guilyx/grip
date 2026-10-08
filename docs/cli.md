@@ -99,8 +99,34 @@ with a marker line so `uninstall` never touches a hook it does not own.
 
 ## `grip status`
 
-Shows which stages have grip installed, whether a foreign hook is in the way, and the
-effective configuration.
+Shows which stages have grip installed, whether a foreign hook is in the way, the last
+quiz (score, pass or fail, how long ago), whether the staged and unpushed diffs have
+already passed, whether hooks are paused, and the effective configuration.
+
+## `grip skip` / `grip resume`
+
+`GRIP_SKIP=1` is awkward from an IDE's push button. `grip skip` skips the next hook run
+once; `grip skip --hours 2` pauses every hook run for two hours; `grip resume` cancels.
+Only the hooks and the agent push gate look at it, a manual `grip quiz` never does.
+
+```bash
+grip skip && git push         # one push without the quiz
+grip skip --hours 1           # a demo, a pairing session
+grip resume
+```
+
+## `grip statusline`
+
+One short line for an editor or Claude Code status line: `grip 92/100 pass`, with
+`paused` appended while `grip skip` is in effect. Outside a repository or before any quiz
+it prints nothing and exits 0. It reads an optional JSON payload on stdin and uses its
+`cwd`, which is what Claude Code sends:
+
+```json
+{ "statusLine": { "type": "command", "command": "grip statusline" } }
+```
+
+`grip statusline --json` prints the score, pass mark, time and skip state for other tools.
 
 ## `grip config`
 

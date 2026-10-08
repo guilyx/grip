@@ -29,7 +29,8 @@ answers against a rubric it derived from the diff.
 - **Bring your model**: Anthropic by default, any OpenAI-compatible API, or Ollama for a
   fully local setup.
 - **No double quizzing**: a diff that passed is remembered for 24 hours.
-- **Escape hatch**: `GRIP_SKIP=1` or git's `--no-verify` when you really need it.
+- **Escape hatch**: `grip skip` for one push, `grip skip --hours 1` for a demo,
+  `GRIP_SKIP=1` or git's `--no-verify` when you really need it.
 
 ## Next steps
 

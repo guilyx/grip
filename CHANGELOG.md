@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `grip skip` skips the next hook run once, `grip skip --hours N` pauses hooks for a
+  while, `grip resume` cancels. Both the git hooks and the Claude Code push gate honour
+  it; a manual `grip quiz` does not. `grip status` gained an activity section: last quiz,
+  whether the staged and unpushed diffs have passed, and the skip state.
+  `grip statusline` prints `grip 92/100 pass` for editor and Claude Code status lines.
 - `grip init`: one command that writes a commented `.grip.toml` (defaulting to an
   installed coding agent as provider), installs the pre-push hook and writes the agent
   rule files. `--provider`, `--passing-score`, `--difficulty`, `--stage`, `--no-hook`,

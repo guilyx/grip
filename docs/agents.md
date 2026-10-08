@@ -83,6 +83,12 @@ a quiz, the push is denied and Claude is told to ask you to run `/grip --unpushe
 Once you pass, the diff is remembered and the push goes through. `GRIP_SKIP=1` bypasses
 the gate, as does `CI=true`.
 
+A status line badge shows the last Grip Score next to Claude's own status:
+
+```json
+{ "statusLine": { "type": "command", "command": "grip statusline" } }
+```
+
 To gate commits as well, point the hook at `--gate both` in your own settings:
 
 ```json

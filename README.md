@@ -122,8 +122,9 @@ per-question feedback so you know what to go read.
 grip quiz                     # quiz your staged changes right now, no hook needed
 grip quiz --unpushed          # quiz everything not yet on a remote
 grip quiz --provider fake     # try the flow offline with a dummy grader
-grip status                   # installed hooks and effective configuration
-GRIP_SKIP=1 git push          # bypass once (git's --no-verify also works)
+grip status                   # hooks, last score, what has passed, configuration
+grip skip && git push         # bypass once (GRIP_SKIP=1 and --no-verify work too)
+grip skip --hours 1           # pause the hooks for a demo; grip resume cancels
 ```
 
 A diff that passed is remembered for 24 hours, so a pre-push right after a pre-commit
