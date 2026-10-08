@@ -33,6 +33,7 @@ from grip_hook.config import Config, describe, load_config
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
 from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
+from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory
 from grip_hook.models import Difficulty, Report, Stage
 from grip_hook.platform import (
@@ -442,6 +443,75 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
             return Diff("push", "", "", ())
         return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
     return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
+
+
+@cli.command(name="agents")
+@click.option(
+    "--list", "list_only", is_flag=True, help="Show which agents were detected, write nothing."
+)
+@click.option("--all", "everything", is_flag=True, help="Every known agent, detected or not.")
+@click.option(
+    "--agent",
+    "keys",
+    multiple=True,
+    type=click.Choice([a.key for a in AGENTS]),
+    help="Only these agents (repeatable).",
+)
+@click.option("--remove", is_flag=True, help="Take out what `grip agents` wrote.")
+@click.option("--dry-run", is_flag=True, help="Print what would change, write nothing.")
+def agents_cmd(
+    list_only: bool, everything: bool, keys: tuple[str, ...], remove: bool, dry_run: bool
+) -> None:
+    """Tell the coding agents you use to run the grip quiz before they push.
+
+    Detects the agents installed on this machine and writes, at the repository root, the
+    file each one reads: a marked block in AGENTS.md, CLAUDE.md or GEMINI.md, a rules
+    file for Cursor, Windsurf and Cline, and the plugin enablement in
+    .claude/settings.json for Claude Code. Run it again to refresh the blocks after an
+    upgrade; --remove takes them out and leaves the rest of each file alone.
+    """
+    git = Git()
+    detected = detect()
+    if list_only:
+        table = Table(title="agents", show_header=True, header_style="bold")
+        table.add_column("agent")
+        table.add_column("installed")
+        table.add_column("writes")
+        for a in AGENTS:
+            found = "[green]yes[/green]" if a in detected else "[dim]no[/dim]"
+            table.add_row(a.key, found, ", ".join(t.path for t in a.targets))
+        _out.print(table)
+        return
+    if keys:
+        chosen = [agent(k) for k in keys]
+    elif everything:
+        chosen = list(AGENTS)
+    else:
+        chosen = detected
+    changes = apply(git.root(), chosen, remove=remove, dry_run=dry_run)
+    verbs = {
+        Action.WRITTEN: "write",
+        Action.UPDATED: "update",
+        Action.REMOVED: "remove",
+        Action.UNCHANGED: "leave unchanged",
+        Action.ABSENT: "find absent",
+    }
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("file", no_wrap=True)
+    table.add_column("read by")
+    table.add_column("action")
+    for change in changes:
+        label = f"would {verbs[change.action]}" if dry_run else change.action.value
+        style = "dim" if change.action in {Action.UNCHANGED, Action.ABSENT} else "green"
+        table.add_row(
+            _pretty_path(change.path), ", ".join(change.agents), f"[{style}]{label}[/{style}]"
+        )
+    _out.print(table)
+    if not remove:
+        _out.print(
+            "[dim]These files make the agent run `grip check` before pushing. The quiz itself "
+            "also installs as a skill: npx skills add guilyx/grip -g[/dim]"
+        )
 
 
 @cli.command(name="install")

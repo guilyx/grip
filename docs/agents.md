@@ -29,6 +29,38 @@ You need the `grip` binary too:
 curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
 ```
 
+## One command for every agent
+
+Rule files are what agents without skill support read, and what keeps a skill-aware agent
+honest when the skill is not loaded. `grip agents` writes them for you:
+
+```bash
+grip agents             # detect the agents on this machine, write their files
+grip agents --list      # what would be written for whom, nothing touched
+grip agents --all       # every known agent, detected or not
+grip agents --agent codex --agent cursor
+grip agents --remove    # take the blocks out again
+```
+
+Detection is local: a binary on `PATH` or a configuration directory under your home.
+Everything is written inside the repository, so commit it and the whole team's agents
+follow the same rule.
+
+| Agent | File written |
+| --- | --- |
+| Codex CLI, OpenCode, Jules, Amp, Zed and anything else that reads it | `AGENTS.md` (always offered) |
+| Claude Code | `CLAUDE.md` and the plugin enablement in `.claude/settings.json` |
+| Gemini CLI | `GEMINI.md` |
+| Cursor | `.cursor/rules/grip.mdc` |
+| Windsurf | `.windsurf/rules/grip.md` |
+| Cline | `.clinerules/grip.md` |
+| GitHub Copilot | `.github/copilot-instructions.md` |
+
+In Markdown files the developer owns, grip appends one block between
+`<!-- grip:start -->` and `<!-- grip:end -->` and only ever touches what is between the
+markers. The rules files for Cursor, Windsurf and Cline are grip's own. The Claude Code
+settings file is merged key by key. Re-running refreshes the block text after an upgrade.
+
 ## Claude Code plugin
 
 The repository is also a Claude Code plugin marketplace. Install once:
@@ -73,7 +105,7 @@ To turn the plugin on for a whole team, add it to the repository's `.claude/sett
   "extraKnownMarketplaces": {
     "grip": { "source": { "source": "github", "repo": "guilyx/grip" } }
   },
-  "enabledPlugins": { "grip@grip": {} }
+  "enabledPlugins": { "grip@grip": true }
 }
 ```
 

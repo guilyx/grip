@@ -77,8 +77,10 @@ plugin instead, which also blocks `git push` until the diff has passed:
 /plugin install grip@grip
 ```
 
-See the [docs](https://guilyx.github.io/grip/agents/) for the raw `grip ask` / `grip grade`
-flow any agent can drive.
+`grip agents` writes the rule file each agent on your machine reads (`AGENTS.md`,
+`CLAUDE.md`, `GEMINI.md`, Cursor, Windsurf, Cline, Copilot) so it runs `grip check` before
+every push. See the [docs](https://guilyx.github.io/grip/agents/) for the raw
+`grip ask` / `grip grade` flow any agent can drive.
 
 ### Provider
 
