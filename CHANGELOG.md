@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `CITATION.cff` and a Cite section in the README; `.github/FUNDING.yml`. The README opens
+  with a three-tile summary and a before/after comparison, and its Why section cites the
+  METR, GitClear, DORA and Stack Overflow findings on AI-assisted code.
 - `grip skip` skips the next hook run once, `grip skip --hours N` pauses hooks for a
   while, `grip resume` cancels. Both the git hooks and the Claude Code push gate honour
   it; a manual `grip quiz` does not. `grip status` gained an activity section: last quiz,

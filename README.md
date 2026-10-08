@@ -7,6 +7,55 @@ choose. Below the mark, nothing goes upstream.
 [![Release](https://img.shields.io/github/v/release/guilyx/grip?sort=semver)](https://github.com/guilyx/grip/releases/latest)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
+<table>
+<tr>
+<td align="center" width="33%"><h3>5 questions</h3>written from <em>your</em> diff, graded against a hidden rubric, 100 points</td>
+<td align="center" width="33%"><h3>12 → 92</h3>the same diff blocked with lazy answers, through with real ones (<a href="docs/assets/demo.mp4">demo</a>)</td>
+<td align="center" width="33%"><h3>0 new tools to learn</h3>a git hook, or <code>/grip</code> inside Claude Code, Codex, Gemini CLI, Cursor and friends</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<th width="50%">Without grip</th>
+<th width="50%">With grip</th>
+</tr>
+<tr>
+<td valign="top">
+
+```text
+$ git push
+Enumerating objects: 14, done.
+...
+To github.com:acme/robot.git
+   3f2a1c9..8e7d4b2  main -> main
+```
+
+Four hundred lines the assistant wrote, nobody on the team can explain, now upstream.
+
+</td>
+<td valign="top">
+
+```text
+$ git push
+grip  5 questions about your push (pre-push). Pass mark: 70/100.
+
+Q1/5 (behaviour) What happens to a cmd_vel message
+     whose linear.x exceeds the new limit?
+> it is clamped to the limit, not dropped, so the
+> robot keeps moving at the max speed
+
+...
+
+Grip Score: 92/100  PASS
+```
+
+Same push, one minute later. You can explain it in the review because you just did.
+
+</td>
+</tr>
+</table>
+
 ![grip blocking a commit with lazy answers, then letting it through after real ones](docs/assets/demo.gif)
 
 <sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.mp4). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
@@ -18,6 +67,16 @@ not explain in a code review. grip makes you explain it *before* it leaves your 
 It is a lightweight forcing function, not a gate for correctness: the model asks about
 behaviour, motivation, edge cases, risks and verification, and grades your answers against
 a rubric it wrote from the diff.
+
+The gap grip aims at is measured, not imagined. In METR's 2025 randomised trial,
+experienced open-source developers using AI tools were [19% slower while believing they
+were 20% faster](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/).
+GitClear's analysis of 153 million changed lines found [code churn on track to double
+since AI assistants arrived](https://www.gitclear.com/coding_on_copilot_data_shows_ais_downward_pressure_on_code_quality).
+The [2024 DORA report](https://dora.dev/research/2024/dora-report/) linked higher AI
+adoption to lower delivery stability, and the [2025 Stack Overflow survey](https://survey.stackoverflow.co/2025/ai)
+put developer trust in AI output at a low. Every one of these tools checks the code. grip
+is the only one that checks the human.
 
 ## Install
 
@@ -174,6 +233,30 @@ Full reference: [guilyx.github.io/grip](https://guilyx.github.io/grip/).
 
 Only the diff (after `exclude`) and your answers are sent to the provider. Reports are
 saved to `.git/grip/last-report.json`.
+
+## When grip gets in the way
+
+A one-line typo fix does not deserve five questions, and grip cannot tell a rename from a
+rewrite. That is what the escape hatches are for: `grip skip` for one push,
+`grip skip --hours 1` for a pairing session, `exclude` for generated files,
+`remember_passes_hours` so a passed diff is not asked twice. Questions and grading come
+from a language model, so they are sometimes unfair; the per-question feedback shows you
+why, and `grip quiz` gives a fresh set. Honest measurements of what the quiz does and does
+not catch are on the roadmap; until they exist, treat the Grip Score as a prompt to
+re-read, not a verdict.
+
+## Cite
+
+If grip is part of a study or a course, please cite it ([CITATION.cff](CITATION.cff)):
+
+```bibtex
+@software{lejeune2026grip,
+  author = {L., Erwin},
+  title  = {grip: keep a grip on your code},
+  year   = {2026},
+  url    = {https://github.com/guilyx/grip}
+}
+```
 
 ## Contributing
 
