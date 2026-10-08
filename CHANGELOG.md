@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A brand identity under `branding/`: the grip mark (an 87.5 percent score ring that
+  reads as a G), wordmark lockups, a social card, and a palette generated in OKLCH by
+  `branding/build.py`, which refuses to write colours that fail WCAG 2 or APCA contrast or
+  that collapse under simulated colour-blindness. `tests/test_branding.py` keeps the
+  generated files current.
+- A redesigned docs site: the generated palette and brand type, tabs for each section, a
+  homepage with an install switcher and feature cards, dark code blocks with checked
+  syntax colours, an announcement bar, social preview tags, and a Brand page.
 - Feature clips under `docs/assets/features/`: one MP4 and GIF per new feature and a
   stitched "what's new" cut, recorded by `scripts/demo/make_features.py` against the real
   CLI with a scripted offline scenario.

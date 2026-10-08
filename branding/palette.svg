@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1098" height="672" viewBox="0 0 1098 672" font-family="Instrument Sans, Inter, system-ui, sans-serif">
+<rect width="100%" height="100%" fill="#fbfbf7"/>
+<text x="24" y="34" font-size="20" font-weight="700" fill="#30312c">grip palette</text>
+<text x="1074" y="34" font-size="12" fill="#787a71" text-anchor="end">OKLCH tonal scales, one lightness ladder</text>
+<text x="24" y="90" font-size="15" font-weight="700" fill="#30312c">volt</text>
+<text x="24" y="108" font-size="11" fill="#787a71">brand, focus, pass</text>
+<rect x="150" y="56" width="76" height="76" rx="12" fill="#f2ffbe"/>
+<text x="150" y="147" font-size="11" font-weight="700" fill="#30312c">50</text>
+<text x="150" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#f2ffbe</text>
+<rect x="234" y="56" width="76" height="76" rx="12" fill="#e4fa8d"/>
+<text x="234" y="147" font-size="11" font-weight="700" fill="#30312c">100</text>
+<text x="234" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#e4fa8d</text>
+<rect x="318" y="56" width="76" height="76" rx="12" fill="#cbe951"/>
+<text x="318" y="147" font-size="11" font-weight="700" fill="#30312c">200</text>
+<text x="318" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#cbe951</text>
+<rect x="402" y="56" width="76" height="76" rx="12" fill="#b0d400"/>
+<text x="402" y="147" font-size="11" font-weight="700" fill="#30312c">300</text>
+<text x="402" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#b0d400</text>
+<rect x="486" y="56" width="76" height="76" rx="12" fill="#98bd00"/>
+<text x="486" y="147" font-size="11" font-weight="700" fill="#30312c">400</text>
+<text x="486" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#98bd00</text>
+<rect x="570" y="56" width="76" height="76" rx="12" fill="#7fa300"/>
+<text x="570" y="147" font-size="11" font-weight="700" fill="#30312c">500</text>
+<text x="570" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#7fa300</text>
+<rect x="654" y="56" width="76" height="76" rx="12" fill="#658700"/>
+<text x="654" y="147" font-size="11" font-weight="700" fill="#30312c">600</text>
+<text x="654" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#658700</text>
+<rect x="738" y="56" width="76" height="76" rx="12" fill="#4d6c00"/>
+<text x="738" y="147" font-size="11" font-weight="700" fill="#30312c">700</text>
+<text x="738" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#4d6c00</text>
+<rect x="822" y="56" width="76" height="76" rx="12" fill="#375200"/>
+<text x="822" y="147" font-size="11" font-weight="700" fill="#30312c">800</text>
+<text x="822" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#375200</text>
+<rect x="906" y="56" width="76" height="76" rx="12" fill="#223800"/>
+<text x="906" y="147" font-size="11" font-weight="700" fill="#30312c">900</text>
+<text x="906" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#223800</text>
+<rect x="990" y="56" width="76" height="76" rx="12" fill="#132400"/>
+<text x="990" y="147" font-size="11" font-weight="700" fill="#30312c">950</text>
+<text x="990" y="161" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#132400</text>
+<text x="24" y="210" font-size="15" font-weight="700" fill="#30312c">tide</text>
+<text x="24" y="228" font-size="11" fill="#787a71">links, information</text>
+<rect x="150" y="176" width="76" height="76" rx="12" fill="#f0f8ff"/>
+<text x="150" y="267" font-size="11" font-weight="700" fill="#30312c">50</text>
+<text x="150" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#f0f8ff</text>
+<rect x="234" y="176" width="76" height="76" rx="12" fill="#dfefff"/>
+<text x="234" y="267" font-size="11" font-weight="700" fill="#30312c">100</text>
+<text x="234" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#dfefff</text>
+<rect x="318" y="176" width="76" height="76" rx="12" fill="#badeff"/>
+<text x="318" y="267" font-size="11" font-weight="700" fill="#30312c">200</text>
+<text x="318" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#badeff</text>
+<rect x="402" y="176" width="76" height="76" rx="12" fill="#8cc9ff"/>
+<text x="402" y="267" font-size="11" font-weight="700" fill="#30312c">300</text>
+<text x="402" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#8cc9ff</text>
+<rect x="486" y="176" width="76" height="76" rx="12" fill="#54b4ff"/>
+<text x="486" y="267" font-size="11" font-weight="700" fill="#30312c">400</text>
+<text x="486" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#54b4ff</text>
+<rect x="570" y="176" width="76" height="76" rx="12" fill="#009bf0"/>
+<text x="570" y="267" font-size="11" font-weight="700" fill="#30312c">500</text>
+<text x="570" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#009bf0</text>
+<rect x="654" y="176" width="76" height="76" rx="12" fill="#0080c4"/>
+<text x="654" y="267" font-size="11" font-weight="700" fill="#30312c">600</text>
+<text x="654" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#0080c4</text>
+<rect x="738" y="176" width="76" height="76" rx="12" fill="#00669d"/>
+<text x="738" y="267" font-size="11" font-weight="700" fill="#30312c">700</text>
+<text x="738" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#00669d</text>
+<rect x="822" y="176" width="76" height="76" rx="12" fill="#004c75"/>
+<text x="822" y="267" font-size="11" font-weight="700" fill="#30312c">800</text>
+<text x="822" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#004c75</text>
+<rect x="906" y="176" width="76" height="76" rx="12" fill="#003451"/>
+<text x="906" y="267" font-size="11" font-weight="700" fill="#30312c">900</text>
+<text x="906" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#003451</text>
+<rect x="990" y="176" width="76" height="76" rx="12" fill="#002135"/>
+<text x="990" y="267" font-size="11" font-weight="700" fill="#30312c">950</text>
+<text x="990" y="281" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#002135</text>
+<text x="24" y="330" font-size="15" font-weight="700" fill="#30312c">flare</text>
+<text x="24" y="348" font-size="11" fill="#787a71">fail, danger</text>
+<rect x="150" y="296" width="76" height="76" rx="12" fill="#fff3f6"/>
+<text x="150" y="387" font-size="11" font-weight="700" fill="#30312c">50</text>
+<text x="150" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#fff3f6</text>
+<rect x="234" y="296" width="76" height="76" rx="12" fill="#ffe5ec"/>
+<text x="234" y="387" font-size="11" font-weight="700" fill="#30312c">100</text>
+<text x="234" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffe5ec</text>
+<rect x="318" y="296" width="76" height="76" rx="12" fill="#ffc8d6"/>
+<text x="318" y="387" font-size="11" font-weight="700" fill="#30312c">200</text>
+<text x="318" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffc8d6</text>
+<rect x="402" y="296" width="76" height="76" rx="12" fill="#ffa4bc"/>
+<text x="402" y="387" font-size="11" font-weight="700" fill="#30312c">300</text>
+<text x="402" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffa4bc</text>
+<rect x="486" y="296" width="76" height="76" rx="12" fill="#ff7aa2"/>
+<text x="486" y="387" font-size="11" font-weight="700" fill="#30312c">400</text>
+<text x="486" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ff7aa2</text>
+<rect x="570" y="296" width="76" height="76" rx="12" fill="#f34d85"/>
+<text x="570" y="387" font-size="11" font-weight="700" fill="#30312c">500</text>
+<text x="570" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#f34d85</text>
+<rect x="654" y="296" width="76" height="76" rx="12" fill="#d02f69"/>
+<text x="654" y="387" font-size="11" font-weight="700" fill="#30312c">600</text>
+<text x="654" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#d02f69</text>
+<rect x="738" y="296" width="76" height="76" rx="12" fill="#ad1951"/>
+<text x="738" y="387" font-size="11" font-weight="700" fill="#30312c">700</text>
+<text x="738" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ad1951</text>
+<rect x="822" y="296" width="76" height="76" rx="12" fill="#85083a"/>
+<text x="822" y="387" font-size="11" font-weight="700" fill="#30312c">800</text>
+<text x="822" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#85083a</text>
+<rect x="906" y="296" width="76" height="76" rx="12" fill="#5d0526"/>
+<text x="906" y="387" font-size="11" font-weight="700" fill="#30312c">900</text>
+<text x="906" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#5d0526</text>
+<rect x="990" y="296" width="76" height="76" rx="12" fill="#390917"/>
+<text x="990" y="387" font-size="11" font-weight="700" fill="#30312c">950</text>
+<text x="990" y="401" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#390917</text>
+<text x="24" y="450" font-size="15" font-weight="700" fill="#30312c">amber</text>
+<text x="24" y="468" font-size="11" fill="#787a71">warning, caution</text>
+<rect x="150" y="416" width="76" height="76" rx="12" fill="#fff5eb"/>
+<text x="150" y="507" font-size="11" font-weight="700" fill="#30312c">50</text>
+<text x="150" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#fff5eb</text>
+<rect x="234" y="416" width="76" height="76" rx="12" fill="#ffe9d2"/>
+<text x="234" y="507" font-size="11" font-weight="700" fill="#30312c">100</text>
+<text x="234" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffe9d2</text>
+<rect x="318" y="416" width="76" height="76" rx="12" fill="#ffcf9b"/>
+<text x="318" y="507" font-size="11" font-weight="700" fill="#30312c">200</text>
+<text x="318" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffcf9b</text>
+<rect x="402" y="416" width="76" height="76" rx="12" fill="#ffb047"/>
+<text x="402" y="507" font-size="11" font-weight="700" fill="#30312c">300</text>
+<text x="402" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ffb047</text>
+<rect x="486" y="416" width="76" height="76" rx="12" fill="#ea9800"/>
+<text x="486" y="507" font-size="11" font-weight="700" fill="#30312c">400</text>
+<text x="486" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#ea9800</text>
+<rect x="570" y="416" width="76" height="76" rx="12" fill="#c88300"/>
+<text x="570" y="507" font-size="11" font-weight="700" fill="#30312c">500</text>
+<text x="570" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#c88300</text>
+<rect x="654" y="416" width="76" height="76" rx="12" fill="#a46b00"/>
+<text x="654" y="507" font-size="11" font-weight="700" fill="#30312c">600</text>
+<text x="654" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#a46b00</text>
+<rect x="738" y="416" width="76" height="76" rx="12" fill="#835600"/>
+<text x="738" y="507" font-size="11" font-weight="700" fill="#30312c">700</text>
+<text x="738" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#835600</text>
+<rect x="822" y="416" width="76" height="76" rx="12" fill="#624000"/>
+<text x="822" y="507" font-size="11" font-weight="700" fill="#30312c">800</text>
+<text x="822" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#624000</text>
+<rect x="906" y="416" width="76" height="76" rx="12" fill="#432b00"/>
+<text x="906" y="507" font-size="11" font-weight="700" fill="#30312c">900</text>
+<text x="906" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#432b00</text>
+<rect x="990" y="416" width="76" height="76" rx="12" fill="#2b1a00"/>
+<text x="990" y="507" font-size="11" font-weight="700" fill="#30312c">950</text>
+<text x="990" y="521" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#2b1a00</text>
+<text x="24" y="570" font-size="15" font-weight="700" fill="#30312c">basalt</text>
+<text x="24" y="588" font-size="11" fill="#787a71">text, surfaces</text>
+<rect x="150" y="536" width="76" height="76" rx="12" fill="#f6f7f3"/>
+<text x="150" y="627" font-size="11" font-weight="700" fill="#30312c">50</text>
+<text x="150" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#f6f7f3</text>
+<rect x="234" y="536" width="76" height="76" rx="12" fill="#eceee8"/>
+<text x="234" y="627" font-size="11" font-weight="700" fill="#30312c">100</text>
+<text x="234" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#eceee8</text>
+<rect x="318" y="536" width="76" height="76" rx="12" fill="#d8dad2"/>
+<text x="318" y="627" font-size="11" font-weight="700" fill="#30312c">200</text>
+<text x="318" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#d8dad2</text>
+<rect x="402" y="536" width="76" height="76" rx="12" fill="#c1c4bb"/>
+<text x="402" y="627" font-size="11" font-weight="700" fill="#30312c">300</text>
+<text x="402" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#c1c4bb</text>
+<rect x="486" y="536" width="76" height="76" rx="12" fill="#abaea4"/>
+<text x="486" y="627" font-size="11" font-weight="700" fill="#30312c">400</text>
+<text x="486" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#abaea4</text>
+<rect x="570" y="536" width="76" height="76" rx="12" fill="#93958b"/>
+<text x="570" y="627" font-size="11" font-weight="700" fill="#30312c">500</text>
+<text x="570" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#93958b</text>
+<rect x="654" y="536" width="76" height="76" rx="12" fill="#787a71"/>
+<text x="654" y="627" font-size="11" font-weight="700" fill="#30312c">600</text>
+<text x="654" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#787a71</text>
+<rect x="738" y="536" width="76" height="76" rx="12" fill="#60615a"/>
+<text x="738" y="627" font-size="11" font-weight="700" fill="#30312c">700</text>
+<text x="738" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#60615a</text>
+<rect x="822" y="536" width="76" height="76" rx="12" fill="#474942"/>
+<text x="822" y="627" font-size="11" font-weight="700" fill="#30312c">800</text>
+<text x="822" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#474942</text>
+<rect x="906" y="536" width="76" height="76" rx="12" fill="#30312c"/>
+<text x="906" y="627" font-size="11" font-weight="700" fill="#30312c">900</text>
+<text x="906" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#30312c</text>
+<rect x="990" y="536" width="76" height="76" rx="12" fill="#1e1e1c"/>
+<text x="990" y="627" font-size="11" font-weight="700" fill="#30312c">950</text>
+<text x="990" y="641" font-size="10" fill="#787a71" font-family="JetBrains Mono, ui-monospace, monospace">#1e1e1c</text>
+</svg>
