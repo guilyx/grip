@@ -1,0 +1,15 @@
+{
+  "title": "debounce() gains a leading option and stops leaking timers",
+  "description": "staged changes",
+  "tags": [
+    "javascript",
+    "behaviour-change"
+  ],
+  "notes": {
+    "what": "debounce(fn, wait, {leading}) now calls fn immediately on the first call in a burst when leading is true, then suppresses calls until wait ms of silence. The returned function gets a cancel() method that clears the pending timer.",
+    "why": "The search box needed the first keystroke to fire instantly for perceived speed, and unmounted components kept firing stale timers because there was no way to cancel.",
+    "edge": "With leading true and a single call, fn runs once and never again at the trailing edge, so the trailing call is skipped when nothing happened during the wait. Calling cancel() twice is a no-op. wait of 0 still defers to the next tick in trailing mode.",
+    "risk": "Existing callers get identical trailing behaviour since leading defaults to false. The timer handle is kept in a closure, so each debounced function holds one timer at most; React effects must call cancel() in cleanup.",
+    "test": "Fake timers in the unit test: assert one call at t=0 with leading, none during the burst, one trailing call without leading, and that cancel() prevents the trailing call."
+  }
+}

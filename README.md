@@ -241,8 +241,10 @@ rewrite. That is what the escape hatches are for: `grip skip` for one push,
 `grip skip --hours 1` for a pairing session, `exclude` for generated files,
 `remember_passes_hours` so a passed diff is not asked twice. Questions and grading come
 from a language model, so they are sometimes unfair; the per-question feedback shows you
-why, and `grip quiz` gives a fresh set. Honest measurements of what the quiz does and does
-not catch are on the roadmap; until they exist, treat the Grip Score as a prompt to
+why, and `grip quiz` gives a fresh set. What has and has not been measured about the
+quiz, and where it is known to be annoying, is on the
+[honest numbers](https://guilyx.github.io/grip/honest-numbers/) page; the
+[evals harness](evals/) behind it runs offline. Treat the Grip Score as a prompt to
 re-read, not a verdict.
 
 ## Cite

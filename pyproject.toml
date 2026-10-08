@@ -80,7 +80,7 @@ packages = ["src/grip_hook"]
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["scripts/demo/fixture"]
+extend-exclude = ["scripts/demo/fixture", "evals/cases"]
 target-version = "py311"
 src = ["src", "tests"]
 

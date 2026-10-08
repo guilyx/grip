@@ -1,0 +1,16 @@
+{
+  "title": "Scan watchdog in the cmd_vel safety filter",
+  "description": "staged changes",
+  "tags": [
+    "python",
+    "ros2",
+    "safety"
+  ],
+  "notes": {
+    "what": "When no LaserScan has arrived for longer than scan_timeout, the filter publishes a zero Twist instead of forwarding the command, with a throttled warning. The hard-coded stop distance becomes the stop_distance parameter.",
+    "why": "A dead lidar used to look like an empty world: the last scan showed no obstacle so commands kept flowing. The check lives in the cmd_vel callback because the scan callback stops running the moment scans stop.",
+    "edge": "Scan age is header.stamp against the node clock, so a lidar whose clock runs behind makes every scan look stale and the robot refuses to move. stop_distance set to 0 silently disables the obstacle stop since min_range can never be below it.",
+    "risk": "Launch files that relied on the constant must now pass stop_distance; the default keeps the old value. The watchdog adds a clock read per command, negligible. Throttled logging hides repeated stops in bag replays.",
+    "test": "Publish synthetic LaserScan messages from a test node, stop publishing, send a cmd_vel_raw and assert /cmd_vel is a zero Twist; launch_testing with a sim clock keeps it repeatable."
+  }
+}
