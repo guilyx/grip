@@ -531,10 +531,11 @@ def init_cmd(
             _out.print(f"[green]grip:[/green] {stage} hook {how} {_pretty_path(result.path)}")
     if not no_agents:
         changes = apply(root, detect())
+        past = {Action.WRITTEN: "wrote", Action.UPDATED: "updated"}
         for change in changes:
-            if change.action is not Action.UNCHANGED:
+            if change.action in past:
                 _out.print(
-                    f"[green]grip:[/green] {change.action.value} {_pretty_path(change.path)} "
+                    f"[green]grip:[/green] {past[change.action]} {_pretty_path(change.path)} "
                     f"for {', '.join(change.agents)}"
                 )
     _out.print(

@@ -1,0 +1,61 @@
+{
+  "summary": "handle() now rate-limits every API key with an in-memory token bucket: 60 requests a minute, then a 429 with a Retry-After header.",
+  "questions": [
+    {
+      "focus": "behaviour",
+      "question": "What does a client get once its API key has used up its requests for the minute?",
+      "rubric": "A 429 response with a Retry-After header computed from the bucket refill; the route is not called.",
+      "rules": [
+        {"match": "429", "score": 20, "feedback": "Right: a 429 with Retry-After, and the route never runs."},
+        {"match": "error", "score": 8, "feedback": "Which error? A 429 with a Retry-After header."}
+      ],
+      "default": {"score": 0, "feedback": "Missed: the client gets a 429 with Retry-After."}
+    },
+    {
+      "focus": "motivation",
+      "question": "Why limit per API key rather than one global limit for the whole service?",
+      "rubric": "One heavy tenant was starving the others; a global limit would punish everyone for one key's traffic.",
+      "rules": [
+        {"match": "tenant", "score": 20, "feedback": "Yes: per key isolates the noisy tenant instead of throttling everyone."},
+        {"match": "starv", "score": 20, "feedback": "Yes: per key isolates the noisy tenant instead of throttling everyone."}
+      ],
+      "default": {"score": 0, "feedback": "Missed: a global limit punishes every customer for one key's traffic."}
+    },
+    {
+      "focus": "edge case",
+      "question": "The API runs on two app servers behind a load balancer. What limit does one key really get?",
+      "rubric": "Up to twice the limit: each process keeps its own _buckets dict, so the limit is per server until the state moves to a shared store.",
+      "rules": [
+        {"match": "twice", "score": 20, "feedback": "Exactly: each server has its own bucket, so the real limit doubles."},
+        {"match": "own bucket", "score": 20, "feedback": "Exactly: each server has its own bucket, so the real limit doubles."},
+        {"match": "60", "score": 4, "feedback": "Not 60: each server keeps its own bucket, so it is up to 120."}
+      ],
+      "default": {"score": 0, "feedback": "Missed: the buckets live in process memory, one per server."}
+    },
+    {
+      "focus": "risk",
+      "question": "Which existing clients does this change put at risk, and how?",
+      "rubric": "Clients that retry immediately without honouring Retry-After will loop on 429s and add load; the mobile app's retry logic needs a backoff first.",
+      "rules": [
+        {"match": "retry-after", "score": 20, "feedback": "Right: clients that ignore Retry-After will hammer the API harder."},
+        {"match": "retry", "score": 14, "feedback": "Close: the risk is clients that retry without reading Retry-After."}
+      ],
+      "default": {"score": 0, "feedback": "Missed: aggressive retry loops turn 429s into more load."}
+    },
+    {
+      "focus": "testing",
+      "question": "How would you show in a test that the limit actually triggers?",
+      "rubric": "Send 61 requests for one key inside a minute (or with a fake clock) and assert the 61st is a 429 with Retry-After, and that another key is unaffected.",
+      "rules": [
+        {"match": "61", "score": 20, "feedback": "Good: the 61st request is the one that must come back 429."},
+        {"match": "429", "score": 16, "feedback": "Good; pin the boundary: request 61 is the first 429."}
+      ],
+      "default": {"score": 0, "feedback": "Missed: drive one key past 60 requests and assert the 429."}
+    }
+  ],
+  "verdicts": [
+    {"min": 90, "text": "You know what this limiter does and exactly where it will bite in production."},
+    {"min": 70, "text": "Solid grasp; re-read the parts flagged above before it ships."},
+    {"min": 0, "text": "Re-read the diff: the limiter's scope and its failure modes are not clear yet."}
+  ]
+}

@@ -88,7 +88,7 @@ _AGENTS_MD = Target("AGENTS.md", Kind.BLOCK)
 AGENTS: tuple[Agent, ...] = (
     Agent(
         "agents-md",
-        "Any agent that reads AGENTS.md (Codex, Jules, Amp, Zed, OpenCode, Copilot CLI)",
+        "AGENTS.md readers",
         (),
         (),
         (_AGENTS_MD,),
