@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Feature clips under `docs/assets/features/`: one MP4 and GIF per new feature and a
+  stitched "what's new" cut, recorded by `scripts/demo/make_features.py` against the real
+  CLI with a scripted offline scenario.
 - Two more skills: `grip-review` quizzes a reviewer on a range of commits (or prints the
   questions for the author with `--questions-only`), `grip-explain` turns the developer's
   answers from the last quiz into a commit message or pull request description. `grip last`
@@ -67,6 +70,9 @@ All notable changes to this project are documented here. The format follows
   on the docs site.
 
 ### Changed
+
+- `grip init` reports agent files as "wrote" or "updated" instead of "written", and the
+  generic `AGENTS.md` target is labelled "AGENTS.md readers".
 
 - The demo now quizzes a ROS 2 change: a `cmd_vel` safety filter gaining a lidar scan
   watchdog, instead of a payment refund.
