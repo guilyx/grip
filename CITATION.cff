@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If grip helped your work, please cite it."
+type: software
+title: "grip: keep a grip on your code"
+abstract: "A git hook that quizzes developers about their own diff before it is committed or pushed. Five questions written from the diff by a language model, a hidden rubric, a Grip Score out of 100 and a pass mark the team chooses."
+authors:
+  - family-names: "L."
+    given-names: "Erwin"
+    email: erwin.lejeune15@gmail.com
+repository-code: "https://github.com/guilyx/grip"
+url: "https://guilyx.github.io/grip/"
+license: BSD-3-Clause
+keywords:
+  - git
+  - code review
+  - comprehension
+  - AI-assisted programming
+  - developer tools
+version: 0.1.0
+date-released: 2026-09-21
