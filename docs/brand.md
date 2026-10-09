@@ -24,58 +24,62 @@ degrees, 87.5 percent: a pass, never a perfect one. A short bar turns it inward 
 
 | File | Use |
 | --- | --- |
-| [`mark.svg`](assets/brand/mark.svg) | default, volt on a basalt tile, also the favicon |
-| [`mark-light.svg`](assets/brand/mark-light.svg) | basalt on volt |
-| [`mark-bare-volt.svg`](assets/brand/mark-bare-volt.svg) | no tile, for dark surfaces |
+| [`mark.svg`](assets/brand/mark.svg) | default, ember on a graphite tile, also the favicon |
+| [`mark-light.svg`](assets/brand/mark-light.svg) | graphite on ember |
+| [`mark-bare-ember.svg`](assets/brand/mark-bare-ember.svg) | no tile, for dark surfaces |
 | [`mark-bare-ink.svg`](assets/brand/mark-bare-ink.svg) | no tile, for light surfaces |
 | [`og-card.png`](assets/brand/og-card.png) | link previews, 1200 × 630 |
 
 Keep half the tile's width clear around it. The smallest size is 16 pixels with the tile.
-Never rotate it, close the ring, or set the wordmark in anything but Bricolage Grotesque.
+Never rotate it, close the ring, or set the wordmark in anything but Archivo.
 
 ## Colour
 
 ![The grip palette](assets/brand/palette.svg)
 
 <div class="grip-swatch-row">
-<div class="grip-swatch"><i style="background:var(--grip-volt-300)"></i><span><b>volt</b><br>brand, focus, pass<br><code>volt-300</code></span></div>
-<div class="grip-swatch"><i style="background:var(--grip-tide-500)"></i><span><b>tide</b><br>links, information<br><code>tide-500</code></span></div>
-<div class="grip-swatch"><i style="background:var(--grip-flare-500)"></i><span><b>flare</b><br>fail, danger<br><code>flare-500</code></span></div>
-<div class="grip-swatch"><i style="background:var(--grip-amber-600)"></i><span><b>amber</b><br>warning<br><code>amber-600</code></span></div>
-<div class="grip-swatch"><i style="background:var(--grip-basalt-950)"></i><span><b>basalt</b><br>text, surfaces<br><code>basalt-950</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-ember-400)"></i><span><b>ember</b><br>brand, focus<br><code>ember-400</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-sky-500)"></i><span><b>sky</b><br>links, information<br><code>sky-500</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-jade-500)"></i><span><b>jade</b><br>pass<br><code>jade-500</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-berry-500)"></i><span><b>berry</b><br>fail, danger<br><code>berry-500</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-honey-600)"></i><span><b>honey</b><br>warning<br><code>honey-600</code></span></div>
+<div class="grip-swatch"><i style="background:var(--grip-graphite-950)"></i><span><b>graphite</b><br>text, surfaces<br><code>graphite-950</code></span></div>
 <div class="grip-swatch"><i style="background:var(--grip-chalk)"></i><span><b>chalk</b><br>the page<br><code>chalk</code></span></div>
 </div>
 
-Developer tools live in blue and purple. Volt is the colour of a highlighter, of grip
-tape, of a climbing hold you can spot from the ground: "look here" without "error".
+Developer tools live in blue and purple. Ember is the orange of safety gear and of a
+climbing hold you can spot from the ground: "look here" without "error".
 
 ### How it is made
 
 1. **OKLCH, not HSL.** Equal lightness steps look equal, and hue holds still as chroma
    changes.
-2. **One lightness ladder** for every family, so step 600 weighs the same in volt and in
-   flare.
+2. **One lightness ladder** for every family, so step 600 weighs the same in ember and in
+   berry.
 3. **A chroma bell**: colour peaks mid-scale and keeps a third at the ends, so deep shades
-   are olive, navy and wine, not grey.
-4. **Hue drift**: tints lean warm and shades lean cool, as pigments do.
+   are rust, teal, forest and plum, not grey.
+4. **Hue drift**: tints lean toward yellow and shades away from it, as pigments do.
 5. **Gamut mapping by chroma only**: lightness and hue never move to fit sRGB.
-6. **A perceptual triad**: volt, tide and flare sit at 124, 244 and 4 degrees, exactly 120
-   apart. Basalt is a neutral tinted toward volt.
+6. **Complements**: ember and sky sit at 46 and 226 degrees, exactly opposite.
+   Orange against cyan-blue is the contrast every colour-vision deficiency keeps. Jade
+   and berry carry pass and fail. Graphite is a neutral tinted toward ember.
 
 ### What it has to pass
 
-The generator refuses to write a palette that fails any check. 28 checks run today.
+The generator refuses to write a palette that fails any check. 37 checks run today.
 
 - **Contrast, measured twice.** Every text pairing on this site clears WCAG 2 (7:1 for
   body text, 4.5:1 elsewhere) and an APCA lightness contrast (Lc 90 for body text, 60 for
   interface text). That includes every syntax colour in the code blocks.
-- **Colour vision.** Pass and fail, pass and warning, info and fail stay at least five
-  just-noticeable differences apart under simulated protanopia, deuteranopia and
-  tritanopia.
+- **Colour vision.** Pass and fail, pass and warning, info and fail, brand and fail stay
+  at least five just-noticeable differences apart under simulated protanopia,
+  deuteranopia and tritanopia.
 
-Two choices came out of those checks, not taste. Fail is raspberry rather than orange-red,
-because at an orange hue it collapsed into volt for deuteranopes. Warnings use amber 600
-or darker, so they differ from pass by lightness, which every eye can see.
+Choices that came out of those checks, not taste: pass is jade rather than the brand
+orange, because orange reads as a warning and nearly matched fail for deuteranopes. Where
+two hues sit close for a colour-blind eye, the pair is taken from different steps so
+lightness keeps them apart. The primary button uses the darkest surface for its label,
+because vivid orange is only mid-light.
 
 !!! tip "Never colour alone"
     A score always says PASS or FAIL in words. Colour is the second signal, not the only
@@ -85,7 +89,7 @@ or darker, so they differ from pass by lightness, which every eye can see.
 
 | Role | Face | Setting |
 | --- | --- | --- |
-| Display and wordmark | Bricolage Grotesque | 800, tracking −0.035em |
+| Display and wordmark | Archivo | 800 to 900, width 112, tracking −0.035em |
 | Text | Instrument Sans | 400 and 600, line height 1.6 |
 | Code | JetBrains Mono | 500 |
 

@@ -9,8 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - A brand identity under `branding/`: the grip mark (an 87.5 percent score ring that
-  reads as a G), wordmark lockups, a social card, and a palette generated in OKLCH by
-  `branding/build.py`, which refuses to write colours that fail WCAG 2 or APCA contrast or
+  reads as a G) in ember orange on warm graphite, Archivo wordmark lockups, a social card,
+  and a palette generated in OKLCH by `branding/build.py`, which refuses to write colours that fail WCAG 2 or APCA contrast or
   that collapse under simulated colour-blindness. `tests/test_branding.py` keeps the
   generated files current.
 - A redesigned docs site: the generated palette and brand type, tabs for each section, a

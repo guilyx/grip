@@ -221,7 +221,7 @@ class Family:
         """OKLCH of step ``i`` (0 is the lightest)."""
         t = i / (len(STEPS) - 1)
         # Chroma follows a sine bell peaking mid-scale. The ends keep about a third of
-        # the peak, so deep shades stay recognisably olive, navy or wine, not grey.
+        # the peak, so deep shades stay recognisably rust, teal or plum, not grey.
         chroma = self.chroma * math.sin(math.pi * (0.12 + t * 0.76))
         hue = (self.hue + self.drift * (t - 0.5)) % 360
         return gamut_map((LIGHTNESS[i], chroma, hue))
@@ -232,16 +232,18 @@ class Family:
 
 
 FAMILIES = (
-    Family("volt", "brand, focus, pass", hue=124, chroma=0.235, drift=14),
-    Family("tide", "links, information", hue=244, chroma=0.165, drift=-8),
-    Family("flare", "fail, danger", hue=4, chroma=0.205, drift=8),
-    Family("amber", "warning, caution", hue=72, chroma=0.17, drift=10),
-    Family("basalt", "text, surfaces", hue=118, chroma=0.014, drift=0),
+    Family("ember", "brand, focus", hue=46, chroma=0.2, drift=-12),
+    Family("sky", "links, information", hue=226, chroma=0.15, drift=-6),
+    Family("jade", "pass", hue=160, chroma=0.15, drift=8),
+    Family("berry", "fail, danger", hue=352, chroma=0.2, drift=8),
+    Family("honey", "warning, caution", hue=96, chroma=0.16, drift=10),
+    Family("graphite", "text, surfaces", hue=55, chroma=0.012, drift=0),
 )
-"""Volt, tide and flare sit exactly 120 degrees apart (124, 244, 4): a triad in perceptual
-hue. Flare leans raspberry rather than orange-red on purpose: at hue 22 it collapsed
-into volt under deuteranopia. Basalt is a neutral tinted toward volt so surfaces belong to
-the brand without looking coloured."""
+"""Ember and sky are complements, 46 and 226 degrees, exactly opposite: orange against
+cyan-blue is the contrast every colour-vision deficiency keeps. Jade and berry carry pass
+and fail, placed for colour-blind separation rather than symmetry, and kept apart by
+lightness as well as hue. Graphite is a neutral tinted toward ember, so surfaces are warm
+without looking coloured."""
 
 
 def palette() -> dict[str, dict[int, str]]:
@@ -251,8 +253,8 @@ def palette() -> dict[str, dict[int, str]]:
 
 # Surfaces outside the 50 to 950 ladder: the page background in dark mode and pure ends.
 EXTRA = {
-    "basalt-975": gamut_map((0.175, 0.012, 118)),
-    "chalk": gamut_map((0.988, 0.006, 110)),
+    "graphite-975": gamut_map((0.175, 0.010, 55)),
+    "chalk": gamut_map((0.988, 0.005, 75)),
 }
 
 
@@ -265,47 +267,57 @@ def extras() -> dict[str, str]:
 
 TEXT_PAIRS = (
     # (name, fg, bg, min WCAG, min |APCA Lc|)
-    ("light body text", "basalt-900", "chalk", 7.0, 90),
-    ("light muted text", "basalt-700", "chalk", 4.5, 60),
-    ("light link text", "tide-700", "chalk", 4.5, 60),
-    ("light code text", "basalt-900", "basalt-100", 7.0, 75),
-    ("dark body text", "basalt-100", "basalt-975", 7.0, 90),
-    ("dark muted text", "basalt-300", "basalt-975", 4.5, 60),
-    ("dark link text", "volt-300", "basalt-975", 4.5, 60),
-    ("dark code text", "basalt-100", "basalt-900", 7.0, 75),
-    ("header text", "chalk", "basalt-950", 7.0, 90),
-    ("brand on header", "volt-300", "basalt-950", 4.5, 60),
-    ("primary button", "basalt-950", "volt-300", 4.5, 60),
-    ("pass badge", "volt-900", "volt-100", 4.5, 60),
-    ("fail badge", "flare-800", "flare-100", 4.5, 60),
-    ("warning badge", "amber-900", "amber-100", 4.5, 60),
-    ("info badge", "tide-800", "tide-100", 4.5, 60),
-    ("link underline, non-text", "volt-600", "chalk", 3.0, 45),
-    ("active nav item", "volt-800", "chalk", 4.5, 60),
-    ("search highlight", "basalt-950", "volt-200", 7.0, 75),
-    ("code: plain", "basalt-100", "basalt-950", 7.0, 75),
-    ("code: string", "volt-300", "basalt-950", 4.5, 60),
-    ("code: keyword", "tide-300", "basalt-950", 4.5, 60),
-    ("code: number", "amber-300", "basalt-950", 4.5, 60),
-    ("code: function", "flare-300", "basalt-950", 4.5, 60),
-    ("code: comment", "basalt-400", "basalt-950", 4.5, 45),
+    ("light body text", "graphite-900", "chalk", 7.0, 90),
+    ("light muted text", "graphite-700", "chalk", 4.5, 60),
+    ("light link text", "sky-700", "chalk", 4.5, 60),
+    ("light code text", "graphite-900", "graphite-100", 7.0, 75),
+    ("dark body text", "graphite-100", "graphite-975", 7.0, 90),
+    ("dark muted text", "graphite-300", "graphite-975", 4.5, 60),
+    ("dark link text", "ember-300", "graphite-975", 4.5, 60),
+    ("dark code text", "graphite-100", "graphite-900", 7.0, 75),
+    ("header text", "chalk", "graphite-950", 7.0, 90),
+    ("brand text on header", "ember-300", "graphite-950", 4.5, 60),
+    ("brand mark on header, non-text", "ember-400", "graphite-950", 3.0, 45),
+    # Buttons are 18 px bold; APCA's minimum for that size and weight is Lc 55.
+    ("primary button, 18 px bold", "graphite-975", "ember-400", 4.5, 55),
+    ("pass badge", "jade-800", "jade-100", 4.5, 60),
+    ("fail badge", "berry-800", "berry-100", 4.5, 60),
+    ("warning badge", "honey-900", "honey-100", 4.5, 60),
+    ("info badge", "sky-800", "sky-100", 4.5, 60),
+    ("pass text on light", "jade-700", "chalk", 4.5, 60),
+    ("brand ink on light", "ember-700", "chalk", 4.5, 60),
+    ("brand ink on dark", "ember-300", "graphite-975", 4.5, 60),
+    ("pass text on dark", "jade-300", "graphite-975", 4.5, 60),
+    ("link underline, non-text", "ember-600", "chalk", 3.0, 45),
+    ("active nav item", "ember-800", "chalk", 4.5, 60),
+    ("search highlight", "graphite-950", "ember-200", 7.0, 75),
+    ("code: plain", "graphite-100", "graphite-950", 7.0, 75),
+    ("code: string", "jade-300", "graphite-950", 4.5, 60),
+    ("code: keyword", "sky-300", "graphite-950", 4.5, 60),
+    ("code: number", "honey-300", "graphite-950", 4.5, 60),
+    ("code: function", "ember-300", "graphite-950", 4.5, 60),
+    ("code: special", "berry-300", "graphite-950", 4.5, 60),
+    ("code: comment", "graphite-400", "graphite-950", 4.5, 45),
 )
 """Every foreground/background pair the docs and the CLI branding rely on."""
 
 CVD_PAIRS = (
-    ("pass vs fail, on light", "volt-600", "flare-500", 0.10),
-    ("pass vs fail, on dark", "volt-300", "flare-400", 0.10),
-    ("pass vs warning", "volt-400", "amber-600", 0.10),
-    ("info vs fail", "tide-500", "flare-500", 0.10),
+    ("pass vs fail, on light", "jade-600", "berry-500", 0.10),
+    ("pass vs fail, on dark", "jade-300", "berry-500", 0.10),
+    ("pass vs warning", "jade-400", "honey-600", 0.10),
+    ("info vs fail", "sky-400", "berry-500", 0.10),
+    ("info vs fail, on dark", "sky-300", "berry-500", 0.10),
+    ("brand vs fail", "ember-400", "berry-600", 0.10),
+    ("brand vs info", "ember-400", "sky-600", 0.10),
 )
 """Pairs that carry meaning by colour. Minimum OKLab distance under every deficiency;
-0.02 is roughly one just-noticeable difference, so 0.10 is five of them. Volt and amber
-are only 52 degrees apart, so warnings use amber 600 and darker: they differ from pass by
-lightness, which survives every deficiency, not by hue alone."""
+0.02 is roughly one just-noticeable difference, so 0.10 is five of them. Where two hues
+sit close for a colour-blind eye (jade and berry, ember and berry), the pair is taken from
+different steps so lightness keeps them apart, which survives every deficiency."""
 
 
 def resolve(token: str, colours: dict[str, str]) -> str:
-    """``volt-400`` or ``chalk`` to hex."""
+    """``ember-400`` or ``chalk`` to hex."""
     return colours[token]
 
 
@@ -379,14 +391,14 @@ def mark_svg(stroke: str, tile: str | None, size: int = 64) -> str:
 
 def marks(colours: dict[str, str]) -> dict[str, str]:
     """Every variant of the mark, by file name."""
-    volt, ink, chalk = colours["volt-300"], colours["basalt-950"], colours["chalk"]
+    ember, ink, chalk = colours["ember-400"], colours["graphite-950"], colours["chalk"]
     return {
-        "mark.svg": mark_svg(volt, ink),
-        "mark-light.svg": mark_svg(ink, volt),
-        "mark-bare-volt.svg": mark_svg(volt, None),
+        "mark.svg": mark_svg(ember, ink),
+        "mark-light.svg": mark_svg(ink, ember),
+        "mark-bare-ember.svg": mark_svg(ember, None),
         "mark-bare-ink.svg": mark_svg(ink, None),
         "mark-bare-chalk.svg": mark_svg(chalk, None),
-        "favicon.svg": mark_svg(volt, ink),
+        "favicon.svg": mark_svg(ember, ink),
     }
 
 
@@ -419,7 +431,7 @@ def tokens_json(pal: dict[str, dict[int, str]]) -> str:
 
 
 def tokens_css(pal: dict[str, dict[int, str]]) -> str:
-    """CSS custom properties, ``--grip-volt-400`` and so on."""
+    """CSS custom properties, ``--grip-ember-400`` and so on."""
     lines = ["/* grip colour tokens. Generated by branding/build.py; do not edit. */", ":root {"]
     for f in FAMILIES:
         lines.append(f"  /* {f.name}: {f.role} */")
@@ -440,7 +452,7 @@ def swatches_svg(pal: dict[str, dict[int, str]]) -> str:
     cell, gap, label_w, top = 76, 8, 150, 56
     width = label_w + len(STEPS) * (cell + gap) + 24
     height = top + len(FAMILIES) * (cell + 44) + 16
-    bg, ink, muted = extras()["chalk"], pal["basalt"][900], pal["basalt"][600]
+    bg, ink, muted = extras()["chalk"], pal["graphite"][900], pal["graphite"][600]
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" font-family="Instrument Sans, Inter, '

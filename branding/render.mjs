@@ -24,7 +24,7 @@ const mark = readFileSync(join(here, "logo", "mark.svg"), "utf8");
 const markLight = readFileSync(join(here, "logo", "mark-light.svg"), "utf8");
 
 const FONTS =
-  "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800" +
+  "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..900" +
   "&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=block";
 
 const page = (body, css) => `<!doctype html><html><head><meta charset="utf-8">
@@ -32,12 +32,12 @@ const page = (body, css) => `<!doctype html><html><head><meta charset="utf-8">
 <style>
   * { box-sizing: border-box; margin: 0; }
   body { font-family: "Instrument Sans", sans-serif; }
-  .word { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800;
-          letter-spacing: -0.045em; line-height: 1; }
+  .word { font-family: "Archivo", sans-serif; font-weight: 900; font-stretch: 112%;
+          letter-spacing: -0.035em; line-height: 1; }
   ${css}
 </style></head><body>${body}
 <div aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none">
-  <span style="font-family:'Bricolage Grotesque';font-weight:800">a</span>
+  <span style="font-family:'Archivo';font-weight:900;font-stretch:112%">a</span>
   <span style="font-family:'Instrument Sans'">a</span>
   <span style="font-family:'JetBrains Mono'">a</span>
 </div></body></html>`;
@@ -56,8 +56,8 @@ function card() {
   const ring = (pct) => {
     const r = 118, len = 2 * Math.PI * r;
     return `<svg width="300" height="300" viewBox="0 0 300 300">
-      <circle cx="150" cy="150" r="${r}" fill="none" stroke="${c("basalt", 900)}" stroke-width="26"/>
-      <circle cx="150" cy="150" r="${r}" fill="none" stroke="${c("volt", 300)}" stroke-width="26"
+      <circle cx="150" cy="150" r="${r}" fill="none" stroke="${c("graphite", 900)}" stroke-width="26"/>
+      <circle cx="150" cy="150" r="${r}" fill="none" stroke="${c("ember", 400)}" stroke-width="26"
         stroke-linecap="round" stroke-dasharray="${(len * pct).toFixed(1)} ${len.toFixed(1)}"
         transform="rotate(-90 150 150)"/>
     </svg>`;
@@ -78,35 +78,35 @@ function card() {
         <div class="num"><b>92</b><span>/100</span><em>PASS</em></div>
       </section>
     </main>`,
-    `body { width: 1200px; height: 630px; background: ${s("basalt-975")}; color: ${s("chalk")}; }
+    `body { width: 1200px; height: 630px; background: ${s("graphite-975")}; color: ${s("chalk")}; }
      main { position: relative; height: 100%; display: flex; align-items: center;
             justify-content: space-between; padding: 0 88px; overflow: hidden; }
      .grid { position: absolute; inset: 0; opacity: .55;
-             background-image: radial-gradient(${c("basalt", 900)} 1.6px, transparent 1.6px);
+             background-image: radial-gradient(${c("graphite", 900)} 1.6px, transparent 1.6px);
              background-size: 28px 28px; }
      .left, .score { position: relative; }
      .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 40px; }
      .brand .word { font-size: 64px; color: ${s("chalk")}; transform: translateY(-4px); }
-     h1 { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 74px;
+     h1 { font-family: "Archivo"; font-weight: 900; font-stretch: 112%; font-size: 70px;
           letter-spacing: -0.035em; line-height: 1.02; margin-bottom: 26px; }
-     p { font-size: 25px; line-height: 1.45; color: ${c("basalt", 300)}; margin-bottom: 34px; }
+     p { font-size: 25px; line-height: 1.45; color: ${c("graphite", 300)}; margin-bottom: 34px; }
      code { font-family: "JetBrains Mono"; font-size: 22px; font-weight: 500;
-            color: ${c("volt", 300)}; background: ${c("basalt", 950)};
-            border: 1px solid ${c("basalt", 800)}; border-radius: 12px; padding: 14px 20px; }
+            color: ${c("ember", 300)}; background: ${c("graphite", 950)};
+            border: 1px solid ${c("graphite", 800)}; border-radius: 12px; padding: 14px 20px; }
      .score { width: 300px; height: 300px; }
      .num { position: absolute; inset: 0; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; font-family: "Bricolage Grotesque"; }
+            align-items: center; justify-content: center; font-family: "Archivo"; font-stretch: 112%; }
      .num b { font-size: 108px; font-weight: 800; letter-spacing: -0.05em; line-height: .9; }
-     .num span { font-size: 26px; color: ${c("basalt", 400)}; margin-top: 2px; }
+     .num span { font-size: 26px; color: ${c("graphite", 400)}; margin-top: 2px; }
      .num em { font-style: normal; font-family: "JetBrains Mono"; font-weight: 700;
-               font-size: 18px; letter-spacing: .2em; color: ${c("volt", 300)}; margin-top: 10px; }`,
+               font-size: 18px; letter-spacing: .2em; color: ${c("jade", 300)}; margin-top: 10px; }`,
   );
 }
 
 const jobs = [
-  ["lockup-dark.png", lockup(mark, s("chalk"), s("basalt-975")), null],
-  ["lockup-light.png", lockup(mark, c("basalt", 950), s("chalk")), null],
-  ["lockup-volt.png", lockup(markLight, c("basalt", 950), c("volt", 300)), null],
+  ["lockup-dark.png", lockup(mark, s("chalk"), s("graphite-975")), null],
+  ["lockup-light.png", lockup(mark, c("graphite", 950), s("chalk")), null],
+  ["lockup-ember.png", lockup(markLight, s("graphite-975"), c("ember", 400)), null],
   ["og-card.png", card(), { width: 1200, height: 630 }],
 ];
 
@@ -134,7 +134,7 @@ for (const [name, html, size] of jobs) {
   await tab.evaluate(() => document.fonts.ready);
   const missing = await tab.evaluate(() => {
     const loaded = new Set([...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family.replaceAll('"', "")));
-    return ["Bricolage Grotesque", "Instrument Sans", "JetBrains Mono"].filter((f) => !loaded.has(f));
+    return ["Archivo", "Instrument Sans", "JetBrains Mono"].filter((f) => !loaded.has(f));
   });
   if (missing.length) throw new Error(`fonts did not load: ${missing.join(", ")}`);
   const target = size ? tab : tab.locator(".lockup");

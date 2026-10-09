@@ -43,7 +43,7 @@ def test_wcag_and_apca_reference_values(build: ModuleType) -> None:
 
 
 def test_oklab_round_trip(build: ModuleType) -> None:
-    for hx in ("#b0d400", "#1380c1", "#f34d85", "#fbfbf7", "#10110b"):
+    for hx in ("#ff8644", "#00a2d2", "#e953a0", "#fdfbf7", "#140f0c"):
         lab = build.linear_to_oklab(build.hex_to_linear(hx))
         rgb = build.oklab_to_linear(lab)
         assert all(abs(a - b) < 1e-6 for a, b in zip(rgb, build.hex_to_linear(hx), strict=True))
@@ -63,15 +63,23 @@ def test_one_lightness_ladder_across_families(build: ModuleType) -> None:
         assert ladder == sorted(ladder, reverse=True)
 
 
-def test_triad_is_exact(build: ModuleType) -> None:
+def test_brand_and_link_hues_are_complements(build: ModuleType) -> None:
     hues = {f.name: f.hue for f in build.FAMILIES}
-    for a, b in (("volt", "tide"), ("tide", "flare"), ("flare", "volt")):
-        assert math.isclose((hues[b] - hues[a]) % 360, 120)
+    assert math.isclose((hues["sky"] - hues["ember"]) % 360, 180)
+
+
+def test_no_lime_or_violet(build: ModuleType) -> None:
+    """grip must not look like a lime-on-violet product: no family in either hue band."""
+    for family in build.FAMILIES:
+        if family.chroma < 0.05:
+            continue
+        assert not 105 <= family.hue <= 135, f"{family.name} is lime"
+        assert not 270 <= family.hue <= 320, f"{family.name} is violet"
 
 
 def test_mark_is_a_g(build: ModuleType) -> None:
-    svg = build.mark_svg("#b0d400", "#1e1e1c")
+    svg = build.mark_svg("#ff8644", "#201e1c")
     assert 'aria-label="grip"' in svg and "<rect" in svg
     # An arc with the large-arc flag set, anticlockwise, then the inward bar.
     assert " 0 1 0 " in svg and " H" in svg
-    assert "<rect" not in build.mark_svg("#b0d400", None)
+    assert "<rect" not in build.mark_svg("#ff8644", None)
