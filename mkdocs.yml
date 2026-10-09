@@ -1,74 +1,128 @@
 site_name: grip
-site_description: Keep a grip on your code. A git hook that quizzes you on your diff before it goes upstream.
+site_description: A quiz on your own diff before it goes upstream. In your terminal and inside your coding agent.
 site_url: https://guilyx.github.io/grip/
 repo_url: https://github.com/guilyx/grip
 repo_name: guilyx/grip
 edit_uri: edit/main/docs/
-copyright: Copyright &copy; 2026 Erwin L.
+copyright: Copyright &copy; 2026 Erwin L. &middot; BSD-3-Clause
 
 theme:
   name: material
+  custom_dir: overrides
+  logo: assets/brand/mark.svg
+  favicon: assets/brand/favicon.svg
+  font:
+    text: Instrument Sans
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil-outline
   features:
-    - navigation.instant
-    - navigation.sections
-    - navigation.top
-    - navigation.footer
-    - content.code.copy
+    - announce.dismiss
     - content.action.edit
-    - search.suggest
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
     - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
   palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/weather-night
+        icon: material/weather-sunny
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
-  icon:
-    repo: fontawesome/brands/github
+        icon: material/weather-night
+        name: Follow the system
+
+extra_css:
+  - stylesheets/tokens.css
+  - stylesheets/grip.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/guilyx/grip
+      name: grip on GitHub
+    - icon: material/school-outline
+      link: https://keepagrip.vercel.app
+      name: Keep A Grip, practice problems
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - How it works: how-it-works.md
-  - Configuration: configuration.md
-  - Providers: providers.md
+  - Get started:
+      - Install: getting-started.md
+      - How it works: how-it-works.md
+      - Configuration: configuration.md
+      - Providers: providers.md
   - Coding agents: agents.md
   - Keep A Grip: keepagrip.md
-  - Command line: cli.md
-  - FAQ: faq.md
-  - Honest numbers: honest-numbers.md
-  - Media: media.md
-  - Contributing: contributing.md
-  - Code of conduct: CODE_OF_CONDUCT.md
-  - Changelog: changelog.md
-  - API reference:
-      - reference/index.md
-      - config: reference/config.md
-      - git: reference/git.md
-      - models: reference/models.md
-      - providers: reference/providers.md
-      - agent: reference/agent.md
-      - quiz: reference/quiz.md
-      - hooks: reference/hooks.md
-      - integrations: reference/integrations.md
-      - study: reference/study.md
-      - platform: reference/platform.md
+  - Reference:
+      - Command line: cli.md
+      - Python API:
+          - reference/index.md
+          - config: reference/config.md
+          - git: reference/git.md
+          - models: reference/models.md
+          - providers: reference/providers.md
+          - agent: reference/agent.md
+          - quiz: reference/quiz.md
+          - hooks: reference/hooks.md
+          - integrations: reference/integrations.md
+          - study: reference/study.md
+          - platform: reference/platform.md
+  - Project:
+      - Honest numbers: honest-numbers.md
+      - FAQ: faq.md
+      - Brand: brand.md
+      - Media: media.md
+      - Contributing: contributing.md
+      - Code of conduct: CODE_OF_CONDUCT.md
+      - Changelog: changelog.md
 
 markdown_extensions:
+  - abbr
   - admonition
   - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
   - pymdownx.snippets:
       check_paths: true
   - pymdownx.superfences:
@@ -78,6 +132,8 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - toc:
       permalink: true
 
@@ -99,3 +155,5 @@ watch:
   - src
   - README.md
   - CHANGELOG.md
+  - overrides
+  - branding

@@ -25,6 +25,7 @@ work in progress to a draft branch and know what you are doing.
 | Tests           | `pytest` (add `--cov` for coverage)      |
 | Try it offline  | `grip quiz --provider fake`              |
 | Docs preview    | `mkdocs serve`                           |
+| Brand colours   | `python branding/build.py`               |
 
 CI runs the same four checks on Linux, macOS and Windows across supported Python
 versions, so running them locally first saves a round trip.
