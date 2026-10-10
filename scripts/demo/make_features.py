@@ -8,9 +8,9 @@ virtualenv, in a throwaway repository, with the offline ``fake`` provider so it 
 network and no key. Its scripted mode (``features-scenario.json``) supplies questions and
 feedback written for the clips' rate-limiter diff, the way ``scenario.json`` does for the
 main demo. Nothing else is staged: what you see is what the commands print. Recording
-and rendering reuse ``make_demo.py``. Output goes to ``docs/assets/features/``:
-``<clip>.mp4`` and ``<clip>.gif`` per clip and ``grip-whats-new.mp4``. Needs the ``demo``
-extra.
+and rendering reuse ``make_demo.py``, title cards use ``brandkit.py``. Output goes to
+``docs/assets/features/``: ``<clip>.mp4`` and ``<clip>.gif`` per clip, then
+``grip-whats-new.mp4`` and its poster. Needs the ``demo`` extra.
 """
 
 from __future__ import annotations
@@ -34,7 +34,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import make_demo  # noqa: E402
-from make_demo import COLS, PROMPT, ROWS, THEME, Session, render  # noqa: E402
+from brandkit import colour, dot_grid, draw_mark  # noqa: E402
+from brandkit import font as brand_font  # noqa: E402
+from make_demo import COLS, PROMPT, ROWS, Session, render  # noqa: E402
 
 ROOT = HERE.parents[1]
 OUT = ROOT / "docs" / "assets" / "features"
@@ -359,24 +361,32 @@ def _size(mp4: Path) -> tuple[int, int]:
             return img.size
 
 
-def _card_mp4(lines: list[tuple[str, int, str]], size: tuple[int, int], seconds: float,
-              out: Path) -> None:  # fmt: skip
-    """A still title card as an mp4 segment matching the clips."""
+Line = tuple[str, str, int, str]  # text, brandkit font kind, pixel size, colour token
+
+
+def _card_mp4(lines: list[Line], size: tuple[int, int], seconds: float, out: Path, *,
+              mark: int = 0) -> None:  # fmt: skip
+    """A still brand card as an mp4 segment matching the clips: dot grid, mark, text."""
     import io  # noqa: PLC0415
 
-    from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+    from PIL import Image, ImageDraw  # noqa: PLC0415
 
     w, h = size
-    img = Image.new("RGB", size, THEME["bg"])
+    img = Image.new("RGB", size, colour("graphite-975"))
     d = ImageDraw.Draw(img)
-    fonts = Path("/usr/share/fonts/truetype/dejavu")
-    total = sum(px + 18 for _, px, _ in lines)
+    dot_grid(d, w, h)
+    gap = 16
+    total = (mark + 28 if mark else 0) + sum(px + gap for _, _, px, _ in lines) - gap
     y = (h - total) / 2
-    for text, px, colour in lines:
-        name = "DejaVuSans-Bold.ttf" if px >= 40 else "DejaVuSans.ttf"
-        font = ImageFont.truetype(str(fonts / name), px)
-        d.text(((w - d.textlength(text, font=font)) / 2, y), text, fill=colour, font=font)
-        y += px + 18
+    if mark:
+        draw_mark(d, w / 2, y + mark / 2, mark)
+        y += mark + 28
+    for text, kind, px, token in lines:
+        face = brand_font(kind, px)
+        top = face.getbbox(text)[1] if text else 0
+        x = (w - d.textlength(text, font=face)) / 2
+        d.text((x, y - top), text, fill=colour(token), font=face)
+        y += px + gap
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=95)
     frames = int(seconds * FPS_OUT)
@@ -396,27 +406,32 @@ def stitch(clips: list[Clip], out: Path) -> None:
         intro = Path(tmp) / "intro.mp4"
         _card_mp4(
             [
-                ("grip", 72, THEME["green"]),
-                ("what's new", 34, THEME["fg"]),
-                ("a quiz on your own diff, now in every coding agent", 22, "#6c7086"),
+                ("grip", "display", 76, "graphite-50"),
+                ("what's new", "display-800", 34, "ember-400"),
+                ("a quiz on your own diff, now in every coding agent", "text", 22,
+                 "graphite-400"),
             ],
-            size, 2.8, intro,
+            size, 2.8, intro, mark=96,
         )  # fmt: skip
         parts.append(intro)
-        for clip in clips:
+        for n, clip in enumerate(clips, 1):
             card = Path(tmp) / f"card-{clip.name}.mp4"
             _card_mp4(
-                [(clip.title, 46, THEME["cyan"]), (clip.subtitle, 24, THEME["fg"])],
+                [
+                    (f"{n:02d} / {len(clips):02d}", "mono-bold", 18, "ember-400"),
+                    (clip.title, "display", 48, "graphite-50"),
+                    (clip.subtitle, "text", 24, "graphite-300"),
+                ],
                 size, 2.2, card,
             )  # fmt: skip
             parts += [card, OUT / f"{clip.name}.mp4"]
         outro = Path(tmp) / "outro.mp4"
         _card_mp4(
             [
-                ("npx skills add guilyx/grip -g", 34, THEME["green"]),
-                ("github.com/guilyx/grip", 26, THEME["fg"]),
+                ("npx skills add guilyx/grip -g", "mono-bold", 32, "ember-300"),
+                ("guilyx.github.io/grip", "text-bold", 24, "graphite-300"),
             ],
-            size, 3.2, outro,
+            size, 3.2, outro, mark=72,
         )  # fmt: skip
         parts.append(outro)
         listing = Path(tmp) / "parts.txt"
@@ -426,6 +441,11 @@ def stitch(clips: list[Clip], out: Path) -> None:
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-crf", "18",
             "-r", str(FPS_OUT), "-movflags", "+faststart", str(out),
         )  # fmt: skip
+
+
+def poster(video: Path, out: Path) -> None:
+    """The homepage poster: the intro card's first second, as a JPEG."""
+    _ffmpeg("-ss", "1.4", "-i", str(video), "-frames:v", "1", "-q:v", "3", str(out))
 
 
 def main(argv: list[str]) -> None:
@@ -447,7 +467,8 @@ def main(argv: list[str]) -> None:
             print(f"wrote {OUT / clip.name}.mp4")
     if not wanted:
         stitch(list(CLIPS), OUT / "grip-whats-new.mp4")
-        print(f"wrote {OUT / 'grip-whats-new.mp4'}")
+        poster(OUT / "grip-whats-new.mp4", OUT / "grip-whats-new.jpg")
+        print(f"wrote {OUT / 'grip-whats-new.mp4'} and its poster")
 
 
 if __name__ == "__main__":

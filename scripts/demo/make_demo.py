@@ -37,6 +37,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(HERE))
+
+from brandkit import colour, draw_mark, font_path  # noqa: E402
+from brandkit import font as brand_font  # noqa: E402
+
 ASSETS = ROOT / "docs" / "assets"
 CAST = ASSETS / "demo.cast"
 GIF = ASSETS / "demo.gif"
@@ -262,29 +267,32 @@ def _drive(s: Session) -> None:
 
 # --------------------------------------------------------------------------- rendering
 
+# ANSI colours mapped onto the brand palette (branding/tokens.json). The quiz's cyan labels
+# become ember, so the brand shows where grip speaks; green and red keep their meaning as
+# jade and berry, the pair the palette checks for colour-blind separation.
 THEME = {
-    "bg": "#1e1e2e",
-    "fg": "#cdd6f4",
-    "cursor": "#f5e0dc",
-    "chrome": "#181825",
-    "black": "#45475a",
-    "red": "#f38ba8",
-    "green": "#a6e3a1",
-    "brown": "#f9e2af",
-    "yellow": "#f9e2af",
-    "blue": "#89b4fa",
-    "magenta": "#f5c2e7",
-    "cyan": "#94e2d5",
-    "white": "#bac2de",
-    "brightblack": "#585b70",
-    "brightred": "#f38ba8",
-    "brightgreen": "#a6e3a1",
-    "brightbrown": "#f9e2af",
-    "brightyellow": "#f9e2af",
-    "brightblue": "#89b4fa",
-    "brightmagenta": "#f5c2e7",
-    "brightcyan": "#94e2d5",
-    "brightwhite": "#a6adc8",
+    "bg": colour("graphite-975"),
+    "fg": colour("graphite-100"),
+    "cursor": colour("ember-400"),
+    "chrome": colour("graphite-950"),
+    "black": colour("graphite-700"),
+    "red": colour("berry-400"),
+    "green": colour("jade-300"),
+    "brown": colour("honey-300"),
+    "yellow": colour("honey-300"),
+    "blue": colour("sky-300"),
+    "magenta": colour("berry-300"),
+    "cyan": colour("ember-300"),
+    "white": colour("graphite-200"),
+    "brightblack": colour("graphite-500"),
+    "brightred": colour("berry-300"),
+    "brightgreen": colour("jade-200"),
+    "brightbrown": colour("honey-200"),
+    "brightyellow": colour("honey-200"),
+    "brightblue": colour("sky-200"),
+    "brightmagenta": colour("berry-200"),
+    "brightcyan": colour("ember-200"),
+    "brightwhite": colour("graphite-100"),
 }
 FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 FONT_SIZE = 15
@@ -316,10 +324,11 @@ def render(cast_path: Path = CAST, gif_path: Path = GIF, webm_path: Path = WEBM)
 
     from fontTools.ttLib import TTFont  # noqa: PLC0415
 
-    regular = ImageFont.truetype(str(FONT_DIR / "DejaVuSansMono.ttf"), FONT_SIZE)
-    bold = ImageFont.truetype(str(FONT_DIR / "DejaVuSansMono-Bold.ttf"), FONT_SIZE)
+    regular = brand_font("mono", FONT_SIZE)
+    bold = brand_font("mono-bold", FONT_SIZE)
     fallback = ImageFont.truetype(str(FONT_DIR / "DejaVuSans.ttf"), FONT_SIZE - 1)
-    mono_cmap = TTFont(str(FONT_DIR / "DejaVuSansMono.ttf")).getBestCmap()
+    mono_cmap = TTFont(str(font_path("mono"))).getBestCmap()
+    title_font = brand_font("text-bold", 13)
 
     def has_glyph(ch: str) -> bool:
         return ord(ch) in mono_cmap
@@ -336,14 +345,13 @@ def render(cast_path: Path = CAST, gif_path: Path = GIF, webm_path: Path = WEBM)
         img = Image.new("RGB", (width, height), THEME["bg"])
         d = ImageDraw.Draw(img)
         d.rectangle([0, 0, width, TITLE_H], fill=THEME["chrome"])
-        for i, colour in enumerate(("#f38ba8", "#f9e2af", "#a6e3a1")):
-            x = 16 + i * 22
-            d.ellipse([x, 11, x + 12, 23], fill=colour)
+        d.line([0, TITLE_H, width, TITLE_H], fill=colour("graphite-900"))
+        draw_mark(d, 26, TITLE_H / 2, 20)
         d.text(
             (width / 2, TITLE_H / 2),
             "grip — keep a grip on your code",
-            fill="#6c7086",
-            font=regular,
+            fill=colour("graphite-500"),
+            font=title_font,
             anchor="mm",
         )
         top = TITLE_H + PAD
