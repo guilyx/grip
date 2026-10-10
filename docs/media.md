@@ -9,7 +9,7 @@ it stays in sync with the terminal output. Use it freely when you write or talk 
   <source src="assets/launch/grip-launch-1080p.mp4" type="video/mp4">
 </video>
 
-83 seconds, 1080p, H.264. Title cards around the full demo. It has a silent audio track,
+84 seconds, 1080p, H.264. Title cards around the full demo. It has a silent audio track,
 so add music before you upload it anywhere that expects sound.
 
 ## Demo
@@ -64,3 +64,6 @@ python scripts/demo/make_features.py      # re-record the feature clips and the 
 
 The demo script needs `bash` and a pseudo-terminal. The launch script needs an ffmpeg
 with libx264, which the `demo` extra provides through `imageio-ffmpeg`.
+All three take colours from `branding/tokens.json` and fonts from Google Fonts (Archivo,
+Instrument Sans, JetBrains Mono, cached in `build/fonts`) through `scripts/demo/brandkit.py`.
+Offline, they fall back to DejaVu and say so.

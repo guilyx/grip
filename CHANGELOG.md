@@ -19,6 +19,10 @@ All notable changes to this project are documented here. The format follows
 - Feature clips under `docs/assets/features/`: one MP4 and GIF per new feature and a
   stitched "what's new" cut, recorded by `scripts/demo/make_features.py` against the real
   CLI with a scripted offline scenario.
+- Every recording in the brand: the demo, the feature clips, the launch video and the
+  Product Hunt stills now use the ember and graphite palette, JetBrains Mono in the
+  terminal, Archivo and Instrument Sans on the title cards, and the mark. Colours come from
+  `branding/tokens.json` through `scripts/demo/brandkit.py`, so videos and docs cannot drift.
 - Two more skills: `grip-review` quizzes a reviewer on a range of commits (or prints the
   questions for the author with `--questions-only`), `grip-explain` turns the developer's
   answers from the last quiz into a commit message or pull request description. `grip last`
