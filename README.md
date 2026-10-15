@@ -136,7 +136,7 @@ verifies its checksum, and puts `grip` (and a `git grip` alias) in `~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
 ```
 
-Pin a version with `sh -s -- --version v0.1.0`, change the directory with `--dir`, remove
+Pin a version with `sh -s -- --version v0.2.0`, change the directory with `--dir`, remove
 it with `--uninstall`. Linux and macOS, x86_64 and arm64. On Windows use the pre-commit
 framework route below.
 
@@ -164,7 +164,7 @@ grip install --stage pre-commit --stage pre-push   # both
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/guilyx/grip
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: grip          # runs at pre-push
       # - id: grip-commit # runs at pre-commit

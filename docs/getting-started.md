@@ -14,7 +14,7 @@ Options go after `sh -s --`:
 
 | Option | Effect |
 | --- | --- |
-| `--version v0.1.0` | Install a specific release instead of the latest. |
+| `--version v0.2.0` | Install a specific release instead of the latest. |
 | `--dir DIR` | Install somewhere other than `~/.local/bin`. |
 | `--uninstall` | Remove `grip` and `git-grip` from the install directory. |
 
@@ -98,7 +98,7 @@ To do it by hand, choose one of the two approaches.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/guilyx/grip
-        rev: v0.1.0
+        rev: v0.2.0
         hooks:
           - id: grip          # runs at pre-push
           # - id: grip-commit # runs at pre-commit
