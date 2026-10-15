@@ -97,6 +97,7 @@ nav:
           - platform: reference/platform.md
   - Project:
       - Honest numbers: honest-numbers.md
+      - "Design: grip whiteboard": design/whiteboard.md
       - FAQ: faq.md
       - Brand: brand.md
       - Media: media.md
