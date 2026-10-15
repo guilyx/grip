@@ -386,9 +386,9 @@ def test_server_stops_when_idle(board: Board) -> None:
 def in_repo(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(repo)
     monkeypatch.setenv("GRIP_FAKE_SCRIPT", str(SCENARIO))
-    (repo / ".grip.toml").write_text('provider = "fake"\nmodel = "fake"\n')
+    (repo / ".grip.toml").write_text('provider = "fake"\nmodel = "fake"\n', "utf-8")
     (repo / "api").mkdir()
-    (repo / "api" / "handlers.py").write_text("_buckets = {}\n")
+    (repo / "api" / "handlers.py").write_text("_buckets = {}\n", "utf-8")
     return repo
 
 
@@ -430,7 +430,7 @@ def test_whiteboard_pass_is_remembered_for_the_push(
     assert result.exit_code == 0, result.output
     assert "Defended" in result.output
     assert CliRunner().invoke(cli, ["check"]).exit_code == 0
-    report = json.loads((in_repo / ".git" / "grip" / "last-report.json").read_text())
+    report = json.loads((in_repo / ".git" / "grip" / "last-report.json").read_text("utf-8"))
     assert report["score"] >= 70
     assert [q["focus"] for q in report["questions"]][1] == "malicious actor"
     again = _run(monkeypatch, {"answers": GOOD})
@@ -466,7 +466,7 @@ def test_whiteboard_export_writes_a_page_without_rubrics(
     out = in_repo / "board.html"
     result = CliRunner().invoke(cli, ["whiteboard", "--export", str(out)])
     assert result.exit_code == 0, result.output
-    page = out.read_text()
+    page = out.read_text("utf-8")  # not the platform default: cp1252 cannot decode it
     assert '"mode": "export"' in page
     assert "Every new key starts with a full bucket" not in page
 
