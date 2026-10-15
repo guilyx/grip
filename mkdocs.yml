@@ -1,5 +1,5 @@
 site_name: grip
-site_description: A quiz on your own diff before it goes upstream. In your terminal and inside your coding agent.
+site_description: Pass the whiteboard defense before you push. A quiz on your own diff, in your terminal and inside your coding agent.
 site_url: https://guilyx.github.io/grip/
 repo_url: https://github.com/guilyx/grip
 repo_name: guilyx/grip
@@ -75,6 +75,7 @@ extra:
 nav:
   - Home: index.md
   - Get started:
+      - The whiteboard defense: whiteboard-defense.md
       - Install: getting-started.md
       - How it works: how-it-works.md
       - Configuration: configuration.md

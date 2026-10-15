@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "grip-hook"
 dynamic = ["version"]
-description = "Keep a grip on your code: a git hook that quizzes you on your diff before you commit or push it."
+description = "Pass the whiteboard defense before you push: a git hook that quizzes you on your own diff."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]

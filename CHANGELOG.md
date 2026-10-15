@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- grip is now explained around the whiteboard defense: could you explain and defend this
+  change at a whiteboard? The README, the docs homepage and a new
+  [whiteboard defense](https://guilyx.github.io/grip/whiteboard-defense/) page map grip's
+  five questions to that bar, and say when to leave grip off (prototypes, demos,
+  experiments).
+
 ## [0.1.0] - 2026-10-15
 
 The first public release.

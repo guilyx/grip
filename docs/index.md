@@ -1,6 +1,6 @@
 ---
 title: grip, keep a grip on your code
-description: A quiz on your own diff before it goes upstream. In your terminal and inside your coding agent.
+description: Pass the whiteboard defense before you push. A quiz on your own diff, in your terminal and inside your coding agent.
 hide:
   - navigation
   - toc
@@ -11,13 +11,14 @@ hide:
 
 <div class="grip-hero__copy" markdown>
 
-<span class="grip-eyebrow">open source · git hook · agent skill</span>
+<span class="grip-eyebrow">the whiteboard defense, before every push</span>
 
-<h1 class="grip-hero__title">Keep a grip<br>on your <em>code.</em></h1>
+<h1 class="grip-hero__title">Could you defend<br>this diff at a <em>whiteboard?</em></h1>
 
-<p class="grip-hero__lede">grip quizzes you on your own diff before it goes upstream. Five
-questions written from the change, a Grip Score out of 100, and a pass mark your team
-picks. In the terminal, and inside Claude Code, Codex, Gemini CLI and Cursor.</p>
+<p class="grip-hero__lede">grip pulls you aside at the push and asks what a senior engineer
+would: how it works, why this way, where it fails, what could go wrong. Five questions
+written from your own diff, a Grip Score out of 100, a pass mark your team picks. In the
+terminal, and inside Claude Code, Codex, Gemini CLI and Cursor.</p>
 
 <div class="grip-hero__actions" markdown>
 
@@ -34,6 +35,18 @@ picks. In the terminal, and inside Claude Code, Codex, Gemini CLI and Cursor.</p
 </svg>
 <div class="grip-score__label"><b>92</b><span>/100</span><em>PASS</em></div>
 </div>
+
+</div>
+
+<div class="grip-quote" markdown>
+
+> I don't expect line-level familiarity with the code. [...] But if I ask "why did you do X
+> instead of Y?", "what happens if this actor behaves maliciously?", "what data structure
+> did you use here and why?", or "where does this fail?" you should be able to answer
+> confidently.
+
+<p class="grip-quote__by" markdown>Mitchell Hashimoto, on the whiteboard defense.
+We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
 
 </div>
 
@@ -193,7 +206,7 @@ the quiz is on the [honest numbers](honest-numbers.md) page.
 
 <div class="grip-closing" markdown>
 
-<p class="grip-closing__line">We let AI write the code.<br>We still own it.</p>
+<p class="grip-closing__line">Generate the prototype.<br>Defend what ships.</p>
 
 [Get started](getting-started.md){ .md-button }
 

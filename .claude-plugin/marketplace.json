@@ -4,7 +4,7 @@
     "name": "Erwin L.",
     "url": "https://github.com/guilyx"
   },
-  "description": "grip: keep a grip on your code. A quiz on your own diff before it goes upstream.",
+  "description": "grip: pass the whiteboard defense before you push. A quiz on your own diff.",
   "plugins": [
     {
       "name": "grip",

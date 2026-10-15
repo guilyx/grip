@@ -97,6 +97,9 @@ All three are open source and served by Google Fonts.
 
 ## Voice
 
+- **Lead with the whiteboard question.** Could you defend this change? Never "do you
+  remember this line".
+- **Prototype freely, defend what ships.** grip is for customer-facing work; say so.
 - **We, not I.** grip is a shared habit, not a scold.
 - **Plain and short.** One idea per sentence.
 - **Honest about limits.** Say what is measured and what is not.

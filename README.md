@@ -1,6 +1,8 @@
-**Keep a grip on your code.** grip is a git hook that quizzes you about your own diff
-before you commit or push it. Five questions, a Grip Score out of 100, and a pass mark you
-choose. Below the mark, nothing goes upstream.
+**Pass the whiteboard defense before you push.** grip is a git hook that pulls you aside
+at the moment you ship and asks what a senior engineer would: what does this do, why this
+way and not another, where does it fail, what could go wrong. Five questions written from
+your own diff, a Grip Score out of 100, and a pass mark your team sets. Below the mark,
+nothing goes upstream.
 
 [![CI](https://github.com/guilyx/grip/actions/workflows/ci.yml/badge.svg)](https://github.com/guilyx/grip/actions/workflows/ci.yml)
 [![Docs](https://github.com/guilyx/grip/actions/workflows/docs.yml/badge.svg)](https://guilyx.github.io/grip/)
@@ -60,13 +62,45 @@ Same push, one minute later. You can explain it in the review because you just d
 
 <sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.mp4). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
 
-## Why
+## The whiteboard defense
+
+> I should be able to pull you aside at any moment and ask you to explain any
+> customer-facing system you've shipped. [...] I don't expect line-level familiarity with
+> the code. [...] But if I ask "why did you do X instead of Y?", "what happens if this
+> actor behaves maliciously?", "what data structure did you use here and why?", or "where
+> does this fail?" you should be able to answer confidently.
+>
+> Mitchell Hashimoto
+
+We found this post after we built grip, and it is the clearest statement of what grip is
+for. (Mitchell is not involved with grip.) The bar is not line-level recall. It is being
+able to explain and defend a system you put in front of customers, however much of it a
+model wrote.
+
+grip runs that conversation at the last moment it is cheap: before the push.
+
+| At the whiteboard | What grip asks |
+| --- | --- |
+| How does it work? | **behaviour**: what the change does, in your words |
+| Why X instead of Y? | **motivation**: why it is built this way |
+| Where does this fail? | **edge case**: the input or state that breaks it |
+| What could go wrong? | **risk**: side effects, and what else it touches |
+| How do you know? | **testing**: how you would show it works |
+
+The questions never ask for line numbers, exact strings or function names. A model writes
+them from the diff with a hidden rubric, then grades your answers against it. Two of the
+questions in that post are not asked directly yet: what a malicious actor could do, and why
+a data structure was chosen. The next release, `grip whiteboard`, adds them.
+
+**Prototype freely, defend what ships.** For a spike, a demo or an experiment, generate
+all of it: `grip skip` lets one push through, `grip skip --hours 2` pauses grip for a
+session, or leave the hook out of that repository. Keep the hook where customers are.
+
+## Why now
 
 Generated code, big refactors, late-night pastes: it is easy to ship a change you could
 not explain in a code review. grip makes you explain it *before* it leaves your machine.
-It is a lightweight forcing function, not a gate for correctness: the model asks about
-behaviour, motivation, edge cases, risks and verification, and grades your answers against
-a rubric it wrote from the diff.
+It is a lightweight forcing function, not a gate for correctness.
 
 The gap grip aims at is measured, not imagined. In METR's 2025 randomised trial,
 experienced open-source developers using AI tools were [19% slower while believing they

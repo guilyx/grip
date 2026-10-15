@@ -747,6 +747,38 @@
   color: var(--grip-chalk);
 }
 
+/* ------------------------------------------------------------------ quote band */
+
+.grip-quote {
+  margin: 2.6rem 0 1rem;
+  padding: 0.2rem 0 0.2rem 1.6rem;
+  border-left: 4px solid var(--grip-ember-400);
+}
+
+.md-typeset .grip-quote blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--md-default-fg-color);
+  font-family: var(--grip-display);
+  font-stretch: var(--grip-display-stretch);
+  font-weight: 800;
+  font-size: clamp(0.98rem, 1.7vw, 1.15rem);
+  line-height: 1.4;
+  max-width: 44rem;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset .grip-quote blockquote p {
+  margin: 0;
+}
+
+.md-typeset .grip-quote .grip-quote__by {
+  margin: 0.9rem 0 0;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
 /* ------------------------------------------------------------------ brand page */
 
 .grip-swatch-row {
