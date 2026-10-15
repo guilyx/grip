@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `grip whiteboard`: the change drawn as a whiteboard (its parts, how they connect, which
+  inputs are untrusted) with five questions pinned to it, defended in the browser. It asks
+  the two whiteboard questions the quiz does not: what a malicious actor could do and why
+  a data structure was chosen. Graded on the same 100-point scale; a pass counts for the
+  push hook. `--interview` shows the rubrics to the person asking and records nothing,
+  `--export` writes a shareable page without rubrics. Served on 127.0.0.1 behind a random
+  token, with `Host`/`Origin` checks and a hash-based Content-Security-Policy.
+- `/grip-whiteboard` skill for Claude Code, Codex, Gemini CLI, Cursor and friends.
+- Providers draw boards (`generate_board`); the `fake` provider draws one from the changed
+  files or from a scripted `board`.
+
 ### Changed
 
 - grip is now explained around the whiteboard defense: could you explain and defend this

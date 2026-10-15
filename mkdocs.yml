@@ -78,6 +78,7 @@ nav:
       - The whiteboard defense: whiteboard-defense.md
       - Install: getting-started.md
       - How it works: how-it-works.md
+      - The whiteboard: whiteboard.md
       - Configuration: configuration.md
       - Providers: providers.md
   - Coding agents: agents.md

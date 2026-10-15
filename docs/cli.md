@@ -17,6 +17,26 @@ grip quiz --report out.json     # also write the report here
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
 
+## `grip whiteboard`
+
+Draw the change as a whiteboard and defend it in the browser. The parts of the change, how
+they connect and five questions pinned to them come from your diff. Answers are graded like
+`grip quiz`, and a pass counts for the push hook. See [the whiteboard](whiteboard.md).
+
+```bash
+grip whiteboard                         # staged changes
+grip whiteboard --unpushed              # commits not on any remote
+grip whiteboard --range main..HEAD      # explicit range
+grip whiteboard --interview             # rubrics visible to the person asking; nothing recorded
+grip whiteboard --export board.html     # standalone page, no rubrics, nothing graded
+grip whiteboard --no-open --port 8765   # print the address instead of opening a browser
+```
+
+It takes the same `--provider`, `--model`, `--difficulty`, `--passing-score` and `--report`
+options as `grip quiz`. The page is served on `127.0.0.1` behind a random token and waits up
+to twenty idle minutes. Exit codes: `0` defended, skipped or exported, `1` below the pass
+mark, `2` error (including Ctrl-C or the idle timeout, which record nothing).
+
 ## `grip hook STAGE [ARGS...]`
 
 The entry point installed hooks and pre-commit call. `STAGE` is `pre-commit` or

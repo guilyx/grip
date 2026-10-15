@@ -69,7 +69,7 @@ We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
     npx skills add guilyx/grip -g
     ```
 
-    Adds `/grip`, `/grip-review` and `/grip-explain` to Claude Code, Codex, Gemini CLI,
+    Adds `/grip`, `/grip-review`, `/grip-explain` and `/grip-whiteboard` to Claude Code, Codex, Gemini CLI,
     Cursor, Windsurf, Cline and Copilot. Type `/grip` before you push.
 
 === "Claude Code plugin"
@@ -144,16 +144,18 @@ get per-question feedback on what to re-read.
     ---
 
     `/grip` in Claude Code, Codex, Gemini CLI or Cursor. The agent relays, you answer.
+    The Claude Code plugin also denies `git push` until the diff has passed.
 
     [:octicons-arrow-right-24: Coding agents](agents.md)
 
--   :material-shield-lock-outline:{ .lg } __Gate the agent's push__
+-   :material-draw:{ .lg } __Defend it at a whiteboard__
 
     ---
 
-    The Claude Code plugin denies `git push` until the diff has passed.
+    `grip whiteboard` draws the change and pins the questions to it, malicious actor and
+    data structure included.
 
-    [:octicons-arrow-right-24: The push gate](agents.md#claude-code-plugin)
+    [:octicons-arrow-right-24: The whiteboard](whiteboard.md)
 
 -   :material-account-eye-outline:{ .lg } __Quiz the reviewer__
 

@@ -1,0 +1,273 @@
+{
+  "summary": "Adds a per-key token bucket in front of every public API route: 60 requests a minute, then 429 with Retry-After.",
+  "questions": [
+    {
+      "question": "Why a token bucket here, instead of counting requests in a fixed one-minute window?",
+      "rubric": "- A fixed window lets a client send up to twice the limit across a window boundary.\n- The bucket refills continuously: bursts up to the limit, but the average rate holds.\n- Refill is computed when a request arrives, so there is no timer or cleanup job.",
+      "focus": "why this way",
+      "rules": [
+        {
+          "match": "twice",
+          "score": 20,
+          "feedback": "Right: a fixed window allows a double burst at the boundary, and the bucket keeps the average."
+        },
+        {
+          "match": "burst",
+          "score": 14,
+          "feedback": "Bursts, yes. Missing: why a fixed window is worse at its boundary."
+        },
+        {
+          "match": "simple",
+          "score": 6,
+          "feedback": "Simpler than what? Name the alternative and what it gets wrong."
+        }
+      ],
+      "default": {
+        "score": 0,
+        "feedback": "Nothing here shows the developer could defend this part."
+      }
+    },
+    {
+      "question": "A client sends every request with a new, made-up api_key. What happens to this server?",
+      "rubric": "- Every new key starts with a full bucket, so the limit never applies.\n- _buckets gains an entry per key and is never cleaned, so memory grows until the process falls over.\n- Fix: reject unknown keys before limiting, limit per IP as well, or bound the map.",
+      "focus": "malicious actor",
+      "rules": [
+        {
+          "match": "memory",
+          "score": 20,
+          "feedback": "Exactly: no limit for new keys, and _buckets grows without bound. Reject unknown keys first."
+        },
+        {
+          "match": "new key",
+          "score": 10,
+          "feedback": "New keys bypass the limit, yes. Missing: the dict grows forever, which is the outage."
+        },
+        {
+          "match": "rate",
+          "score": 4,
+          "feedback": "This is about keys nobody issued, not the normal rate."
+        }
+      ],
+      "default": {
+        "score": 0,
+        "feedback": "Nothing here shows the developer could defend this part."
+      }
+    },
+    {
+      "question": "Why a plain dict of (tokens, last refill) per key, and what does that choice cost?",
+      "rubric": "- Constant-time lookup and update, no dependency, two numbers per key.\n- It lives in one process: not shared between workers or servers, lost on restart.\n- Nothing ever removes an entry.",
+      "focus": "data structure",
+      "rules": [
+        {
+          "match": "process",
+          "score": 16,
+          "feedback": "Right about per-process. Missing: entries are never removed."
+        },
+        {
+          "match": "o(1)",
+          "score": 10,
+          "feedback": "Fast, yes. Missing what it costs: per process, and never evicted."
+        }
+      ],
+      "default": {
+        "score": 0,
+        "feedback": "Nothing here shows the developer could defend this part."
+      }
+    },
+    {
+      "question": "Where does this limit stop holding?",
+      "rubric": "- Several workers or servers each keep their own buckets, so a key gets that many times the limit.\n- A restart or deploy refills every bucket.\n- Concurrent requests can both spend the last token.",
+      "focus": "where it fails",
+      "rules": [
+        {
+          "match": "server",
+          "score": 20,
+          "feedback": "Yes: N servers give N times the limit, and a deploy resets every bucket."
+        },
+        {
+          "match": "restart",
+          "score": 12,
+          "feedback": "Restarts, yes. Missing: several servers each keep their own buckets."
+        }
+      ],
+      "default": {
+        "score": 0,
+        "feedback": "Nothing here shows the developer could defend this part."
+      }
+    },
+    {
+      "question": "How would you show the 61st request in a minute gets a 429, without waiting a minute?",
+      "rubric": "- Call _allow with explicit times instead of the real clock.\n- 61 calls at the same instant: 60 allowed, the 61st refused.\n- Retry-After is about one second, and a call one second later is allowed.",
+      "focus": "how you know",
+      "rules": [
+        {
+          "match": "now",
+          "score": 20,
+          "feedback": "Good: drive _allow with explicit times, assert the 61st is refused and the Retry-After."
+        },
+        {
+          "match": "sleep",
+          "score": 6,
+          "feedback": "Sleeping a minute in a test is slow and flaky. Pass the time in instead."
+        }
+      ],
+      "default": {
+        "score": 0,
+        "feedback": "Nothing here shows the developer could defend this part."
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "min": 0,
+      "text": "You could not yet defend the parts this change puts in front of customers."
+    },
+    {
+      "min": 70,
+      "text": "You defended it: how it works, why this way, and where it breaks."
+    }
+  ],
+  "board": {
+    "summary": "Adds a per-key token bucket in front of every public API route: 60 requests a minute, then 429 with Retry-After.",
+    "nodes": [
+      {
+        "id": "client",
+        "label": "API client",
+        "role": "sends api_key with each call",
+        "kind": "external",
+        "trust": "untrusted",
+        "files": []
+      },
+      {
+        "id": "handle",
+        "label": "handle()",
+        "role": "entry for every request",
+        "kind": "component",
+        "trust": "trusted",
+        "files": [
+          "api/handlers.py"
+        ]
+      },
+      {
+        "id": "clock",
+        "label": "time.monotonic()",
+        "role": "the clock",
+        "kind": "external",
+        "trust": "trusted",
+        "files": []
+      },
+      {
+        "id": "allow",
+        "label": "_allow()",
+        "role": "refill, spend or refuse",
+        "kind": "component",
+        "trust": "trusted",
+        "files": [
+          "api/handlers.py"
+        ]
+      },
+      {
+        "id": "buckets",
+        "label": "_buckets",
+        "role": "key → (tokens, last)",
+        "kind": "store",
+        "trust": "trusted",
+        "files": [
+          "api/handlers.py"
+        ]
+      },
+      {
+        "id": "route",
+        "label": "route()",
+        "role": "the real endpoint",
+        "kind": "context",
+        "trust": "trusted",
+        "files": []
+      }
+    ],
+    "edges": [
+      {
+        "source": "client",
+        "target": "handle",
+        "label": "request + api_key"
+      },
+      {
+        "source": "handle",
+        "target": "client",
+        "label": "429 + Retry-After"
+      },
+      {
+        "source": "clock",
+        "target": "handle",
+        "label": "now"
+      },
+      {
+        "source": "handle",
+        "target": "allow",
+        "label": "key, now → ok, wait"
+      },
+      {
+        "source": "allow",
+        "target": "buckets",
+        "label": "read · write"
+      },
+      {
+        "source": "handle",
+        "target": "route",
+        "label": "if allowed"
+      }
+    ],
+    "pins": [
+      {
+        "on": "allow",
+        "kind": "why this way",
+        "question": "Why a token bucket here, instead of counting requests in a fixed one-minute window?",
+        "rubric": [
+          "A fixed window lets a client send up to twice the limit across a window boundary.",
+          "The bucket refills continuously: bursts up to the limit, but the average rate holds.",
+          "Refill is computed when a request arrives, so there is no timer or cleanup job."
+        ]
+      },
+      {
+        "on": "client->handle",
+        "kind": "malicious actor",
+        "question": "A client sends every request with a new, made-up api_key. What happens to this server?",
+        "rubric": [
+          "Every new key starts with a full bucket, so the limit never applies.",
+          "_buckets gains an entry per key and is never cleaned, so memory grows until the process falls over.",
+          "Fix: reject unknown keys before limiting, limit per IP as well, or bound the map."
+        ]
+      },
+      {
+        "on": "buckets",
+        "kind": "data structure",
+        "question": "Why a plain dict of (tokens, last refill) per key, and what does that choice cost?",
+        "rubric": [
+          "Constant-time lookup and update, no dependency, two numbers per key.",
+          "It lives in one process: not shared between workers or servers, lost on restart.",
+          "Nothing ever removes an entry."
+        ]
+      },
+      {
+        "on": "handle",
+        "kind": "where it fails",
+        "question": "Where does this limit stop holding?",
+        "rubric": [
+          "Several workers or servers each keep their own buckets, so a key gets that many times the limit.",
+          "A restart or deploy refills every bucket.",
+          "Concurrent requests can both spend the last token."
+        ]
+      },
+      {
+        "on": "clock",
+        "kind": "how you know",
+        "question": "How would you show the 61st request in a minute gets a 429, without waiting a minute?",
+        "rubric": [
+          "Call _allow with explicit times instead of the real clock.",
+          "61 calls at the same instant: 60 allowed, the 61st refused.",
+          "Retry-After is about one second, and a call one second later is allowed."
+        ]
+      }
+    ]
+  }
+}

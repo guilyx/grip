@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>grip whiteboard</title>
+<style>
+:root {
+  --page: #f1ece8; --board: #fdfbf7; --dot: #ded8d4; --ink: #201e1c; --muted: #655f5b;
+  --line: #c8c1bc; --node: #ffffff; --panel: #fdfbf7; --accent: #ff8644; --accent-ink: #9f3d00;
+  --on-accent: #201e1c; --pass: #008f5f; --pass-soft: #bdffd6; --warn: #706000; --warn-soft: #ffecb3;
+  --fail: #a62168; --fail-soft: #ffe4f0; --zone: #fff3f8; --zone-line: #c83683;
+  --display: "Archivo", "Arial Black", "Helvetica Neue", system-ui, sans-serif;
+  --text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --page: #140f0c; --board: #201e1c; --dot: #332f2d; --ink: #f9f6f4; --muted: #b3aba6;
+  --line: #4c4643; --node: #332f2d; --panel: #201e1c; --accent: #ff8644; --accent-ink: #ffac80;
+  --on-accent: #140f0c; --pass: #6ddda2; --pass-soft: #003b26; --warn: #e1c046; --warn-soft: #383100;
+  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; padding: 14px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
+  background: var(--page); color: var(--ink); font: 15px/1.5 var(--text); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand b { font: 800 22px/1 var(--display); letter-spacing: -0.03em; }
+.brand span { font: 700 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); }
+.meta { font: 500 12.5px var(--mono); color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.chip { font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 10px; color: var(--muted); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.board { border: 1px solid var(--line); border-radius: 18px; overflow-x: auto;
+  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / 20px 20px, var(--board); }
+.board svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 16px 12px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--line); }
+.legend i.ext { border-style: dashed; }
+.legend i.zone { background: var(--zone); border-color: var(--zone-line); border-style: dashed; }
+.legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
+svg text { font-family: var(--text); fill: var(--ink); }
+.arrowhead { fill: var(--muted); }
+.n rect { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
+.n.ext rect { stroke-dasharray: 6 4; }
+.n.ctx rect { fill: transparent; }
+.n .label { font: 700 14.5px var(--mono); }
+.n .role { font-size: 12px; fill: var(--muted); }
+.n .tag { font: 700 9.5px var(--mono); letter-spacing: .12em; fill: var(--muted); }
+.n .lid { stroke: var(--line); stroke-width: 1.5; }
+.n, .p { cursor: pointer; outline: none; }
+.n:hover rect, .n:focus-visible rect { stroke: var(--accent); }
+.n.sel rect { stroke: var(--accent); stroke-width: 2.5; }
+.e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.e.trust path { stroke: var(--zone-line); }
+.e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
+.zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
+.zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
+.p circle { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
+.p text { font: 700 13px var(--mono); fill: var(--on-accent); text-anchor: middle; dominant-baseline: central; }
+.p.sel circle { stroke: var(--ink); }
+.p.done circle { fill: var(--ink); } .p.done text { fill: var(--board); }
+.p.pass circle { fill: var(--pass); } .p.warn circle { fill: var(--warn); } .p.fail circle { fill: var(--fail); }
+.p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
+.n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel h2 { font: 800 21px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
+.panel p { margin: 0; }
+.small { font-size: 13px; color: var(--muted); }
+.kind { display: inline-block; font: 700 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.item { width: 100%; text-align: left; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start;
+  background: none; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.item:hover { border-color: var(--accent); }
+.num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 12.5px var(--mono); background: var(--accent); color: var(--on-accent); }
+.num.done { background: var(--ink); color: var(--board); }
+.num.pass { background: var(--pass); color: var(--board); } .num.warn { background: var(--warn); color: var(--board); } .num.fail { background: var(--fail); color: var(--board); }
+.item .q { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.item .s { font: 700 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.question { font: 600 17px/1.4 var(--text); overflow-wrap: anywhere; }
+textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  background: var(--board); color: var(--ink); font: 15px/1.5 var(--text); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 14px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.rubric { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: var(--page); list-style: none; }
+.rubric label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.rubric input { margin-top: 3px; accent-color: var(--accent); }
+.fb { display: grid; gap: 4px; padding: 12px; border-radius: 12px; font-size: 14px; }
+.fb.pass { background: var(--pass-soft); } .fb.warn { background: var(--warn-soft); } .fb.fail { background: var(--fail-soft); }
+.fb b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.error { padding: 12px; border-radius: 12px; background: var(--fail-soft); font-size: 14px; }
+.score { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: center; }
+.score svg { width: 96px; height: 96px; }
+.score .track { stroke: var(--line); } .score .arc.pass { stroke: var(--pass); } .score .arc.fail { stroke: var(--fail); }
+.score .big { font: 800 30px var(--display); fill: var(--ink); text-anchor: middle; }
+.score .unit { font: 500 11px var(--mono); fill: var(--muted); text-anchor: middle; }
+.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
+.verdict.pass { color: var(--pass); } .verdict.fail { color: var(--fail); }
+.note { font-size: 12.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
+.nodeinfo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.nodeinfo dt { color: var(--muted); }
+.nodeinfo dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) { .p circle, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15.4" fill="#201e1c"/><path d="M48 32 A16 16 0 1 1 43.31 20.69" fill="none" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/><path d="M48 32 H34" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/></svg>
+    <b>grip</b><span>whiteboard</span>
+  </div>
+  <div class="meta" id="meta"></div>
+  <div class="chip" id="mode-chip"></div>
+</header>
+<main class="layout">
+  <section class="board" aria-label="The change as a whiteboard">
+    <svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg>
+    <div class="legend">
+      <span><i></i>changed in this diff</span>
+      <span><i class="ext"></i>outside the diff</span>
+      <span><i class="zone"></i>untrusted input</span>
+      <span><i class="pin"></i>question pinned here</span>
+    </div>
+  </section>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+<script type="application/json" id="board-data">__BOARD_DATA__</script>
+<script>
+"use strict";
+// Everything in DATA came from a language model reading the developer's diff. It is
+// untrusted: it is only ever placed with textContent or as attribute values, never as markup.
+const DATA = JSON.parse(document.getElementById("board-data").textContent);
+const MODE = DATA.mode, PPQ = DATA.points_per_question, W = DATA.node.width, H = DATA.node.height;
+const NS = "http://www.w3.org/2000/svg";
+const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "circle", "defs", "marker"]);
+const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
+const edgeById = Object.fromEntries(DATA.edges.map((e) => [e.id, e]));
+const state = {
+  sel: null, busy: false, error: null, result: null,
+  answers: DATA.pins.map(() => ""),
+  ticks: DATA.pins.map((p) => (p.rubric || []).map(() => false)),
+};
+
+function el(tag, attrs = {}, ...kids) {
+  const node = SVG_TAGS.has(tag) ? document.createElementNS(NS, tag) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
+    if (k === "on") for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v === true ? "" : String(v));
+  }
+  for (const kid of kids.flat()) if (kid != null) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return node;
+}
+const activate = (fn) => ({ click: fn, keydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(ev); } } });
+
+const centre = (n) => ({ x: n.x + W / 2, y: n.y + H / 2 });
+function exitPoint(n, toward) {
+  const c = centre(n), dx = toward.x - c.x, dy = toward.y - c.y;
+  const t = Math.min(dx ? (W / 2 + 6) / Math.abs(dx) : Infinity, dy ? (H / 2 + 6) / Math.abs(dy) : Infinity);
+  return { x: c.x + dx * t, y: c.y + dy * t };
+}
+function edgeGeometry(e) {
+  const a = centre(byId[e.source]), b = centre(byId[e.target]);
+  const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
+  const sx = horizontal ? 0 : e.offset, sy = horizontal ? e.offset : 0;
+  const p = exitPoint(byId[e.source], b), q = exitPoint(byId[e.target], a);
+  const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
+  return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
+}
+function pinAnchor(pin) {
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4, y: n.y + 4 }; }
+  const g = edgeGeometry(edgeById[pin.on]);
+  return g.horizontal ? { x: g.mid.x, y: g.mid.y - 38 } : { x: g.mid.x - 26, y: g.mid.y };
+}
+function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
+function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }
+function pinTarget(p) {
+  if (byId[p.on]) return byId[p.on].label;
+  const e = edgeById[p.on];
+  return `${byId[e.source].label} → ${byId[e.target].label}`;
+}
+
+function drawBoard() {
+  const svg = document.getElementById("board");
+  svg.setAttribute("viewBox", `0 0 ${DATA.size.width} ${DATA.size.height}`);
+  svg.replaceChildren(el("defs", {}, el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+    el("path", { d: "M0 0 L10 5 L0 10 z", class: "arrowhead" }))));
+  if (DATA.zone) {
+    const [x, y, w, h] = DATA.zone;
+    svg.append(el("g", { class: "zone" }, el("rect", { x, y, width: w, height: h, rx: 16 }), el("text", { x: x + 16, y: y + 24, text: "UNTRUSTED" })));
+  }
+  // Labels go in their own layer above the boxes, so a long one stays readable.
+  const labels = el("g", { class: "e" });
+  for (const e of DATA.edges) {
+    const g = edgeGeometry(e);
+    const below = e.offset > 0;
+    labels.append(g.horizontal
+      ? el("text", { x: g.mid.x, y: g.mid.y + (below ? 17 : -8), "text-anchor": "middle", text: e.label })
+      : el("text", { x: g.mid.x + 10, y: g.mid.y + 4, text: e.label }));
+    svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") },
+      el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" })));
+  }
+  const per = state.result ? state.result.grades : null;
+  for (const n of DATA.nodes) {
+    const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === n.id);
+    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "");
+    if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
+    const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
+    const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`, on: activate(() => select({ node: n.id })) },
+      el("rect", { x: n.x, y: n.y, width: W, height: H, rx: 12 }),
+      el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
+      el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
+      el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
+    if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + W - 10}` }));
+    svg.append(g);
+  }
+  svg.append(labels);
+  DATA.pins.forEach((p, i) => {
+    const at = pinAnchor(p);
+    let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");
+    if (per) cls += " " + band(per[i].score); else if (answered(i)) cls += " done";
+    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `Question ${i + 1}, ${p.kind}`,
+      on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); }) },
+      el("circle", { cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
+  });
+}
+
+function numClass(i) {
+  if (state.result) return "num " + band(state.result.grades[i].score);
+  return "num" + (answered(i) ? " done" : "");
+}
+function pinList(indexes) {
+  return el("ol", { class: "list" }, indexes.map((i) => {
+    const p = DATA.pins[i];
+    const status = state.result ? `${state.result.grades[i].score}/${PPQ}` : answered(i) ? "ready" : "";
+    return el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
+      el("span", { class: numClass(i), text: String(i + 1) }),
+      el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.question })),
+      el("span", { class: "s", text: status })));
+  }));
+}
+
+function overview() {
+  const parts = [];
+  if (state.result) {
+    const r = state.result;
+    parts.push(el("div", { class: "score" },
+      el("svg", { viewBox: "0 0 100 100", "aria-hidden": "true" },
+        el("circle", { class: "track", cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9 }),
+        el("circle", { class: "arc " + (r.passed ? "pass" : "fail"), cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9, "stroke-linecap": "round",
+          pathLength: 100, "stroke-dasharray": `${r.score} 100`, transform: "rotate(-90 50 50)" }),
+        el("text", { class: "big", x: 50, y: 56, text: String(r.score) }), el("text", { class: "unit", x: 50, y: 72, text: "/100" })),
+      el("div", {}, el("div", { class: "verdict " + (r.passed ? "pass" : "fail"), text: r.passed ? "PASS" : "NOT YET" }),
+        el("p", { class: "small", text: r.verdict }))));
+    parts.push(el("p", { class: "small", text: r.recorded
+      ? (r.passed ? "The pass is remembered for this diff, so the push hook lets it through. You can close this tab." : `Below the pass mark of ${r.passing_score}. Open the coloured pins for feedback, re-read the diff, and run grip whiteboard again.`)
+      : "Interview score. Nothing was recorded on this machine." }));
+  } else {
+    const heading = { defend: "Could you defend this at a whiteboard?", interview: "Ask these aloud. Tick what you hear.", export: "Could you defend this at a whiteboard?" }[MODE];
+    parts.push(el("div", {}, el("span", { class: "kind", text: { defend: "Defend this change", interview: "Interview", export: "Shared board" }[MODE] }), el("h2", { text: heading })));
+    parts.push(el("p", { class: "small", text: DATA.summary }));
+  }
+  if (state.error) parts.push(el("p", { class: "error", text: state.error }));
+  parts.push(pinList(DATA.pins.map((_, i) => i)));
+  if (!state.result && MODE !== "export") {
+    const done = DATA.pins.filter((_, i) => answered(i)).length;
+    parts.push(el("div", { class: "row" },
+      el("button", { type: "button", class: "btn primary", id: "hand-in", disabled: state.busy || done === 0,
+        text: state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`, on: { click: handIn } })));
+  }
+  const notes = {
+    defend: "Answer in your own words; a sentence or two is enough. The rubrics stay with grip on this machine and never reach this page.",
+    interview: "Interview mode shows the rubric to the person asking. Accept any wording that covers a point.",
+    export: "A shared copy of the board. Nothing here is graded; run grip whiteboard to be scored.",
+  };
+  parts.push(el("p", { class: "note", text: notes[MODE] }));
+  return parts;
+}
+
+function pinView(i) {
+  const p = DATA.pins[i];
+  const parts = [el("div", { class: "row" },
+    el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }),
+    el("span", { class: "small", text: `${i + 1} of ${DATA.pins.length} · on ${pinTarget(p)}` }))];
+  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }), el("p", { class: "question", text: p.question })));
+  const locked = state.busy || !!state.result;
+  if (MODE === "interview") {
+    parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, el("label", { for: `tick-${i}-${k}` },
+      el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: locked,
+        on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
+      el("span", { text: point }))))));
+  } else {
+    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", placeholder: "A sentence or two, in your own words.", disabled: locked,
+      maxlength: 4000, on: { input: (ev) => { state.answers[i] = ev.target.value; drawBoard(); } } });
+    ta.value = state.answers[i];
+    parts.push(ta);
+  }
+  if (state.result) {
+    const g = state.result.grades[i];
+    parts.push(el("div", { class: "fb " + band(g.score) }, el("b", { text: `${g.score}/${PPQ}` }), el("span", { text: g.feedback })));
+  }
+  const last = i === DATA.pins.length - 1;
+  parts.push(el("div", { class: "row" },
+    el("button", { type: "button", class: "btn", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
+    el("button", { type: "button", class: "btn primary", text: last ? "Review all" : "Next", on: { click: () => select(last ? null : { pin: i + 1 }) } })));
+  return parts;
+}
+
+function nodeView(id) {
+  const n = byId[id];
+  const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === id).map(([, i]) => i);
+  const kind = n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
+  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }))];
+  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: kind }), el("h2", { text: n.label }),
+    el("dl", {}, el("dt", { text: "Role" }), el("dd", { text: n.role }), el("dt", { text: "Files" }), el("dd", { text: n.files.length ? n.files.join(", ") : "none in the diff" }))));
+  parts.push(pins.length ? pinList(pins) : el("p", { class: "small", text: "No question is pinned here. It is on the board so the questions around it make sense." }));
+  return parts;
+}
+
+async function handIn() {
+  state.busy = true; state.error = null; state.sel = null; render();
+  const body = MODE === "interview" ? { ticks: state.ticks } : { answers: state.answers };
+  try {
+    const res = await fetch("answers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || `grip answered ${res.status}`);
+    state.result = payload;
+  } catch (err) {
+    state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
+  } finally {
+    state.busy = false; render();
+  }
+}
+function select(sel) {
+  state.sel = sel; render();
+  if (sel && sel.pin != null) { const box = document.getElementById(`answer-${sel.pin}`); if (box) box.focus({ preventScroll: true }); }
+}
+function render() {
+  drawBoard();
+  const panel = document.getElementById("panel");
+  panel.replaceChildren(...(state.sel && state.sel.pin != null ? pinView(state.sel.pin) : state.sel && state.sel.node ? nodeView(state.sel.node) : overview()));
+}
+document.getElementById("meta").textContent = `${DATA.description} · ${DATA.files.length} file${DATA.files.length === 1 ? "" : "s"} · pass mark ${DATA.passing_score}`;
+document.getElementById("mode-chip").textContent = { defend: "Defend", interview: "Interview", export: "Shared" }[MODE];
+render();
+</script>
+</body>
+</html>

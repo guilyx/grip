@@ -88,9 +88,23 @@ grip runs that conversation at the last moment it is cheap: before the push.
 | How do you know? | **testing**: how you would show it works |
 
 The questions never ask for line numbers, exact strings or function names. A model writes
-them from the diff with a hidden rubric, then grades your answers against it. Two of the
-questions in that post are not asked directly yet: what a malicious actor could do, and why
-a data structure was chosen. The next release, `grip whiteboard`, adds them.
+them from the diff with a hidden rubric, then grades your answers against it.
+
+### `grip whiteboard`: the whole defense
+
+`grip whiteboard` draws your change the way you would on a whiteboard: its parts, how they
+connect, which inputs are untrusted. It pins five questions to the drawing, including the
+two the quiz does not ask directly, **what a malicious actor could do** and **why this data
+structure**, and opens it in your browser. Click a part, answer, hand in. Same score, same
+pass mark, and a pass counts for the push hook.
+
+```bash
+grip whiteboard                    # defend your staged change in the browser
+grip whiteboard --interview        # for the person asking: rubrics visible, tick what you hear
+grip whiteboard --export board.html  # a shareable copy, no rubrics
+```
+
+![grip whiteboard: the change drawn as parts, with questions pinned to them](docs/assets/whiteboard.png)
 
 **Prototype freely, defend what ships.** For a spike, a demo or an experiment, generate
 all of it: `grip skip` lets one push through, `grip skip --hours 2` pauses grip for a
@@ -172,7 +186,8 @@ npx skills add guilyx/grip -g
 Then type `/grip` before you push. The agent relays the five questions, you answer, grip
 grades; the skill forbids the agent from answering for you. `/grip-review main..feat`
 quizzes a reviewer on someone else's branch, `/grip-explain` turns your answers into the
-commit message. Claude Code users can take the
+commit message, and `/grip-whiteboard` opens the whiteboard in your browser so you answer
+there. Claude Code users can take the
 plugin instead, which also blocks `git push` until the diff has passed:
 
 ```text
@@ -217,6 +232,7 @@ per-question feedback so you know what to go read.
 grip quiz                     # quiz your staged changes right now, no hook needed
 grip quiz --unpushed          # quiz everything not yet on a remote
 grip quiz --provider fake     # try the flow offline with a dummy grader
+grip whiteboard               # draw the change and defend it in the browser
 grip status                   # hooks, last score, what has passed, configuration
 grip skip && git push         # bypass once (GRIP_SKIP=1 and --no-verify work too)
 grip skip --hours 1           # pause the hooks for a demo; grip resume cancels
