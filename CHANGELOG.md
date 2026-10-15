@@ -6,8 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
+The first public release.
+
 ### Added
 
+- `grip quiz`: five questions about your staged, unpushed or ranged diff, graded to a Grip
+  Score out of 100 with a configurable pass mark.
+- `grip hook pre-commit` / `grip hook pre-push`: hook entry points, both for native git
+  hooks and for the pre-commit framework (`.pre-commit-hooks.yaml`).
+- `grip install` / `grip uninstall` / `grip status` / `grip config` / `grip forget`.
+- Providers: Anthropic (default, `claude-opus-5`), any OpenAI-compatible API including
+  Ollama, and an offline `fake` provider for tests and demos.
+- Configuration through `.grip.toml`, `[tool.grip]` in `pyproject.toml`, `GRIP_*`
+  environment variables and command-line flags.
+- Passed diffs are remembered for a configurable time so you are not quizzed twice.
+- Documentation site built with MkDocs Material and published to GitHub Pages.
 - A brand identity under `branding/`: the grip mark (an 87.5 percent score ring that
   reads as a G) in ember orange on warm graphite, Archivo wordmark lockups, a social card,
   and a palette generated in OKLCH by `branding/build.py`, which refuses to write colours that fail WCAG 2 or APCA contrast or
@@ -96,22 +111,6 @@ All notable changes to this project are documented here. The format follows
   Anthropic, the CLI's default for coding agents). `openai` and `ollama` require it.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
-
-## [0.1.0] - 2026-09-20
-
-### Added
-
-- `grip quiz`: five questions about your staged, unpushed or ranged diff, graded to a Grip
-  Score out of 100 with a configurable pass mark.
-- `grip hook pre-commit` / `grip hook pre-push`: hook entry points, both for native git
-  hooks and for the pre-commit framework (`.pre-commit-hooks.yaml`).
-- `grip install` / `grip uninstall` / `grip status` / `grip config` / `grip forget`.
-- Providers: Anthropic (default, `claude-opus-5`), any OpenAI-compatible API including
-  Ollama, and an offline `fake` provider for tests and demos.
-- Configuration through `.grip.toml`, `[tool.grip]` in `pyproject.toml`, `GRIP_*`
-  environment variables and command-line flags.
-- Passed diffs are remembered for a configurable time so you are not quizzed twice.
-- Documentation site built with MkDocs Material and published to GitHub Pages.
 
 [Unreleased]: https://github.com/guilyx/grip/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/guilyx/grip/releases/tag/v0.1.0
