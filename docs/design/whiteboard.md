@@ -77,30 +77,33 @@ Five pins, 20 points each, so the Grip Score and pass mark mean the same thing a
 
 ```python
 class Node(BaseModel):
-    id: str                  # short slug, unique on the board
-    label: str               # what a person would write on the whiteboard
-    role: str                # one line
+    id: str  # short slug, unique on the board
+    label: str  # what a person would write on the whiteboard
+    role: str  # one line
     kind: Literal["component", "store", "external", "context"]
     trust: Literal["trusted", "untrusted"] = "trusted"
-    files: list[str]         # paths from the diff; empty only for external/context
+    files: list[str]  # paths from the diff; empty only for external/context
+
 
 class Edge(BaseModel):
     source: str
     target: str
-    label: str               # what flows: "request + api_key"
-    crosses_trust: bool      # derived by grip, not the model
+    label: str  # what flows: "request + api_key"
+    crosses_trust: bool  # derived by grip, not the model
+
 
 class Pin(BaseModel):
-    on: str                  # node id or "source->target"
+    on: str  # node id or "source->target"
     kind: PinKind
     question: str
-    rubric: list[str]        # 2 to 4 points, hidden from the developer
+    rubric: list[str]  # 2 to 4 points, hidden from the developer
+
 
 class Board(BaseModel):
     summary: str
-    nodes: list[Node]        # 2 to 8
+    nodes: list[Node]  # 2 to 8
     edges: list[Edge]
-    pins: list[Pin]          # exactly 5
+    pins: list[Pin]  # exactly 5
 ```
 
 **Validation before anything is shown.** Every edge and pin points at a real node. Every
