@@ -7,13 +7,19 @@ Two modes:
   half marks when it is non-empty, and zero otherwise.
 * **Scripted.** When ``GRIP_FAKE_SCRIPT`` points to a JSON file, questions, grading rules
   and verdicts come from that file (see :func:`load_script`). This is how the demo
-  recording and some tests get realistic, reproducible output without a network.
+  recording and some tests get realistic, reproducible output without a network. An
+  optional ``board`` in the script is the whiteboard; its pins are graded by the rules of
+  the scripted question at the same position.
+
+Without a script, the whiteboard is drawn from the changed files: an untrusted caller, one
+box per file in order, and the five whiteboard questions pinned across them.
 
 ``GRIP_FAKE_DELAY`` (seconds, float) makes each call sleep, so the spinner is visible.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import time
@@ -27,6 +33,7 @@ from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
+from grip_hook.whiteboard import MAX_LABEL, Board, Edge, Node, Pin, PinKind
 
 SCRIPT_ENV = "GRIP_FAKE_SCRIPT"
 DELAY_ENV = "GRIP_FAKE_DELAY"
@@ -83,6 +90,7 @@ class Script(BaseModel):
     summary: str
     questions: list[ScriptedQuestion] = Field(min_length=QUESTION_COUNT, max_length=QUESTION_COUNT)
     verdicts: list[Verdict] = Field(default_factory=list)
+    board: Board | None = None
 
     def verdict_for(self, total: int) -> str:
         """Pick the verdict with the highest ``min`` not above ``total``."""
@@ -144,6 +152,15 @@ class FakeProvider:
             questions=questions,
         )
 
+    def generate_board(
+        self, diff: Diff, difficulty: Difficulty, problems: tuple[str, ...]
+    ) -> Board:
+        """The scripted board, or one drawn from the changed files."""
+        self._pause()
+        if self.script is not None and self.script.board is not None:
+            return self.script.board
+        return _board_from_files(list(diff.files)[:5] or ["the diff"])
+
     def grade(
         self,
         diff: Diff,
@@ -170,6 +187,69 @@ class FakeProvider:
         if self.script is not None:
             return GradeSheet(grades=grades, verdict=self.script.verdict_for(total))
         return GradeSheet(grades=grades, verdict=f"Fake verdict: {total} points.")
+
+
+def _board_from_files(files: list[str]) -> Board:
+    ids = [f"file-{i + 1}" for i in range(len(files))]
+    nodes = [
+        Node(
+            id="caller",
+            label="caller",
+            role="whoever sends the input",
+            kind="external",
+            trust="untrusted",
+            files=[],
+        )
+    ]
+    nodes += [
+        Node(
+            id=node_id,
+            label=Path(f).name[:MAX_LABEL],
+            role="changed in this diff",
+            kind="component" if f != "the diff" else "context",
+            trust="trusted",
+            files=[f] if f != "the diff" else [],
+        )
+        for node_id, f in zip(ids, files, strict=True)
+    ]
+    edges = [Edge(source="caller", target=ids[0], label="input")]
+    edges += [Edge(source=a, target=b, label="calls") for a, b in itertools.pairwise(ids)]
+    first, last = ids[0], ids[-1]
+    pins = [
+        Pin(
+            on=first,
+            kind=PinKind.WHY,
+            question=f"Why is {files[0]} built this way?",
+            rubric=["Names the approach", "Names an alternative and why not"],
+        ),
+        Pin(
+            on=f"caller->{first}",
+            kind=PinKind.ADVERSARY,
+            question="What could a hostile caller do with this input?",
+            rubric=["Names an abuse", "Says what stops it"],
+        ),
+        Pin(
+            on=last,
+            kind=PinKind.FAILURE,
+            question=f"Where does {files[-1]} fail?",
+            rubric=["Names an input or state", "Says what happens"],
+        ),
+        Pin(
+            on=first,
+            kind=PinKind.VERIFY,
+            question="How would you show this works?",
+            rubric=["Names a test", "Says what it asserts"],
+        ),
+        Pin(
+            on=first,
+            kind=PinKind.HOW,
+            question=f"What does the change to {files[0]} do?",
+            rubric=["Describes the behaviour", "In the developer's own words"],
+        ),
+    ]
+    return Board(
+        summary=f"Fake board over {len(files)} file(s).", nodes=nodes, edges=edges, pins=pins
+    )
 
 
 __all__ = ["DELAY_ENV", "SCRIPT_ENV", "FakeProvider", "Script", "load_script"]

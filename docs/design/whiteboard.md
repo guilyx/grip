@@ -6,7 +6,7 @@ description: Design for grip whiteboard, the 0.2.0 feature. A generated, clickab
 
 | | |
 | --- | --- |
-| **Status** | Draft, open for comments |
+| **Status** | Milestones 1 and 2 built in 0.2.0; milestone 3 open |
 | **Target** | 0.2.0 |
 | **Prototype** | [Open the clickable prototype](whiteboard-prototype.html) (one example diff, simulated grading) |
 
@@ -47,15 +47,15 @@ three things the whiteboard defense needs:
 | `grip whiteboard --no-open` | Print the URL instead of opening a browser (SSH, containers) |
 | `/grip-whiteboard` | Skill: the agent starts the board and gives you the link; you answer in the browser |
 
-Configuration, one new key:
+Planned for milestone 3, one new key:
 
 ```toml
 [tool.grip]
 whiteboard = "off"   # "off" | "fallback" | "always"
 ```
 
-`fallback` serves a board when the hook has no terminal (an IDE push button, an agent's
-shell) instead of skipping. `always` replaces the terminal quiz.
+`fallback` would serve a board when the hook has no terminal (an IDE push button, an
+agent's shell) instead of skipping. `always` would replace the terminal quiz.
 
 ## Question kinds
 
@@ -81,7 +81,7 @@ class Node(BaseModel):
     label: str  # what a person would write on the whiteboard
     role: str  # one line
     kind: Literal["component", "store", "external", "context"]
-    trust: Literal["trusted", "untrusted"] = "trusted"
+    trust: Literal["trusted", "untrusted"]
     files: list[str]  # paths from the diff; empty only for external/context
 
 
@@ -109,8 +109,9 @@ class Board(BaseModel):
 **Validation before anything is shown.** Every edge and pin points at a real node. Every
 `component` or `store` lists at least one file that is in the diff. Required kinds are
 present. Labels are plain text under 40 characters. On failure grip asks the model once
-more with the errors listed, then falls back to the terminal quiz. A board that does not
-validate is never served.
+more with the errors listed, then stops and points to `grip quiz`. A board that does not
+validate is never served. Every field is required, with no defaults, so the schema also
+works with providers that enforce strict structured output.
 
 **Layout is grip's job, not the model's.** Columns by role: untrusted actors on the left,
 then the code in topological order of the edges, stores below what writes them, external
@@ -150,10 +151,13 @@ stays true.
   label: every model string is inserted with `textContent`, the CSP forbids inline script
   other than grip's own, and labels are validated as plain text.
 - *The coding agent* tries to answer for the developer: the answers are typed into the
-  browser and go straight to grip; the agent only ever sees the link and the final score.
-  This is stronger than today's relay through `grip ask` and `grip grade`.
-- *A developer* reads the rubric from disk: the same exposure as `pending.json` today. grip
-  checks understanding; it is not an exam proctor.
+  browser and go straight to grip, so they never pass through the agent's conversation.
+  An agent with a shell can still read the address and post to it, exactly as it could
+  answer the terminal quiz; the `/grip-whiteboard` skill forbids it. `Host` and `Origin`
+  checks stop browsers, not local programs.
+- *A developer* reads the rubric: while the board is open it lives only in grip's memory;
+  after grading it is in `last-report.json`, as for the quiz. grip checks understanding; it
+  is not an exam proctor.
 
 **What data structure, and why?** A board is lists of nodes, edges and pins with string
 ids, not free-form Mermaid or SVG from the model. Ids let grip validate references, pin
@@ -175,27 +179,30 @@ carry markup, and would lay out differently every run.
 
 **M1: the board** (0.2.0)
 
-- [ ] `Board` models, prompt, validation, one retry
-- [ ] `generate_board` on every provider; scripted boards for the `fake` provider
-- [ ] Layered layout in Python, with tests
-- [ ] `grip whiteboard --export` (static, no rubrics)
+- [x] `Board` models, prompt, validation, one retry
+- [x] `generate_board` on every provider; scripted boards for the `fake` provider
+- [x] Layered layout in Python, with tests
+- [x] `grip whiteboard --export` (static, no rubrics)
 
 **M2: defend it** (0.2.0)
 
-- [ ] Local server, token, `Host`/`Origin` checks, CSP, idle timeout
-- [ ] Defend mode: answer, hand in, grade, remember the pass
-- [ ] Interview mode
-- [ ] `/grip-whiteboard` skill and docs; feature clip
+- [x] Local server, token, `Host`/`Origin` checks, CSP, idle timeout
+- [x] Defend mode: answer, hand in, grade, remember the pass
+- [x] Interview mode
+- [x] `/grip-whiteboard` skill and docs
+- [ ] Feature clip
 
 **M3: everywhere** (0.3.0)
 
 - [ ] `whiteboard = "fallback"` in the hook for pushes without a terminal
 - [ ] Boards for Keep A Grip practice problems
 
-## Open questions
+## Decisions
 
-1. Should a whiteboard pass satisfy the push hook? Proposed: yes, same score and pass mark.
+Taken as proposed for 0.2.0; each can be revisited.
+
+1. Should a whiteboard pass satisfy the push hook? Yes, same score and pass mark.
 2. Should `--export` ever include rubrics, for a reviewer who runs the session elsewhere?
-   Proposed: no; use `--interview` on the reviewer's machine.
-3. Five pins always, or four to six by diff size? Proposed: five, to keep scores comparable.
-4. Brand fonts embedded in the binary (about 150 KB) or system fonts? Proposed: system fonts.
+   No; use `--interview` on the reviewer's machine.
+3. Five pins always, or four to six by diff size? Five, to keep scores comparable.
+4. Brand fonts embedded in the binary (about 150 KB) or system fonts? System fonts.

@@ -15,11 +15,18 @@ from grip_hook.config import Config
 from grip_hook.errors import ConfigError, ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
-from grip_hook.prompts import GRADING_SYSTEM_PROMPT, grading_prompt, question_prompt
+from grip_hook.prompts import (
+    BOARD_SYSTEM_PROMPT,
+    GRADING_SYSTEM_PROMPT,
+    board_prompt,
+    grading_prompt,
+    question_prompt,
+)
 from grip_hook.providers import get_provider
 from grip_hook.providers.anthropic import AnthropicProvider
-from grip_hook.providers.fake import FakeProvider
+from grip_hook.providers.fake import FakeProvider, load_script
 from grip_hook.providers.openai_compat import OLLAMA_URL, OpenAICompatibleProvider
+from grip_hook.whiteboard import Board
 
 DIFF = Diff("staged changes", " a.py | 1 +", "+print('hi')\n", ("a.py",), truncated=True)
 QUESTIONS = [Question(question=f"q{i}", rubric=f"r{i}", focus="f") for i in range(QUESTION_COUNT)]
@@ -309,3 +316,48 @@ def test_anthropic_api_key_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MY_KEY", "sk-ant-test")
     provider = AnthropicProvider(Config(api_key_env="MY_KEY", base_url="https://proxy.example"))
     assert provider.model == "claude-opus-5"
+
+
+# -- whiteboard boards -------------------------------------------------------------------
+
+SCENARIO = Path(__file__).resolve().parents[1] / "scripts" / "demo" / "whiteboard-scenario.json"
+
+
+def _scenario_board() -> Board:
+    board = load_script(SCENARIO).board
+    assert board is not None
+    return board
+
+
+def test_board_prompt_lists_files_and_problems() -> None:
+    first = board_prompt(DIFF, Difficulty.NORMAL)
+    assert "- a.py" in first
+    assert "<diff>" in first
+    assert "rejected" not in first
+    retry = board_prompt(DIFF, Difficulty.NORMAL, ("pin 1 is on 'x'",))
+    assert "rejected" in retry
+    assert "- pin 1 is on 'x'" in retry
+    assert "malicious actor" in BOARD_SYSTEM_PROMPT
+    assert "line numbers" in BOARD_SYSTEM_PROMPT
+
+
+def test_openai_compat_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    board = _scenario_board()
+    opener = _opener_returning(_chat_payload(board.model_dump_json()))
+    provider = OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"), opener=opener)
+    assert provider.generate_board(DIFF, Difficulty.NORMAL, ()) == board
+    body = json.loads(opener.calls[0].data)
+    assert body["response_format"]["json_schema"]["name"] == "Board"
+    assert body["messages"][0]["content"] == BOARD_SYSTEM_PROMPT
+
+
+def test_anthropic_board() -> None:
+    board = _scenario_board()
+    client = _Client(_Parsed(board))
+    provider = AnthropicProvider(Config(model="claude-opus-5"), client=client)  # type: ignore[arg-type]
+    assert provider.generate_board(DIFF, Difficulty.NORMAL, ("fix this",)) == board
+    call = client.messages.calls[0]
+    assert call["output_format"] is Board
+    assert call["system"] == BOARD_SYSTEM_PROMPT
+    assert "fix this" in call["messages"][0]["content"]

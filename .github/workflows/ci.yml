@@ -97,6 +97,9 @@ jobs:
           "$PWD/installed/grip" --version
           "$PWD/installed/git-grip" --version
           cd "$(mktemp -d)" && git init -q && "$OLDPWD/installed/grip" install && "$OLDPWD/installed/grip" status
+          echo "x = 1" > a.py && git add a.py
+          "$OLDPWD/installed/grip" whiteboard --provider fake --export board.html
+          grep -q '"mode": "export"' board.html
           sh "$OLDPWD/install.sh" --dir "$OLDPWD/installed" --uninstall
 
   docs:

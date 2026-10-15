@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import webbrowser
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,9 +18,10 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, __version__
+from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT, __version__
 from grip_hook.agent import (
     Gate,
+    PendingQuiz,
     PendingStore,
     ask,
     claude_code_decision,
@@ -41,7 +43,7 @@ from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect, is_installed
 from grip_hook.memory import PassMemory, SkipState
-from grip_hook.models import Difficulty, Report, Stage
+from grip_hook.models import Difficulty, QuestionSet, Report, Stage
 from grip_hook.platform import (
     DEFAULT_URL,
     URL_ENV,
@@ -69,6 +71,8 @@ from grip_hook.study import (
     build_export,
 )
 from grip_hook.terminal import open_terminal
+from grip_hook.whiteboard import Board, Mode, board_data, generate_board
+from grip_hook.whiteboard_server import IDLE_SECONDS, WhiteboardServer, render_page
 
 _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
@@ -334,6 +338,178 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
         memory.record_pass(report.diff_digest)
         return
     sys.exit(QuizFailed.exit_code)
+
+
+MAX_ANSWER = 4000
+
+
+@cli.command(name="whiteboard")
+@_diff_options
+@click.option(
+    "--interview",
+    is_flag=True,
+    help="For the person asking: show the rubrics and tick what you hear. Nothing is recorded.",
+)
+@click.option(
+    "--export",
+    "export_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write the board to a standalone HTML file instead. No rubrics, no grading.",
+)
+@click.option("--no-open", is_flag=True, help="Print the address instead of opening a browser.")
+@click.option(
+    "--port",
+    type=click.IntRange(0, 65535),
+    default=0,
+    help="Port on 127.0.0.1 (default: any free port).",
+)
+@quiz_options
+def whiteboard_cmd(
+    *,
+    mode: str,
+    rev_range: str | None,
+    interview: bool,
+    export_path: Path | None,
+    no_open: bool,
+    port: int,
+    report_path: Path | None,
+    **overrides: Any,
+) -> None:
+    """Draw the change as a whiteboard and defend it in the browser.
+
+    The parts of the change, how they connect and five questions pinned to them come from
+    your diff. Answers are graded like `grip quiz`, and a pass counts for the push hook.
+    """
+    git = Git()
+    cfg = _config(git, **overrides)
+    diff = _select_diff(git, cfg, mode, rev_range)
+    if diff.is_empty:
+        _skip("nothing to draw, no changes found.")
+        return
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    defending = not interview and export_path is None
+    if defending and memory.has_passed(diff.digest):
+        _skip("this exact diff already passed recently; nothing to defend.")
+        return
+    provider = get_provider(cfg)
+    with _err.status("grip is drawing the whiteboard..."):
+        board = generate_board(provider, diff, cfg.difficulty)
+    board_mode: Mode = "export" if export_path else "interview" if interview else "defend"
+    page = render_page(
+        board_data(
+            board,
+            mode=board_mode,
+            passing_score=cfg.passing_score,
+            description=diff.description,
+            files=list(diff.files),
+        )
+    )
+    if export_path is not None:
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        export_path.write_text(page, "utf-8")
+        _err.print(f"[green]grip:[/green] wrote the board to {_pretty_path(export_path)}")
+        return
+
+    pending = PendingQuiz(
+        stage=Stage.MANUAL,
+        provider=provider.name,
+        model=provider.model,
+        description=diff.description,
+        stat=diff.stat,
+        patch=diff.patch,
+        files=list(diff.files),
+        truncated=diff.truncated,
+        question_set=QuestionSet(summary=board.summary, questions=board.questions()),
+    )
+    graded: list[Report] = []
+
+    def submit(payload: dict[str, Any]) -> dict[str, Any]:
+        if interview:
+            return _interview_result(board, payload, cfg.passing_score)
+        report = grade(pending, _answers_from(payload), cfg, provider)
+        graded.append(report)
+        return {
+            "score": report.score,
+            "passed": report.passed,
+            "passing_score": report.passing_score,
+            "verdict": report.verdict,
+            "grades": [{"score": g.score, "feedback": g.feedback} for g in report.grades],
+            "recorded": True,
+        }
+
+    server = WhiteboardServer(page, submit, port=port)
+    click.echo(server.url)
+    _err.print(
+        "[bold]grip:[/bold] the whiteboard is open at the address above. "
+        "Answer there; this waits until you hand in (Ctrl-C to stop)."
+    )
+    if not no_open:
+        webbrowser.open(server.url)
+    try:
+        result = server.serve()
+    except KeyboardInterrupt:
+        raise GripError("stopped before handing in; nothing was recorded.") from None
+    if result is None:
+        minutes = IDLE_SECONDS // 60
+        raise GripError(f"no answers after {minutes} idle minutes; nothing was recorded.")
+    if interview:
+        _out.print(f"Interview score: {result['score']}/{MAX_SCORE} (not recorded)")
+        return
+    report = graded[-1]
+    saved = _record(git, memory, report)
+    if report_path is not None:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(report.model_dump_json(indent=2), "utf-8")
+    if report.passed:
+        memory.record_pass(report.diff_digest)
+        _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
+        return
+    raise QuizFailed(
+        f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
+        f"{report.passing_score}. The page shows what each answer missed. "
+        f"Report: {_pretty_path(saved)}"
+    )
+
+
+def _answers_from(payload: dict[str, Any]) -> list[str]:
+    """The ``answers`` of a whiteboard submission, padded to one per question."""
+    answers = payload.get("answers")
+    if (
+        not isinstance(answers, list)
+        or len(answers) > QUESTION_COUNT
+        or not all(isinstance(a, str) and len(a) <= MAX_ANSWER for a in answers)
+    ):
+        raise ValueError(
+            f"answers must be at most {QUESTION_COUNT} strings of up to {MAX_ANSWER} characters"
+        )
+    return [a.strip() for a in answers] + [""] * (QUESTION_COUNT - len(answers))
+
+
+def _interview_result(board: Board, payload: dict[str, Any], passing_score: int) -> dict[str, Any]:
+    """Score an interview from the rubric points the person asking ticked."""
+    ticks = payload.get("ticks")
+    shapes = [len(p.rubric) for p in board.pins]
+    if (
+        not isinstance(ticks, list)
+        or [len(t) if isinstance(t, list) else -1 for t in ticks] != shapes
+        or not all(isinstance(x, bool) for t in ticks for x in t)
+    ):
+        raise ValueError("ticks must be one list of booleans per question, one per rubric point")
+    scores = [round(POINTS_PER_QUESTION * sum(t) / len(t)) for t in ticks]
+    grades = [
+        {"score": score, "feedback": f"Covered {sum(t)} of {len(t)} points."}
+        for score, t in zip(scores, ticks, strict=True)
+    ]
+    total = sum(scores)
+    return {
+        "score": total,
+        "passed": total >= passing_score,
+        "passing_score": passing_score,
+        "verdict": "Scored by the person asking, from the rubric points they heard.",
+        "grades": grades,
+        "recorded": False,
+    }
 
 
 @cli.command(name="check")

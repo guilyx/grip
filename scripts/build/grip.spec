@@ -9,6 +9,9 @@ for package in ("anthropic", "pydantic", "pydantic_core", "rich", "click"):
     binaries += b
     hiddenimports += h
 
+# The whiteboard page is read with importlib.resources at run time.
+datas.append(("../../src/grip_hook/whiteboard.html", "grip_hook"))
+
 a = Analysis(
     ["entry.py"],
     pathex=["../../src"],

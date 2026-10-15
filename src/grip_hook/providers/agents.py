@@ -30,11 +30,14 @@ from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
 from grip_hook.prompts import (
+    BOARD_SYSTEM_PROMPT,
     GRADING_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    board_prompt,
     grading_prompt,
     question_prompt,
 )
+from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -163,6 +166,12 @@ class AgentCLIProvider:
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """Write the question set for ``diff``."""
         return self._run(QUESTION_SYSTEM_PROMPT, question_prompt(diff, difficulty), QuestionSet)
+
+    def generate_board(
+        self, diff: Diff, difficulty: Difficulty, problems: tuple[str, ...]
+    ) -> Board:
+        """Draw the whiteboard for ``diff``."""
+        return self._run(BOARD_SYSTEM_PROMPT, board_prompt(diff, difficulty, problems), Board)
 
     def grade(
         self,

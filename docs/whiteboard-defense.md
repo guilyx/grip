@@ -49,11 +49,11 @@ push through.
 The model is told never to ask for line numbers, exact strings, or trivia that only tests
 memory. Questions favour the riskiest and most surprising parts of the diff.
 
-!!! note "Coming in the next release"
-    Two of the questions above are not asked directly yet: what a malicious actor could do,
-    and why a data structure was chosen. `grip whiteboard` adds them, and turns the quiz
-    into a clickable whiteboard of the change: its parts, how they connect, and the
-    questions pinned to each one.
+!!! tip "The whole defense: `grip whiteboard`"
+    The terminal quiz does not ask two of the questions above directly: what a malicious
+    actor could do, and why a data structure was chosen. [`grip whiteboard`](whiteboard.md)
+    does. It draws the change, its parts, how they connect and which inputs are untrusted,
+    and pins the questions to it in your browser.
 
 ## Prototype freely, defend what ships
 
