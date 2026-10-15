@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>grip whiteboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112.5,800&family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a bar on top, the board on the left, the defense panel on the right; stacked on phones. */
+:root {
+  --page: #f1ece8;      /* graphite-100 */
+  --board: #fdfbf7;     /* chalk */
+  --dot: #ded8d4;       /* graphite-200 */
+  --ink: #201e1c;       /* graphite-950 */
+  --muted: #655f5b;     /* graphite-700 */
+  --line: #c8c1bc;      /* graphite-300 */
+  --node: #ffffff;
+  --panel: #fdfbf7;
+  --accent: #ff8644;    /* ember-400, fills */
+  --accent-ink: #9f3d00;/* ember-700, text */
+  --on-accent: #201e1c;
+  --pass: #008f5f; --pass-soft: #bdffd6;
+  --warn: #706000; --warn-soft: #ffecb3;
+  --fail: #a62168; --fail-soft: #ffe4f0;
+  --zone: #fff3f8; --zone-line: #e953a0;
+  --display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #140f0c; --board: #201e1c; --dot: #332f2d; --ink: #f9f6f4; --muted: #b3aba6;
+  --line: #4c4643; --node: #332f2d; --panel: #201e1c; --accent: #ff8644; --accent-ink: #ffac80;
+  --on-accent: #140f0c; --pass: #6ddda2; --pass-soft: #003b26; --warn: #e1c046; --warn-soft: #383100;
+  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --page: #140f0c; --board: #201e1c; --dot: #332f2d; --ink: #f9f6f4; --muted: #b3aba6;
+  --line: #4c4643; --node: #332f2d; --panel: #201e1c; --accent: #ff8644; --accent-ink: #ffac80;
+  --on-accent: #140f0c; --pass: #6ddda2; --pass-soft: #003b26; --warn: #e1c046; --warn-soft: #383100;
+  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--page); color: var(--ink); font: 15px/1.5 var(--text);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 24px;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand b { font: 800 22px/1 var(--display); font-stretch: 112.5%; letter-spacing: -0.03em; }
+.brand span { font: 700 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); }
+.meta { font: 500 12.5px var(--mono); color: var(--muted); min-width: 0; }
+.spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); }
+.seg button { border: 0; background: none; border-radius: 999px; padding: 5px 14px; font-weight: 600; font-size: 13.5px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--board); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.board {
+  position: relative; border: 1px solid var(--line); border-radius: 18px; overflow-x: auto;
+  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / 20px 20px, var(--board);
+}
+.board svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.board .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 16px 12px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--line); }
+.legend i.ext { border-style: dashed; }
+.legend i.zone { background: var(--zone); border-color: var(--zone-line); border-style: dashed; }
+.legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
+
+svg text { font-family: var(--text); fill: var(--ink); }
+.n rect { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
+.n.ext rect { stroke-dasharray: 6 4; }
+.n.ctx rect { fill: transparent; }
+.n .label { font: 700 14.5px var(--mono); }
+.n .role { font-size: 12px; fill: var(--muted); }
+.n .tag { font: 700 9.5px var(--mono); letter-spacing: .12em; fill: var(--muted); }
+.n, .p { cursor: pointer; outline: none; }
+.n:hover rect, .n:focus-visible rect { stroke: var(--accent); }
+.n.sel rect { stroke: var(--accent); stroke-width: 2.5; }
+.e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
+.zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
+.zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
+.p circle { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
+.p text { font: 700 13px var(--mono); fill: var(--on-accent); text-anchor: middle; dominant-baseline: central; }
+.p.sel circle { stroke: var(--ink); }
+.p.done circle { fill: var(--ink); } .p.done text { fill: var(--board); }
+.p.pass circle { fill: var(--pass); } .p.warn circle { fill: var(--warn); } .p.fail circle { fill: var(--fail); }
+.p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
+.n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel h2 { font: 800 21px/1.15 var(--display); font-stretch: 112.5%; letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
+.panel p { margin: 0; }
+.small { font-size: 13px; color: var(--muted); }
+.kind { display: inline-block; font: 700 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.item { width: 100%; text-align: left; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start;
+  background: none; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.item:hover { border-color: var(--accent); }
+.num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 12.5px var(--mono); background: var(--accent); color: var(--on-accent); }
+.num.done { background: var(--ink); color: var(--board); }
+.num.pass { background: var(--pass); color: var(--board); } .num.warn { background: var(--warn); color: var(--board); } .num.fail { background: var(--fail); color: var(--board); }
+.item .q { font-size: 14px; line-height: 1.4; }
+.item .s { font: 700 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.question { font: 600 17px/1.4 var(--text); text-wrap: pretty; }
+textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  background: var(--board); color: var(--ink); font: 15px/1.5 var(--text); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 14px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.rubric { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: var(--page); list-style: none; }
+.rubric label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.rubric input { margin-top: 3px; accent-color: var(--accent); }
+.fb { display: grid; gap: 4px; padding: 12px; border-radius: 12px; font-size: 14px; }
+.fb.pass { background: var(--pass-soft); } .fb.warn { background: var(--warn-soft); } .fb.fail { background: var(--fail-soft); }
+.fb b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.score { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: center; }
+.score svg { width: 96px; height: 96px; }
+.score .big { font: 800 30px var(--display); font-stretch: 112.5%; fill: var(--ink); text-anchor: middle; }
+.score .unit { font: 500 11px var(--mono); fill: var(--muted); text-anchor: middle; }
+.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
+.verdict.pass { color: var(--pass); } .verdict.fail { color: var(--fail); }
+.note { font-size: 12.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
+.nodeinfo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.nodeinfo dt { color: var(--muted); }
+.nodeinfo dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) { .p circle, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15.4" fill="#201e1c"/><path d="M48 32 A16 16 0 1 1 43.31 20.69" fill="none" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/><path d="M48 32 H34" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/></svg>
+    <b>grip</b><span>whiteboard</span>
+  </div>
+  <div class="meta">pre-push · api/handlers.py · +21 −1 · pass mark 70</div>
+  <div class="spacer"></div>
+  <div class="seg" role="group" aria-label="Who is at the whiteboard">
+    <button type="button" id="mode-defend" aria-pressed="true">Defend</button>
+    <button type="button" id="mode-interview" aria-pressed="false">Interview</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="board" aria-label="The change as a whiteboard">
+    <svg id="board" viewBox="0 0 900 540" role="group" aria-label="Components of the change and how they connect"></svg>
+    <div class="legend">
+      <span><i></i>changed in this diff</span>
+      <span><i class="ext"></i>outside the diff</span>
+      <span><i class="zone"></i>untrusted input</span>
+      <span><i class="pin"></i>question pinned here</span>
+    </div>
+  </section>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<script>
+"use strict";
+// The board grip would generate for the rate-limiter diff in grip's feature clips.
+// Everything below that reads like model output is treated as untrusted text:
+// it is only ever placed with textContent, never parsed as HTML.
+const BOARD = {
+  summary: "Adds a per-key token bucket in front of every public API route: 60 requests a minute, then 429 with Retry-After.",
+  nodes: [
+    { id: "client", label: "API client", role: "sends api_key with each call", kind: "external", trust: "untrusted", x: 48, y: 247, files: [] },
+    { id: "handle", label: "handle()", role: "entry for every request", kind: "component", x: 352, y: 247, files: ["api/handlers.py"] },
+    { id: "clock", label: "time.monotonic()", role: "the clock", kind: "external", x: 352, y: 64, files: [] },
+    { id: "allow", label: "_allow()", role: "refill, spend or refuse", kind: "component", x: 680, y: 247, files: ["api/handlers.py"] },
+    { id: "buckets", label: "_buckets", role: "key → (tokens, last)", kind: "store", x: 680, y: 430, files: ["api/handlers.py"] },
+    { id: "route", label: "route()", role: "the real endpoint", kind: "context", x: 352, y: 430, files: [] },
+  ],
+  edges: [
+    { id: "req", from: "client", to: "handle", label: "request + api_key", offset: -13, boundary: true },
+    { id: "res", from: "handle", to: "client", label: "429 + Retry-After", offset: 13 },
+    { id: "now", from: "clock", to: "handle", label: "now" },
+    { id: "ask", from: "handle", to: "allow", label: "key, now → ok, wait" },
+    { id: "rw", from: "allow", to: "buckets", label: "read · write" },
+    { id: "fwd", from: "handle", to: "route", label: "if allowed" },
+  ],
+  pins: [
+    { on: "allow", kind: "why this way",
+      q: "Why a token bucket here, instead of counting requests in a fixed one-minute window?",
+      rubric: [
+        { point: "A fixed window lets a client send up to twice the limit across a window boundary.", keys: ["boundary", "twice", "double", "120", "edge of", "reset"] },
+        { point: "The bucket refills continuously: bursts up to the limit, but the average rate holds.", keys: ["burst", "refill", "continu", "smooth", "average", "steady"] },
+        { point: "Refill is computed when a request arrives, so there is no timer or cleanup job.", keys: ["lazy", "on read", "no timer", "when a request", "computed", "on demand"] },
+      ] },
+    { on: "req", kind: "malicious actor",
+      q: "A client sends every request with a new, made-up api_key. What happens to this server?",
+      rubric: [
+        { point: "Every new key starts with a full bucket, so the limit never applies.", keys: ["new key", "fresh", "full bucket", "never limit", "bypass", "unlimited", "no limit", "each key"] },
+        { point: "_buckets gains an entry per key and is never cleaned, so memory grows until the process falls over.", keys: ["memory", "grow", "unbounded", "leak", "oom", "never clean", "never evict", "fills"] },
+        { point: "Fix: reject unknown keys before limiting, limit per IP as well, or bound the map.", keys: ["validate", "reject", "unknown", "per ip", "ip", "lru", "cap", "bound", "evict", "authent"] },
+      ] },
+    { on: "buckets", kind: "data structure",
+      q: "Why a plain dict of (tokens, last refill) per key, and what does that choice cost?",
+      rubric: [
+        { point: "Constant-time lookup and update, no dependency, and two numbers per key are all a bucket needs.", keys: ["o(1)", "constant", "fast", "simple", "no dependenc", "two numbers", "tuple", "cheap"] },
+        { point: "It lives in one process: not shared between workers or servers, and lost on restart.", keys: ["process", "worker", "server", "shared", "restart", "redis", "lost"] },
+        { point: "Nothing ever removes an entry.", keys: ["evict", "never remov", "grow", "unbounded", "ttl", "cleanup", "clean up"] },
+      ] },
+    { on: "handle", kind: "where it fails",
+      q: "Where does this limit stop holding?",
+      rubric: [
+        { point: "Several workers or servers each keep their own buckets, so a key gets that many times the limit.", keys: ["two server", "servers", "workers", "processes", "multiple", "each keep", "times the limit", "twice"] },
+        { point: "A restart or deploy refills every bucket.", keys: ["restart", "deploy", "reset"] },
+        { point: "Concurrent requests can read the same bucket and both spend the last token.", keys: ["thread", "concurren", "race", "lock", "async", "same time"] },
+      ] },
+    { on: "clock", kind: "how you know",
+      q: "How would you show the 61st request in a minute gets a 429, without waiting a minute?",
+      rubric: [
+        { point: "Call _allow with explicit times instead of the real clock.", keys: ["now", "inject", "fake", "freeze", "explicit", "mock", "monkeypatch", "pass the time"] },
+        { point: "61 calls at the same instant: 60 allowed, the 61st refused.", keys: ["61", "60", "refused", "false", "429"] },
+        { point: "Retry-After is about one second, and a call one second later is allowed again.", keys: ["retry-after", "retry after", "one second", "1 second", "later", "refill"] },
+      ] },
+  ],
+};
+const SAMPLE = [
+  "A fixed window lets someone do 60 at 0:59 and 60 more at 1:00, twice the limit. The bucket refills continuously so bursts are capped and the average holds.",
+  "Every made-up key gets a fresh full bucket so they are never limited, and each key adds an entry to _buckets that is never removed, so memory grows until we OOM. Validate the key first.",
+  "A dict is O(1) and needs no dependency. It is per process though.",
+  "",
+  "Pass explicit now values to _allow: 61 calls at the same time, assert the 61st is refused, then check Retry-After is 1 and that a call 1 second later is allowed.",
+];
+const PASS_MARK = 70, PER_PIN = 20, W = 184, H = 66;
+
+const state = { mode: "defend", sel: null, answers: BOARD.pins.map(() => ""), ticks: BOARD.pins.map((p) => p.rubric.map(() => false)), result: null };
+const NS = "http://www.w3.org/2000/svg";
+const byId = Object.fromEntries(BOARD.nodes.map((n) => [n.id, n]));
+const edgeById = Object.fromEntries(BOARD.edges.map((e) => [e.id, e]));
+
+function el(tag, attrs = {}, ...kids) {
+  const svg = ["svg", "g", "rect", "path", "text", "circle", "line", "defs", "marker"].includes(tag);
+  const node = svg ? document.createElementNS(NS, tag) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
+    if (k === "on") for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return node;
+}
+
+const centre = (n) => ({ x: n.x + W / 2, y: n.y + H / 2 });
+function exitPoint(n, toward) {
+  const c = centre(n), dx = toward.x - c.x, dy = toward.y - c.y;
+  const t = Math.min(dx ? (W / 2 + 6) / Math.abs(dx) : Infinity, dy ? (H / 2 + 6) / Math.abs(dy) : Infinity);
+  return { x: c.x + dx * t, y: c.y + dy * t };
+}
+function edgeGeometry(e) {
+  const a = centre(byId[e.from]), b = centre(byId[e.to]);
+  const o = e.offset || 0, horizontal = Math.abs(b.x - a.x) > Math.abs(b.y - a.y);
+  const shift = horizontal ? { x: 0, y: o } : { x: o, y: 0 };
+  const a2 = { x: a.x + shift.x, y: a.y + shift.y }, b2 = { x: b.x + shift.x, y: b.y + shift.y };
+  const p = exitPoint(byId[e.from], b2), q = exitPoint(byId[e.to], a2);
+  const s = { x: p.x + shift.x * (horizontal ? 1 : 0), y: p.y + shift.y * (horizontal ? 1 : 0) };
+  const t = { x: q.x + shift.x * (horizontal ? 1 : 0), y: q.y + shift.y * (horizontal ? 1 : 0) };
+  return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
+}
+function pinAnchor(pin) {
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4, y: n.y + 4 }; }
+  const g = edgeGeometry(edgeById[pin.on]);
+  return { x: g.mid.x, y: g.mid.y - 38 };
+}
+
+function grade(i) {
+  const pin = BOARD.pins[i];
+  let hit;
+  if (state.mode === "interview") hit = state.ticks[i];
+  else {
+    const a = state.answers[i].toLowerCase();
+    hit = pin.rubric.map((r) => a.trim() !== "" && r.keys.some((k) => a.includes(k)));
+  }
+  const n = hit.filter(Boolean).length;
+  return { score: Math.round((PER_PIN * n) / pin.rubric.length), hit };
+}
+const band = (s) => (s >= 16 ? "pass" : s >= 8 ? "warn" : "fail");
+const answered = (i) => state.mode === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== "";
+
+function drawBoard() {
+  const svg = document.getElementById("board");
+  svg.replaceChildren();
+  svg.append(el("defs", {}, el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" },
+    el("path", { d: "M0 0 L10 5 L0 10 z", style: "fill: var(--muted)" }))));
+  svg.append(el("g", { class: "zone" }, el("rect", { x: 24, y: 120, width: 232, height: 312, rx: 16 }), el("text", { x: 40, y: 145, text: "UNTRUSTED" })));
+
+  for (const e of BOARD.edges) {
+    const g = edgeGeometry(e);
+    const label = el("text", { x: g.mid.x, y: g.horizontal ? g.mid.y + (e.offset > 0 ? 17 : -8) : g.mid.y, "text-anchor": g.horizontal ? "middle" : "start", text: e.label });
+    if (!g.horizontal) label.setAttribute("x", g.mid.x + 10);
+    svg.append(el("g", { class: "e" }, el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" }), label));
+  }
+
+  const scores = state.result ? state.result.per : null;
+  BOARD.nodes.forEach((n) => {
+    const pins = BOARD.pins.map((p, i) => [p, i]).filter(([p]) => p.on === n.id);
+    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel?.node === n.id ? " sel" : "");
+    if (scores && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => scores[i].score)));
+    const tag = n.kind === "store" ? "DATA" : n.kind === "external" ? (n.trust === "untrusted" ? "ACTOR" : "EXTERNAL") : n.kind === "context" ? "CONTEXT" : "CHANGED";
+    const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`,
+      on: { click: () => select({ node: n.id }), keydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select({ node: n.id }); } } } },
+      el("rect", { x: n.x, y: n.y, width: W, height: H, rx: 12 }),
+      el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
+      el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
+      el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
+    if (n.kind === "store") g.append(el("path", { d: `M${n.x + 10} ${n.y + 5} H${n.x + W - 10}`, style: "stroke: var(--line); stroke-width: 1.5" }));
+    svg.append(g);
+  });
+
+  BOARD.pins.forEach((p, i) => {
+    const at = pinAnchor(p);
+    let cls = "p" + (state.sel?.pin === i ? " sel" : "");
+    if (scores) cls += " " + band(scores[i].score); else if (answered(i)) cls += " done";
+    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `Question ${i + 1}, ${p.kind}`,
+      on: { click: (ev) => { ev.stopPropagation(); select({ pin: i }); }, keydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select({ pin: i }); } } } },
+      el("circle", { cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
+  });
+}
+
+function numClass(i) {
+  if (state.result) return "num " + band(state.result.per[i].score);
+  return "num" + (answered(i) ? " done" : "");
+}
+function pinTarget(p) { return byId[p.on] ? byId[p.on].label : `${byId[edgeById[p.on].from].label} → ${byId[edgeById[p.on].to].label}`; }
+
+function overview() {
+  const done = BOARD.pins.filter((_, i) => answered(i)).length;
+  const parts = [];
+  if (state.result) {
+    const { total, passed } = state.result;
+    parts.push(el("div", { class: "score" },
+      el("svg", { viewBox: "0 0 100 100", "aria-hidden": "true" },
+        el("circle", { cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9, style: "stroke: var(--line)" }),
+        el("circle", { cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9, "stroke-linecap": "round", pathLength: 100,
+          "stroke-dasharray": `${total} 100`, transform: "rotate(-90 50 50)", style: `stroke: var(--${passed ? "pass" : "fail"})` }),
+        el("text", { class: "big", x: 50, y: 56, text: String(total) }), el("text", { class: "unit", x: 50, y: 72, text: "/100" })),
+      el("div", {}, el("div", { class: `verdict ${passed ? "pass" : "fail"}`, text: passed ? "PASS" : "NOT YET" }),
+        el("p", { class: "small", text: passed
+          ? "You defended it. In the real grip this push goes through and the pass is remembered for this diff."
+          : `Below the pass mark of ${PASS_MARK}. Open the red and yellow pins to see what each answer missed.` }))));
+  } else {
+    parts.push(el("div", {}, el("span", { class: "kind", text: state.mode === "interview" ? "Interview mode" : "Defend this change" }),
+      el("h2", { text: state.mode === "interview" ? "Ask these aloud. Tick what you hear." : "Could you defend this at a whiteboard?" })));
+    parts.push(el("p", { class: "small", text: BOARD.summary }));
+  }
+  parts.push(el("ol", { class: "list" }, BOARD.pins.map((p, i) => el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
+    el("span", { class: numClass(i), text: String(i + 1) }),
+    el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.q })),
+    el("span", { class: "s", text: state.result ? `${state.result.per[i].score}/${PER_PIN}` : answered(i) ? "ready" : "" }))))));
+  if (!state.result) {
+    parts.push(el("div", { class: "row" },
+      el("button", { type: "button", class: "btn primary", disabled: done === 0, text: `Hand in ${done}/${BOARD.pins.length}`, on: { click: handIn } }),
+      state.mode === "defend" ? el("button", { type: "button", class: "btn", text: "Fill sample answers", on: { click: () => { state.answers = [...SAMPLE]; render(); } } }) : null));
+  } else {
+    parts.push(el("div", { class: "row" }, el("button", { type: "button", class: "btn", text: "Try again", on: { click: () => { state.result = null; render(); } } })));
+  }
+  parts.push(el("p", { class: "note", text: "Prototype. The board is hand-written for one example diff and grading is simulated by matching rubric points. The real grip writes the board and grades with your model; rubrics never reach the browser in Defend mode." }));
+  return parts;
+}
+
+function pinView(i) {
+  const p = BOARD.pins[i];
+  const parts = [el("div", { class: "row" },
+    el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }),
+    el("span", { class: "small", text: `${i + 1} of ${BOARD.pins.length} · on ${pinTarget(p)}` }))];
+  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }), el("p", { class: "question", text: p.q })));
+  const r = state.result?.per[i];
+  if (state.mode === "interview") {
+    parts.push(el("ul", { class: "rubric" }, p.rubric.map((pt, k) => el("li", {}, el("label", { for: `tick-${i}-${k}` },
+      el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: !!state.result,
+        on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
+      el("span", { text: pt.point }))))));
+    parts.push(el("p", { class: "small", text: "Only you see these points. Accept any wording that covers them." }));
+  } else {
+    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", placeholder: "A sentence or two, in your own words.", disabled: !!state.result,
+      on: { input: (ev) => { state.answers[i] = ev.target.value; drawBoard(); } } });
+    ta.value = state.answers[i];
+    parts.push(ta);
+  }
+  if (r) {
+    const missed = p.rubric.filter((_, k) => !r.hit[k]).map((x) => x.point);
+    parts.push(el("div", { class: `fb ${band(r.score)}` }, el("b", { text: `${r.score}/${PER_PIN}` }),
+      el("span", { text: missed.length ? `Missed: ${missed.join(" ")}` : "Covered every point." })));
+  }
+  parts.push(el("div", { class: "row" },
+    el("button", { type: "button", class: "btn", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
+    el("button", { type: "button", class: "btn primary", text: i === BOARD.pins.length - 1 ? "Review all" : "Next", on: { click: () => select(i === BOARD.pins.length - 1 ? null : { pin: i + 1 }) } })));
+  return parts;
+}
+
+function nodeView(id) {
+  const n = byId[id];
+  const pins = BOARD.pins.map((p, i) => [p, i]).filter(([p]) => p.on === id);
+  const kind = { component: "changed in this diff", store: "data, changed in this diff", external: n.trust === "untrusted" ? "untrusted actor" : "outside the diff", context: "outside the diff, called by it" }[n.kind];
+  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }))];
+  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: kind }), el("h2", { text: n.label }),
+    el("dl", {}, el("dt", { text: "Role" }), el("dd", { text: n.role }), el("dt", { text: "Files" }), el("dd", { text: n.files.length ? n.files.join(", ") : "none in the diff" }))));
+  if (pins.length) parts.push(el("ol", { class: "list" }, pins.map(([p, i]) => el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
+    el("span", { class: numClass(i), text: String(i + 1) }), el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.q })), el("span", { class: "s" }))))));
+  else parts.push(el("p", { class: "small", text: "No question is pinned here. It is on the board so the questions around it make sense." }));
+  return parts;
+}
+
+function handIn() {
+  const per = BOARD.pins.map((_, i) => grade(i));
+  const total = per.reduce((s, r) => s + r.score, 0);
+  state.result = { per, total, passed: total >= PASS_MARK };
+  state.sel = null;
+  render();
+}
+function select(sel) {
+  state.sel = sel; render();
+  if (sel && sel.pin != null) document.getElementById(`answer-${sel.pin}`)?.focus({ preventScroll: true });
+}
+function render() {
+  drawBoard();
+  const panel = document.getElementById("panel");
+  panel.replaceChildren(...(state.sel?.pin != null ? pinView(state.sel.pin) : state.sel?.node ? nodeView(state.sel.node) : overview()));
+}
+for (const mode of ["defend", "interview"]) {
+  document.getElementById(`mode-${mode}`).addEventListener("click", () => {
+    state.mode = mode; state.result = null;
+    document.getElementById("mode-defend").setAttribute("aria-pressed", String(mode === "defend"));
+    document.getElementById("mode-interview").setAttribute("aria-pressed", String(mode === "interview"));
+    render();
+  });
+}
+render();
+</script>
+</body>
+</html>
