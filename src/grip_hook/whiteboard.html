@@ -176,10 +176,14 @@ function edgeGeometry(e) {
   const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
   return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
 }
+// Pins sharing a box line up leftwards along its top edge; pins sharing an arrow spread
+// out along it from the middle. Each one stays visible and clickable.
 function pinAnchor(pin) {
-  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4, y: n.y + 4 }; }
+  const same = DATA.pins.filter((p) => p.on === pin.on), k = same.indexOf(pin);
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
   const g = edgeGeometry(edgeById[pin.on]);
-  return g.mid;  // on the wire; the edge's label makes room for it
+  const at = 0.5 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.22;
+  return { x: g.s.x + (g.t.x - g.s.x) * at, y: g.s.y + (g.t.y - g.s.y) * at };  // on the wire
 }
 function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
 function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }

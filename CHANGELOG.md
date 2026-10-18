@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format follows
   text is in the tooltip and the side panel), long arrow labels wrap onto two lines and
   slide along their arrow when they would cover another label, a box or a pin, and a pin
   on an arrow sits on the arrow.
+- Whiteboard page: two questions pinned to the same box or arrow were drawn on the same
+  spot, so one was hidden and could not be clicked. They now line up side by side.
 - `--unpushed` described its range as `sha..sha` with the same commit twice; the base is
   now resolved to the parent's hash.
 
