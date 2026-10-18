@@ -218,6 +218,48 @@ def test_a_cycle_does_not_hang_the_layout() -> None:
     assert layout(Board(summary="s", nodes=nodes, edges=edges, pins=pins)).width > 0
 
 
+def _login_board() -> Board:
+    """The board a real model drew for a login rate limiter: replies, and a test feeding in."""
+
+    def node(i: str, kind: str = "component", trust: str = "trusted") -> Node:
+        return Node(id=i, label=i, role="r", kind=kind, trust=trust, files=["api/auth.py"])
+
+    nodes = [
+        node("client", "external", "untrusted"),
+        node("login"),
+        node("limiter"),
+        node("buckets", "store"),
+        node("users", "context"),
+        node("tests"),
+    ]
+    flows = [
+        ("client", "login"),
+        ("login", "limiter"),
+        ("limiter", "buckets"),
+        ("limiter", "login"),  # the reply: allowed, wait
+        ("login", "client"),  # the 429 back to the client
+        ("login", "users"),
+        ("tests", "limiter"),
+    ]
+    edges = [Edge(source=s, target=t, label="") for s, t in flows]
+    pins = [Pin(on="limiter", kind=PinKind.HOW, question="q?", rubric=["x", "y"])] * QUESTION_COUNT
+    return Board(summary="s", nodes=nodes, edges=edges, pins=pins)
+
+
+def test_replies_do_not_push_columns_and_a_feeder_sits_beside_its_target() -> None:
+    placed = layout(_login_board())
+    x = {i: p[0] for i, p in placed.positions.items()}
+    y = {i: p[1] for i, p in placed.positions.items()}
+    step = x["limiter"] - x["login"]
+    assert x["login"] < x["limiter"] < x["buckets"]
+    assert x["buckets"] - x["limiter"] == step  # the reply did not add columns
+    assert len(set(x.values())) == 4
+    # The tests feed the limiter from the column before it, not across the client's arrow.
+    assert x["tests"] == x["login"] and y["tests"] > y["login"]
+    # Rows follow what feeds them, so login -> users and tests -> limiter do not cross.
+    assert y["users"] < y["limiter"]
+
+
 # -- what the page receives ------------------------------------------------------------
 
 

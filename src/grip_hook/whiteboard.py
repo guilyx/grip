@@ -276,18 +276,48 @@ class Placement:
     """The untrusted area (x, y, width, height), when the board has untrusted nodes."""
 
 
+def _flow(board: Board, bad: set[str]) -> list[tuple[str, str]]:
+    """The edges that set the columns: every edge except replies that close a loop.
+
+    A depth-first walk from the untrusted inputs, then the nodes in board order, keeps an
+    edge unless it points back at a node still on the walk (``allow -> handler`` after
+    ``handler -> allow``). Replies are drawn all the same; they just do not push columns.
+    """
+    order = [n.id for n in board.nodes]
+    out: dict[str, list[str]] = {i: [] for i in order}
+    for e in board.edges:
+        if e.source in out and e.target in out and e.target not in bad and e.source != e.target:
+            out[e.source].append(e.target)
+    flow: list[tuple[str, str]] = []
+    state: dict[str, int] = {}  # 1 while on the walk, 2 when finished
+
+    def visit(i: str) -> None:
+        state[i] = 1
+        for j in out[i]:
+            if state.get(j) == 1:
+                continue
+            flow.append((i, j))
+            if j not in state:
+                visit(j)
+        state[i] = 2
+
+    for i in [*(i for i in order if i in bad), *order]:
+        if i not in state:
+            visit(i)
+    return flow
+
+
 def _columns(board: Board) -> dict[str, int]:
     """Column per node: untrusted on the left, then the flow of the edges."""
     order = [n.id for n in board.nodes]
     bad = board.untrusted()
     preds: dict[str, list[str]] = {i: [] for i in order}
     succs: dict[str, list[str]] = {i: [] for i in order}
-    for e in board.edges:
-        if e.source in preds and e.target in preds and e.target not in bad:
-            preds[e.target].append(e.source)
-            succs[e.source].append(e.target)
+    for source, target in _flow(board, bad):
+        preds[target].append(source)
+        succs[source].append(target)
     col = {i: (0 if i in bad else 1) for i in order}
-    # Longest path, bounded so a cycle cannot loop forever.
+    # Longest path; the flow has no loops, the bound is only a guard.
     for _ in range(len(order)):
         changed = False
         for i in order:
@@ -298,12 +328,15 @@ def _columns(board: Board) -> dict[str, int]:
                 col[i], changed = want, True
         if not changed:
             break
-    # A trusted external with nothing feeding it (a clock, a config service) sits above
-    # the first thing it feeds instead of taking a column of its own.
+    # Nothing feeds a node but it feeds others (tests, a clock, a config service): a
+    # trusted external sits above the first thing it feeds; anything else sits just left
+    # of it, instead of in column 1 where it lands across the edges out of the inputs.
     nodes = {n.id: n for n in board.nodes}
     for i in order:
-        if nodes[i].kind == "external" and i not in bad and not preds[i] and succs[i]:
-            col[i] = min(col[s] for s in succs[i])
+        if i in bad or preds[i] or not succs[i]:
+            continue
+        first = min(col[s] for s in succs[i])
+        col[i] = first if nodes[i].kind == "external" else max(1, first - 1)
     # Close the gaps that moves leave behind, keeping the order of the columns.
     rank = {c: k for k, c in enumerate(sorted(set(col.values())))}
     return {i: rank[c] for i, c in col.items()}
@@ -312,13 +345,40 @@ def _columns(board: Board) -> dict[str, int]:
 _ROW_ORDER = {"external": 0, "component": 1, "store": 2, "context": 3}
 
 
-def layout(board: Board) -> Placement:
-    """A deterministic layered layout: same board, same picture."""
-    col = _columns(board)
+def _rows(board: Board, col: dict[str, int]) -> dict[int, list[str]]:
+    """Nodes per column, top to bottom.
+
+    Column by column, a node sits level with the average row of what feeds it from the
+    columns before (the barycentre rule), which uncrosses most edges; kind, then board
+    order, break ties.
+    """
     order = {n.id: k for k, n in enumerate(board.nodes)}
+    feeds: dict[str, list[str]] = {n.id: [] for n in board.nodes}
+    for source, target in _flow(board, board.untrusted()):
+        if col[source] < col[target]:
+            feeds[target].append(source)
     by_col: dict[int, list[str]] = {}
     for n in sorted(board.nodes, key=lambda n: (_ROW_ORDER[n.kind], order[n.id])):
         by_col.setdefault(col[n.id], []).append(n.id)
+    # Rows are counted from the middle, since layout() centres every column.
+    row: dict[str, float] = {}
+    for c in sorted(by_col):
+        ids = by_col[c]
+        mid = (len(ids) - 1) / 2
+        key = {}
+        for k, i in enumerate(ids):
+            placed = [row[f] for f in feeds[i] if f in row]
+            key[i] = (sum(placed) / len(placed) if placed else k - mid, k)
+        ids.sort(key=key.__getitem__)
+        for k, i in enumerate(ids):
+            row[i] = k - mid
+    return by_col
+
+
+def layout(board: Board) -> Placement:
+    """A deterministic layered layout: same board, same picture."""
+    col = _columns(board)
+    by_col = _rows(board, col)
     rows = max(len(ids) for ids in by_col.values())
     height = MARGIN * 2 + rows * NODE_H + (rows - 1) * GAP_Y + 24
     positions: dict[str, tuple[int, int]] = {}
