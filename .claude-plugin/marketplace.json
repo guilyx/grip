@@ -10,7 +10,7 @@
       "name": "grip",
       "source": "./",
       "description": "Quiz yourself on your diff before Claude pushes it. /grip asks five questions; a hook blocks `git push` until the diff has passed.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "Erwin L."
       },

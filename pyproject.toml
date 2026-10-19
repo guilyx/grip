@@ -42,9 +42,6 @@ dev = [
   "ruff>=0.5",
   "pre-commit>=3.7",
 ]
-build = [
-  "pyinstaller>=6.10",
-]
 demo = [
   "pyte>=0.8",
   "pillow>=10.0",

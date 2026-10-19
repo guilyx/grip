@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-19
+
+grip is on PyPI.
+
+### Changed
+
+- grip is published to PyPI as `grip-hook`: `pipx install grip-hook` or
+  `uv tool install grip-hook`. Releases publish there through trusted publishing, and
+  the GitHub release carries the same sdist and wheel.
+- The prebuilt binaries are gone. They bundled the build machine's Python, so the 0.1.0
+  and 0.2.0 Linux binaries needed glibc 2.38 and failed on Ubuntu 22.04 and older with
+  `GLIBC_2.38 not found`. `install.sh` now installs the package with uv or pipx, and
+  replaces a binary left by an earlier install.
+- Windows is supported through the same install.
+
 ### Fixed
 
 - Whiteboard layout: a reply arrow (`allow -> handler` after `handler -> allow`) no longer
@@ -152,6 +167,7 @@ The first public release.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 
-[Unreleased]: https://github.com/guilyx/grip/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/guilyx/grip/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/guilyx/grip/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/guilyx/grip/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/guilyx/grip/releases/tag/v0.1.0

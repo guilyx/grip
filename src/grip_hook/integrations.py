@@ -38,7 +38,7 @@ show the developer the questions verbatim, wait for their answers, then run
 `grip grade --answers -` with the answers as a JSON list of five strings. Never answer
 the questions yourself, never hint, and never open the diff to help them. Push only after
 `grip check --unpushed` exits 0. If `grip` is missing, install it with
-`curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh`.
+`pipx install grip-hook` (or `uv tool install grip-hook`).
 """
 """The instructions every agent gets, as Markdown."""
 

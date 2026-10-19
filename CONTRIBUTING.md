@@ -72,15 +72,15 @@ cast also plays with `asciinema play docs/assets/demo.cast`.
 
 ## Releasing (maintainers)
 
-Releases are prebuilt binaries on GitHub Releases; nothing goes to PyPI.
+Releases go to PyPI as `grip-hook`, published by the `release` workflow through PyPI
+trusted publishing (no token).
 
 1. Bump `__version__` in `src/grip_hook/__init__.py` and move the `Unreleased` section
    of `CHANGELOG.md` under the new version.
 2. Commit, tag `vX.Y.Z`, push the tag.
-3. The `release` workflow builds single-file binaries with PyInstaller for Linux and
-   macOS (x86_64 and arm64), writes `SHA256SUMS`, and creates the GitHub release with the
-   changelog section as notes. `install.sh` fetches from there.
+3. The `release` workflow checks the tag against `__version__`, builds the sdist and the
+   wheel, smoke-tests the wheel, publishes both to PyPI, then creates the GitHub release
+   with the changelog section as notes.
 
-To build a binary locally: `pip install -e ".[build]" && scripts/build/package.sh`, then
-`GRIP_DOWNLOAD_BASE=file://$PWD/some-dir sh install.sh` to exercise the installer against
-it (CI does exactly this on every push).
+To try a build locally: `uv build`, then `GRIP_PACKAGE=dist/<wheel> sh install.sh`
+installs that wheel the way users get grip (CI does exactly this on every push).

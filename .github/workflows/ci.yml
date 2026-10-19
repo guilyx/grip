@@ -66,41 +66,22 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v7
       - run: uv build
-      - run: uv pip install --system dist/*.whl
-      - run: python -m grip_hook --version
+      - name: Install the wheel with install.sh and use it
+        run: |
+          export PATH="$(uv tool dir --bin):$PATH"
+          GRIP_PACKAGE="$(ls "$PWD"/dist/*.whl)" sh install.sh
+          grip --version
+          git grip --version
+          cd "$(mktemp -d)" && git init -q && grip install && grip status
+          echo "x = 1" > a.py && git add a.py
+          grip whiteboard --provider fake --export board.html
+          grep -q '"mode": "export"' board.html
+          sh "$OLDPWD/install.sh" --uninstall
+          test ! -e "$(uv tool dir --bin)/grip"
       - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
-
-  binary:
-    name: Binary and installer (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v7
-      - run: uv pip install --system -e ".[build]"
-      - run: scripts/build/package.sh
-      - name: Install from the built tarball with install.sh
-        run: |
-          mkdir -p fake-release/latest/download
-          cp dist/grip-*.tar.gz fake-release/latest/download/
-          (cd fake-release/latest/download && { sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz; } > SHA256SUMS)
-          GRIP_DOWNLOAD_BASE="file://$PWD/fake-release" sh install.sh --dir "$PWD/installed"
-          "$PWD/installed/grip" --version
-          "$PWD/installed/git-grip" --version
-          cd "$(mktemp -d)" && git init -q && "$OLDPWD/installed/grip" install && "$OLDPWD/installed/grip" status
-          echo "x = 1" > a.py && git add a.py
-          "$OLDPWD/installed/grip" whiteboard --provider fake --export board.html
-          grep -q '"mode": "export"' board.html
-          sh "$OLDPWD/install.sh" --dir "$OLDPWD/installed" --uninstall
 
   docs:
     name: Build docs

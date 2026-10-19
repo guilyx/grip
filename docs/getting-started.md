@@ -2,24 +2,22 @@
 
 ## 1. Install the CLI
 
-One command. It downloads the prebuilt binary for your OS and CPU from the latest GitHub
-release, checks its SHA-256 against the published `SHA256SUMS`, and installs `grip` plus a
-`git-grip` alias into `~/.local/bin`:
+grip is on PyPI as [`grip-hook`](https://pypi.org/project/grip-hook/). Install it as a
+command-line tool, in its own environment, with pipx or uv (Python 3.11+):
+
+```bash
+pipx install grip-hook        # or: uv tool install grip-hook
+```
+
+You get `grip` and a `git-grip` alias, so `git grip` works too. Linux, macOS and Windows.
+Plain `pip install grip-hook` works as well, inside a virtualenv.
+
+No pipx or uv? This script uses whichever one it finds, and tells you how to get uv when
+there is neither:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
 ```
-
-Options go after `sh -s --`:
-
-| Option | Effect |
-| --- | --- |
-| `--version v0.2.0` | Install a specific release instead of the latest. |
-| `--dir DIR` | Install somewhere other than `~/.local/bin`. |
-| `--uninstall` | Remove `grip` and `git-grip` from the install directory. |
-
-Supported: Linux and macOS, x86_64 and arm64. There is no Windows binary yet; use the
-pre-commit framework route in step 3, which installs grip into its own environment.
 
 Check it works:
 
@@ -27,10 +25,7 @@ Check it works:
 grip --version
 ```
 
-!!! note "Nothing to do with Python on your side"
-    grip is written in Python, but the binary bundles everything it needs. No `pip`, no
-    virtualenv, and nothing is published to PyPI. To upgrade, run the install command
-    again.
+To upgrade: `pipx upgrade grip-hook` (or `uv tool upgrade grip-hook`).
 
 ## 2. Give it a model
 
@@ -98,7 +93,7 @@ To do it by hand, choose one of the two approaches.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/guilyx/grip
-        rev: v0.2.0
+        rev: v0.2.1
         hooks:
           - id: grip          # runs at pre-push
           # - id: grip-commit # runs at pre-commit

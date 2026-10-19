@@ -19,7 +19,7 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
    - `"status": "nothing-to-quiz"`: say there is nothing to quiz and stop.
    - `"status": "already-passed"`: say this diff already passed recently and stop.
    - If the command fails because `grip` is missing, tell the developer to install it:
-     `curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh`
+     `pipx install grip-hook` (or `uv tool install grip-hook`)
 2. Show the `summary`, then the five questions, numbered 1 to 5, each with its `focus`
    in parentheses. Quote them verbatim. Ask the developer to answer all five in one
    reply, a sentence or two each, and say a blank answer scores zero.
