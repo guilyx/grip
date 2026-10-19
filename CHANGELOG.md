@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-19
+
 ### Changed
 
 - Releases are automatic. Each pull request carries one label, `release:patch`,
@@ -204,7 +206,8 @@ The first public release.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 
-[Unreleased]: https://github.com/guilyx/grip/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/guilyx/grip/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/guilyx/grip/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/guilyx/grip/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/guilyx/grip/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/guilyx/grip/releases/tag/v0.1.0

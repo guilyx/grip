@@ -87,7 +87,7 @@ We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
     ```yaml
     repos:
       - repo: https://github.com/guilyx/grip
-        rev: v0.2.1
+        rev: v0.2.2
         hooks:
           - id: grip
     ```
