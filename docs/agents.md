@@ -23,10 +23,10 @@ Copilot and the other agents the `skills` CLI knows about look for it. Then type
 agent to run `grip ask`, show you the five questions verbatim, wait for your answers, run
 `grip grade`, and never answer for you.
 
-You need the `grip` binary too:
+You need the `grip` command too:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
+pipx install grip-hook        # or: uv tool install grip-hook
 ```
 
 ## One command for every agent

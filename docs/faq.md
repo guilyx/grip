@@ -2,13 +2,13 @@
 
 ## Do I need Python installed?
 
-No. `install.sh` fetches a self-contained binary. Python only matters if you contribute to
-grip or run it through the pre-commit framework, which manages its own environment.
+Python 3.11 or newer. grip is a Python package (`grip-hook` on PyPI). `uv tool install
+grip-hook` fetches a suitable Python by itself if you do not have one, and the pre-commit
+framework route manages its own environment.
 
 ## How do I upgrade or uninstall?
 
-Run the install command again to upgrade to the latest release, or
-`sh -s -- --uninstall` (or `sh install.sh --uninstall`) to remove it.
+`pipx upgrade grip-hook` and `pipx uninstall grip-hook`, or the same with `uv tool`.
 
 ## Can I bypass it?
 

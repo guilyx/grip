@@ -6,13 +6,13 @@ nothing goes upstream.
 
 [![CI](https://github.com/guilyx/grip/actions/workflows/ci.yml/badge.svg)](https://github.com/guilyx/grip/actions/workflows/ci.yml)
 [![Docs](https://github.com/guilyx/grip/actions/workflows/docs.yml/badge.svg)](https://guilyx.github.io/grip/)
-[![Release](https://img.shields.io/github/v/release/guilyx/grip?sort=semver)](https://github.com/guilyx/grip/releases/latest)
-[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/grip-hook)](https://pypi.org/project/grip-hook/)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/guilyx/grip/blob/main/LICENSE)
 
 <table>
 <tr>
 <td align="center" width="33%"><h3>5 questions</h3>written from <em>your</em> diff, graded against a hidden rubric, 100 points</td>
-<td align="center" width="33%"><h3>12 → 92</h3>the same diff blocked with lazy answers, through with real ones (<a href="docs/assets/demo.mp4">demo</a>)</td>
+<td align="center" width="33%"><h3>12 → 92</h3>the same diff blocked with lazy answers, through with real ones (<a href="https://github.com/guilyx/grip/blob/main/docs/assets/demo.mp4">demo</a>)</td>
 <td align="center" width="33%"><h3>0 new tools to learn</h3>a git hook, or <code>/grip</code> inside Claude Code, Codex, Gemini CLI, Cursor and friends</td>
 </tr>
 </table>
@@ -58,9 +58,9 @@ Same push, one minute later. You can explain it in the review because you just d
 </tr>
 </table>
 
-![grip blocking a commit with lazy answers, then letting it through after real ones](docs/assets/demo.gif)
+![grip blocking a commit with lazy answers, then letting it through after real ones](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/demo.gif)
 
-<sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](docs/assets/demo.mp4). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
+<sub>A commit blocked at 12/100, then accepted at 92/100. [Video version](https://github.com/guilyx/grip/blob/main/docs/assets/demo.mp4). Recorded with the offline scripted provider, so questions are canned; a real model writes them from your diff.</sub>
 
 ## The whiteboard defense
 
@@ -104,7 +104,7 @@ grip whiteboard --interview        # for the person asking: rubrics visible, tic
 grip whiteboard --export board.html  # a shareable copy, no rubrics
 ```
 
-![grip whiteboard: the change drawn as parts, with questions pinned to them](docs/assets/whiteboard.png)
+![grip whiteboard: the change drawn as parts, with questions pinned to them](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/whiteboard.png)
 
 **Prototype freely, defend what ships.** For a spike, a demo or an experiment, generate
 all of it: `grip skip` lets one push through, `grip skip --hours 2` pauses grip for a
@@ -128,17 +128,19 @@ is the only one that checks the human.
 
 ## Install
 
-One command, no Python or package manager needed. It downloads the prebuilt binary for
-your OS and CPU from the [latest release](https://github.com/guilyx/grip/releases/latest),
-verifies its checksum, and puts `grip` (and a `git grip` alias) in `~/.local/bin`:
+grip is on PyPI as [`grip-hook`](https://pypi.org/project/grip-hook/). Install it as a
+command-line tool with pipx or uv (Python 3.11+):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
+pipx install grip-hook        # or: uv tool install grip-hook
 ```
 
-Pin a version with `sh -s -- --version v0.2.0`, change the directory with `--dir`, remove
-it with `--uninstall`. Linux and macOS, x86_64 and arm64. On Windows use the pre-commit
-framework route below.
+Plain `pip install grip-hook` works too, inside a virtualenv. You get `grip` and a
+`git grip` alias, on Linux, macOS and Windows. Upgrade with `pipx upgrade grip-hook` (or
+`uv tool upgrade grip-hook`).
+
+Neither pipx nor uv? `curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh`
+uses whichever one it finds and tells you how to get uv when there is neither.
 
 Then, in your repository:
 
@@ -164,7 +166,7 @@ grip install --stage pre-commit --stage pre-push   # both
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/guilyx/grip
-    rev: v0.2.0
+    rev: v0.2.1
     hooks:
       - id: grip          # runs at pre-push
       # - id: grip-commit # runs at pre-commit
@@ -296,12 +298,12 @@ from a language model, so they are sometimes unfair; the per-question feedback s
 why, and `grip quiz` gives a fresh set. What has and has not been measured about the
 quiz, and where it is known to be annoying, is on the
 [honest numbers](https://guilyx.github.io/grip/honest-numbers/) page; the
-[evals harness](evals/) behind it runs offline. Treat the Grip Score as a prompt to
+[evals harness](https://github.com/guilyx/grip/blob/main/evals/) behind it runs offline. Treat the Grip Score as a prompt to
 re-read, not a verdict.
 
 ## Cite
 
-If grip is part of a study or a course, please cite it ([CITATION.cff](CITATION.cff)):
+If grip is part of a study or a course, please cite it ([CITATION.cff](https://github.com/guilyx/grip/blob/main/CITATION.cff)):
 
 ```bibtex
 @software{lejeune2026grip,
@@ -314,17 +316,17 @@ If grip is part of a study or a course, please cite it ([CITATION.cff](CITATION.
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
-development setup, and [SECURITY.md](SECURITY.md) for what data grip touches.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/guilyx/grip/blob/main/CONTRIBUTING.md) for the
+development setup, and [SECURITY.md](https://github.com/guilyx/grip/blob/main/SECURITY.md) for what data grip touches.
 
 ## Media
 
-A [launch video](docs/assets/launch/grip-launch-1080p.mp4), the
-[Product Hunt image](docs/assets/launch/grip-producthunt-1270x760.png) and the icon live
+A [launch video](https://github.com/guilyx/grip/blob/main/docs/assets/launch/grip-launch-1080p.mp4), the
+[Product Hunt image](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/launch/grip-producthunt-1270x760.png) and the icon live
 under `docs/assets/launch/`, all generated from the demo recording by
 `scripts/launch/make_launch.py`. Use them freely. More on the
 [media page](https://guilyx.github.io/grip/media/).
 
 ## License
 
-[BSD-3-Clause](LICENSE). Copyright (c) 2026, Erwin L.
+[BSD-3-Clause](https://github.com/guilyx/grip/blob/main/LICENSE). Copyright (c) 2026, Erwin L.

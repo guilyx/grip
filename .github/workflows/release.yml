@@ -8,45 +8,50 @@ permissions:
   contents: read
 
 jobs:
-  binaries:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: linux-x86_64
-            runner: ubuntu-latest
-          - target: linux-aarch64
-            runner: ubuntu-24.04-arm
-          - target: macos-aarch64
-            runner: macos-latest
-          - target: macos-x86_64
-            runner: macos-15-intel
+  build:
+    name: Build the package
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
       - uses: astral-sh/setup-uv@v7
-      - run: uv pip install --system -e ".[build]"
       - name: Check the tag matches the package version
         run: |
-          version="$(python -m grip_hook --version | awk '{print $NF}')"
+          version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/grip_hook/__init__.py)"
           test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
-      - run: scripts/build/package.sh
-      - name: Check the artifact name matches the target
-        run: test -f "dist/grip-${{ matrix.target }}.tar.gz"
+      - run: uv build
+      - name: Smoke-test the wheel in a clean tool environment
+        run: |
+          uv tool install dist/*.whl
+          export PATH="$(uv tool dir --bin):$PATH"
+          grip --version
+          cd "$(mktemp -d)" && git init -q && echo "x = 1" > a.py && git add a.py
+          grip whiteboard --provider fake --export board.html
+          grep -q '"mode": "export"' board.html
       - uses: actions/upload-artifact@v7
         with:
-          name: grip-${{ matrix.target }}
-          path: |
-            dist/grip-${{ matrix.target }}.tar.gz
-            dist/grip-${{ matrix.target }}.tar.gz.sha256
+          name: dist
+          path: dist/
 
-  release:
+  pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # Trusted publishing: PyPI accepts this workflow (release.yml) for grip-hook, no token.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/grip-hook/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github:
     name: Publish GitHub release
-    needs: binaries
+    needs: pypi
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -54,14 +59,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          path: artifacts
-          merge-multiple: true
-      - name: Assemble assets and checksums
-        run: |
-          mkdir -p release
-          cp artifacts/*.tar.gz release/
-          (cd release && sha256sum *.tar.gz > SHA256SUMS)
-          cat release/SHA256SUMS
+          name: dist
+          path: dist/
       - name: Extract changelog section
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -75,15 +74,13 @@ jobs:
             echo '## Install'
             echo
             echo '```sh'
-            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh'
+            echo "pipx install grip-hook==${version}    # or: uv tool install grip-hook==${version}"
             echo '```'
             echo
-            echo "Pin this version with \`sh -s -- --version ${GITHUB_REF_NAME}\`. Checksums are in \`SHA256SUMS\`."
+            echo "On PyPI: https://pypi.org/project/grip-hook/${version}/"
           } >> release-notes.md
           cat release-notes.md
       - uses: softprops/action-gh-release@v3
         with:
           body_path: release-notes.md
-          files: |
-            release/*.tar.gz
-            release/SHA256SUMS
+          files: dist/*

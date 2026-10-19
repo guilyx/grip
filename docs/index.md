@@ -55,7 +55,7 @@ We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
 === "Terminal"
 
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/guilyx/grip/main/install.sh | sh
+    pipx install grip-hook        # or: uv tool install grip-hook
     cd your-repo && grip init
     ```
 
@@ -87,7 +87,7 @@ We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
     ```yaml
     repos:
       - repo: https://github.com/guilyx/grip
-        rev: v0.2.0
+        rev: v0.2.1
         hooks:
           - id: grip
     ```
