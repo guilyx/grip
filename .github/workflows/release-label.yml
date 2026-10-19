@@ -1,0 +1,31 @@
+name: Release label
+
+# Every pull request says what merging it releases, with exactly one label:
+# release:major, release:minor or release:patch to ship a new version on merge (see
+# release.yml), or release:none for changes that do not need one (docs, CI, refactors).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: One release label
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          found=""
+          for label in $LABELS; do
+            case "$label" in release:major|release:minor|release:patch|release:none) found="$found $label" ;; esac
+          done
+          count=$(echo $found | wc -w)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Add exactly one of release:major, release:minor, release:patch, release:none (found:${found:- none})."
+            exit 1
+          fi
+          echo "merging this pull request releases:${found}"

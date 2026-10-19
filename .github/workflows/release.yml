@@ -1,23 +1,115 @@
 name: Release
 
+# A release starts in one of three ways:
+# - a pull request merges into main carrying a release:patch, release:minor or
+#   release:major label: the version is bumped, the [Unreleased] changelog entries are
+#   dated, and the result is committed to main and tagged;
+# - a v* tag is pushed by hand: that tag is released as it is;
+# - this workflow is run by hand from the Actions tab, with the part to bump.
+# Either way the package is built, published to PyPI through trusted publishing (PyPI
+# trusts this file, release.yml, for grip-hook) and released on GitHub.
+
 on:
   push:
+    branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: Build the package
+  plan:
+    name: Decide what to release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      bump: ${{ steps.plan.outputs.bump }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_BUMP: ${{ inputs.bump }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
+            echo "bump=${DISPATCH_BUMP}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0].labels[].name' 2>/dev/null || true)"
+          bump=""
+          for part in major minor patch; do
+            if printf '%s\n' "$labels" | grep -qx "release:${part}"; then bump="$part"; break; fi
+          done
+          echo "labels on the merged pull request: ${labels:-none}; release: ${bump:-none}"
+          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
+
+  bump:
+    name: Bump, commit and tag
+    needs: plan
+    if: needs.plan.outputs.bump != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: bump
+        env:
+          PART: ${{ needs.plan.outputs.bump }}
+        run: |
+          version="$(python3 scripts/release/bump.py "${PART}")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Release v${version}"
+          git tag -a "v${version}" -m "grip ${version}"
+          # Pushed with the workflow token, so neither push starts this workflow again.
+          git push origin HEAD:main "v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build the package
+    needs: [plan, bump]
+    if: ${{ !cancelled() && (needs.plan.outputs.tag != '' || needs.bump.result == 'success') }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        env:
+          TAG: ${{ needs.plan.outputs.tag || needs.bump.outputs.tag }}
+        run: echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
       - uses: astral-sh/setup-uv@v7
       - name: Check the tag matches the package version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/grip_hook/__init__.py)"
-          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+          test "v${version}" = "${TAG}" || { echo "tag ${TAG} != v${version}"; exit 1; }
       - run: uv build
       - name: Smoke-test the wheel in a clean tool environment
         run: |
@@ -51,19 +143,23 @@ jobs:
 
   github:
     name: Publish GitHub release
-    needs: pypi
+    needs: [build, pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
       - name: Extract changelog section
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           awk -v ver="$version" '
             $0 ~ "^## \\[" ver "\\]" { found=1; next }
             found && /^## \[/ { exit }
@@ -82,5 +178,6 @@ jobs:
           cat release-notes.md
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.TAG }}
           body_path: release-notes.md
           files: dist/*

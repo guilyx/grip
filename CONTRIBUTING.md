@@ -73,14 +73,28 @@ cast also plays with `asciinema play docs/assets/demo.cast`.
 ## Releasing (maintainers)
 
 Releases go to PyPI as `grip-hook`, published by the `release` workflow through PyPI
-trusted publishing (no token).
+trusted publishing (no token). Nobody bumps versions or pushes tags by hand.
 
-1. Bump `__version__` in `src/grip_hook/__init__.py` and move the `Unreleased` section
-   of `CHANGELOG.md` under the new version.
-2. Commit, tag `vX.Y.Z`, push the tag.
-3. The `release` workflow checks the tag against `__version__`, builds the sdist and the
-   wheel, smoke-tests the wheel, publishes both to PyPI, then creates the GitHub release
-   with the changelog section as notes.
+1. Every pull request adds its entries under `## [Unreleased]` in `CHANGELOG.md`, and
+   carries exactly one label saying what merging it releases (the `Release label` check
+   insists):
+
+    | Label | Merging it |
+    | --- | --- |
+    | `release:patch` | ships `X.Y.Z+1`: fixes |
+    | `release:minor` | ships `X.Y+1.0`: new features, compatible |
+    | `release:major` | ships `X+1.0.0`: breaking changes |
+    | `release:none` | ships nothing; the entries wait for the next release |
+
+2. When a pull request with a release label merges, the `release` workflow runs
+   `scripts/release/bump.py`. That bumps the version everywhere it is written, turns
+   `[Unreleased]` into `## [X.Y.Z] - date`, commits `Release vX.Y.Z` to `main` and tags
+   it.
+3. It then builds the sdist and the wheel, smoke-tests the wheel, publishes both to PyPI,
+   and creates the GitHub release with the changelog section as notes.
+
+A hand-pushed `vX.Y.Z` tag still releases that tag as it is, and the workflow can be run
+from the Actions tab with the part to bump.
 
 To try a build locally: `uv build`, then `GRIP_PACKAGE=dist/<wheel> sh install.sh`
 installs that wheel the way users get grip (CI does exactly this on every push).

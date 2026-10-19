@@ -11,5 +11,6 @@
 - [ ] Tests added or updated
 - [ ] `ruff check . && ruff format --check . && mypy && pytest` pass locally
 - [ ] `CHANGELOG.md` updated under `Unreleased`
+- [ ] One release label: `release:patch`, `release:minor`, `release:major` or `release:none`
 - [ ] Docs updated if user-facing behaviour changed
 - [ ] Prompt changes (if any) were tried against real diffs
