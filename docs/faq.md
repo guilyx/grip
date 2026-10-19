@@ -65,3 +65,17 @@ case.
 It is enough to cover behaviour, motivation, an edge case, a risk and verification, and
 short enough that people answer rather than bypass. It is fixed on purpose so scores are
 comparable across repositories.
+
+## How do I cite grip?
+
+GitHub's "Cite this repository" button reads
+[CITATION.cff](https://github.com/guilyx/grip/blob/main/CITATION.cff). In BibTeX:
+
+```bibtex
+@software{lejeune2026grip,
+  author = {L., Erwin},
+  title  = {grip: keep a grip on your code},
+  year   = {2026},
+  url    = {https://github.com/guilyx/grip}
+}
+```

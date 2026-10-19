@@ -75,14 +75,20 @@ extra:
 nav:
   - Home: index.md
   - Get started:
-      - The whiteboard defense: whiteboard-defense.md
       - Install: getting-started.md
-      - How it works: how-it-works.md
+      - Walkthrough: walkthrough.md
+      - The whiteboard defense: whiteboard-defense.md
+  - Guides:
       - The whiteboard: whiteboard.md
+      - Coding agents: agents.md
       - Configuration: configuration.md
       - Providers: providers.md
-  - Coding agents: agents.md
-  - Keep A Grip: keepagrip.md
+      - Keep A Grip: keepagrip.md
+  - Deep dive:
+      - How it works: how-it-works.md
+      - Inside grip: internals.md
+      - Honest numbers: honest-numbers.md
+      - "Design: grip whiteboard": design/whiteboard.md
   - Reference:
       - Command line: cli.md
       - Python API:
@@ -98,8 +104,6 @@ nav:
           - study: reference/study.md
           - platform: reference/platform.md
   - Project:
-      - Honest numbers: honest-numbers.md
-      - "Design: grip whiteboard": design/whiteboard.md
       - FAQ: faq.md
       - Brand: brand.md
       - Media: media.md

@@ -1,5 +1,9 @@
 # How it works
 
+The short version. For one real change followed from `git commit` to an accepted push, see
+the [walkthrough](walkthrough.md); for every step in detail, module by module, see
+[inside grip](internals.md).
+
 ## The flow
 
 ```mermaid
