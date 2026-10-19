@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Pushing a new branch said "nothing to quiz" when its commits were also on a branch that
+  had been deleted upstream (a merged pull request) but not pruned locally: the stale
+  `origin/...` ref made them look pushed. grip now asks the remote with `git ls-remote`
+  whenever the local refs say a new branch has nothing to send.
+
 ### Documentation
 
 - A shorter README in the usual open-source shape: what grip is, install, quick start,

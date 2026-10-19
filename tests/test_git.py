@@ -137,6 +137,32 @@ def test_unpushed_base_and_push_diff(
     assert set(merged.files) == {"one.txt", "two.txt"}
 
 
+def test_new_branch_is_quizzed_when_a_remote_tracking_ref_is_stale(
+    git: Git, remote: Path, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    # Commits pushed on a branch that was later deleted upstream (a merged pull request),
+    # while the local origin/old ref was never pruned.
+    run_git("checkout", "-q", "-b", "old")
+    stage_change("kidnap.py", "detect = True\n")
+    run_git("commit", "-q", "-m", "kidnap detection")
+    run_git("push", "-q", "origin", "old")
+    Git(remote).run("branch", "-D", "old")
+    run_git("checkout", "-q", "-b", "feat/new")
+    head = run_git("rev-parse", "HEAD").strip()
+
+    assert git.unpushed_base(head, "origin") is None  # the stale ref hides the commit
+    refs = [PushedRef("refs/heads/feat/new", head, "refs/heads/feat/new", ZERO_SHA)]
+    diff = git.push_diff(refs, "origin")
+    assert diff.files == ("kidnap.py",)
+
+
+def test_live_check_falls_back_when_the_remote_is_unreachable(
+    git: Git, run_git: Callable[..., str]
+) -> None:
+    head = run_git("rev-parse", "HEAD").strip()
+    assert git.unpushed_base_live(head, "no-such-remote") is None
+
+
 def test_unpushed_base_without_remote_uses_empty_tree(
     git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
 ) -> None:
