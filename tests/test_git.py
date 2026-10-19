@@ -111,8 +111,8 @@ def test_unpushed_base_and_push_diff(
     head = run_git("rev-parse", "HEAD").strip()
 
     base = git.unpushed_base(head, "origin")
-    assert base is not None
-    assert git.run("rev-parse", base).strip() == pushed
+    assert base == pushed
+    assert git.range_diff(base, head).description == f"{pushed[:12]}..{head[:12]}"
 
     # Existing remote branch: diff against the remote sha.
     refs = [PushedRef("refs/heads/main", head, "refs/heads/main", pushed)]

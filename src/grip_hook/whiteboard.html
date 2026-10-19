@@ -140,7 +140,7 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 const DATA = JSON.parse(document.getElementById("board-data").textContent);
 const MODE = DATA.mode, PPQ = DATA.points_per_question, W = DATA.node.width, H = DATA.node.height;
 const NS = "http://www.w3.org/2000/svg";
-const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "circle", "defs", "marker"]);
+const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "tspan", "title", "circle", "defs", "marker"]);
 const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
 const edgeById = Object.fromEntries(DATA.edges.map((e) => [e.id, e]));
 const state = {
@@ -176,10 +176,14 @@ function edgeGeometry(e) {
   const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
   return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
 }
+// Pins sharing a box line up leftwards along its top edge; pins sharing an arrow spread
+// out along it from the middle. Each one stays visible and clickable.
 function pinAnchor(pin) {
-  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4, y: n.y + 4 }; }
+  const same = DATA.pins.filter((p) => p.on === pin.on), k = same.indexOf(pin);
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
   const g = edgeGeometry(edgeById[pin.on]);
-  return g.horizontal ? { x: g.mid.x, y: g.mid.y - 38 } : { x: g.mid.x - 26, y: g.mid.y };
+  const at = 0.5 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.22;
+  return { x: g.s.x + (g.t.x - g.s.x) * at, y: g.s.y + (g.t.y - g.s.y) * at };  // on the wire
 }
 function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
 function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }
@@ -187,6 +191,67 @@ function pinTarget(p) {
   if (byId[p.on]) return byId[p.on].label;
   const e = edgeById[p.on];
   return `${byId[e.source].label} → ${byId[e.target].label}`;
+}
+
+// Text is fitted once it is on screen, where it can be measured: a long label or role in a
+// box ends in an ellipsis (the full text is in its tooltip and the side panel), and a long
+// edge label wraps onto a second line, growing away from its arrow.
+function ellipsize(t, width) {
+  const full = t.textContent;
+  if (t.getComputedTextLength() <= width) return;
+  let lo = 0, hi = full.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    t.textContent = full.slice(0, mid).trimEnd() + "…";
+    if (t.getComputedTextLength() <= width) lo = mid; else hi = mid - 1;
+  }
+  t.textContent = full.slice(0, lo).trimEnd() + "…";
+}
+function wrapLabel(t, width) {
+  if (t.getComputedTextLength() <= width) return 0;
+  const words = t.textContent.split(" ");
+  const first = el("tspan", {}), second = el("tspan", { dy: 14 });
+  t.replaceChildren(first, second);
+  let k = 1;
+  while (k < words.length) {
+    first.textContent = words.slice(0, k + 1).join(" ");
+    if (first.getComputedTextLength() > width) break;
+    k++;
+  }
+  first.textContent = words.slice(0, k).join(" ");
+  second.textContent = words.slice(k).join(" ");
+  ellipsize(first, width);
+  ellipsize(second, width);
+  return 1;
+}
+// Each label goes at the middle of its arrow unless that covers a box, a pin or a label
+// already placed; then it slides along the arrow to the first spot that is clear, or the
+// one that covers least.
+const SPOTS = [0.5, 0.36, 0.64, 0.24, 0.76, 0.14, 0.86];
+function placeLabels(svg, labels) {
+  const box = (b, pad = 3) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
+  const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+  const taken = [...svg.querySelectorAll(".n rect")].map((r) => box(r.getBBox(), 1));
+  for (const p of DATA.pins) { const at = pinAnchor(p); taken.push(box({ x: at.x - 15, y: at.y - 15, width: 30, height: 30 }, 1)); }
+  // Straight arrows first: sliding along a slanted one moves its label off the others' rows.
+  const slant = (t) => Math.abs(t.fit.g.t.y - t.fit.g.s.y);
+  for (const t of [...labels.children].sort((a, b) => slant(a) - slant(b))) {
+    const f = t.fit, lines = wrapLabel(t, f.width);
+    const put = (at) => {
+      const x = f.g.s.x + (f.g.t.x - f.g.s.x) * at + f.dx;
+      const y = f.g.s.y + (f.g.t.y - f.g.s.y) * at + f.dy + 14 * f.grow * lines;
+      t.setAttribute("x", x); t.setAttribute("y", y);
+      for (const span of t.children) span.setAttribute("x", x);
+      return box(t.getBBox());
+    };
+    let best = SPOTS[0], least = Infinity;
+    for (const at of SPOTS) {
+      const b = put(at), covered = taken.reduce((sum, o) => sum + overlap(b, o), 0);
+      if (covered < least) { best = at; least = covered; }
+      if (!covered) break;
+    }
+    taken.push(put(best));
+  }
 }
 
 function drawBoard() {
@@ -202,10 +267,14 @@ function drawBoard() {
   const labels = el("g", { class: "e" });
   for (const e of DATA.edges) {
     const g = edgeGeometry(e);
-    const below = e.offset > 0;
-    labels.append(g.horizontal
-      ? el("text", { x: g.mid.x, y: g.mid.y + (below ? 17 : -8), "text-anchor": "middle", text: e.label })
-      : el("text", { x: g.mid.x + 10, y: g.mid.y + 4, text: e.label }));
+    const below = e.offset > 0, room = DATA.pins.some((p) => p.on === e.id) ? 13 : 0;
+    const label = el("text", { "text-anchor": g.horizontal ? "middle" : "start", text: e.label });
+    label.fit = {
+      g, width: g.horizontal ? Math.max(Math.abs(g.t.x - g.s.x) - 10, 90) : 170,
+      grow: g.horizontal ? (below ? 0 : -1) : -0.5,
+      dx: g.horizontal ? 0 : 10 + room, dy: g.horizontal ? (below ? 17 + room : -8 - room) : 4,
+    };
+    labels.append(label);
     svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") },
       el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" })));
   }
@@ -216,14 +285,17 @@ function drawBoard() {
     if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
     const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
     const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`, on: activate(() => select({ node: n.id })) },
+      el("title", { text: `${n.label}: ${n.role}` }),
       el("rect", { x: n.x, y: n.y, width: W, height: H, rx: 12 }),
       el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
       el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
       el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
     if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + W - 10}` }));
     svg.append(g);
+    g.querySelectorAll(".label, .role").forEach((t) => ellipsize(t, W - 28));
   }
   svg.append(labels);
+  placeLabels(svg, labels);
   DATA.pins.forEach((p, i) => {
     const at = pinAnchor(p);
     let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");

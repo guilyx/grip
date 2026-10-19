@@ -142,8 +142,10 @@ class Git:
         commits = out.split()
         if not commits:
             return None
-        base = f"{commits[0]}^"
-        return base if self.rev_exists(base) else self.empty_tree()
+        # Resolved to a hash: a ``sha^`` spelling would lose its ``^`` when shortened for
+        # the description and read as ``sha..sha``.
+        parent = self.run("rev-parse", "--verify", "--quiet", f"{commits[0]}^", check=False)
+        return parent.strip() or self.empty_tree()
 
     # -- diff collection ------------------------------------------------------------------
 

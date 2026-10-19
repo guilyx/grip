@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Whiteboard layout: a reply arrow (`allow -> handler` after `handler -> allow`) no longer
+  pushes the board into extra columns, a part that only feeds others (tests, a fixture)
+  sits just before what it feeds instead of across the input's arrow, and each column is
+  ordered by what feeds it so fewer arrows cross.
+- Whiteboard page: long labels and roles end in an ellipsis inside their box (the full
+  text is in the tooltip and the side panel), long arrow labels wrap onto two lines and
+  slide along their arrow when they would cover another label, a box or a pin, and a pin
+  on an arrow sits on the arrow.
+- Whiteboard page: two questions pinned to the same box or arrow were drawn on the same
+  spot, so one was hidden and could not be clicked. They now line up side by side.
+- `--unpushed` described its range as `sha..sha` with the same commit twice; the base is
+  now resolved to the parent's hash.
+
 ## [0.2.0] - 2026-10-15
 
 The whiteboard release.
