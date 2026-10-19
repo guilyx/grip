@@ -71,7 +71,7 @@ The [walkthrough](https://guilyx.github.io/grip/walkthrough/) follows one real c
 ```toml
 passing_score = 70        # 0-100
 difficulty = "normal"     # easy | normal | hard
-provider = "claude-code"  # anthropic | claude-code | codex | gemini | openai | ollama
+provider = "claude-code"  # auto | anthropic | claude-code | codex | gemini | openai | ollama
 ```
 
 Every option, environment variables and the pre-commit framework hook are in the

@@ -29,15 +29,16 @@ To upgrade: `pipx upgrade grip-hook` (or `uv tool upgrade grip-hook`).
 
 ## 2. Give it a model
 
-Already have Claude Code, Codex or Gemini CLI installed and signed in? Reuse it, no key
-needed:
+Already have Claude Code, Codex or Gemini CLI installed and signed in? grip uses it
+automatically, no key needed: with no provider configured, it picks the first of the three
+it finds. `grip init` (step 3) asks which one to use and writes it down:
 
 ```toml
 # .grip.toml at the root of your repository
-provider = "claude-code"   # or "codex", or "gemini"
+provider = "claude-code"   # or "codex", "gemini", or "auto"
 ```
 
-Otherwise grip uses Anthropic's API by default:
+With none of them installed, grip uses Anthropic's API:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."

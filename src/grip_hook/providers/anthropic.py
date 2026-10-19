@@ -27,6 +27,13 @@ T = TypeVar("T", bound=BaseModel)
 _EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 _MAX_TOKENS = 16_000
 
+NO_CREDENTIALS = (
+    "the anthropic provider has no credentials. Set ANTHROPIC_API_KEY, or run "
+    "`ant auth login`, or use a coding agent you are already signed in to: "
+    'provider = "claude-code" (or "codex", "gemini") in .grip.toml. '
+    "`grip init` sets this up."
+)
+
 
 class AnthropicProvider:
     """Ask Claude for questions and grades using structured outputs."""
@@ -94,6 +101,11 @@ class AnthropicProvider:
             raise ProviderError(f"Anthropic API error ({exc.status_code}): {exc.message}") from exc
         except anthropic.APIConnectionError as exc:
             raise ProviderError(f"could not reach the Anthropic API: {exc}") from exc
+        except TypeError as exc:
+            # The SDK only finds out at request time that it has no key, token or login.
+            if "authentication" not in str(exc):
+                raise
+            raise ProviderError(NO_CREDENTIALS) from exc
 
         if response.stop_reason == "refusal":
             detail = ""

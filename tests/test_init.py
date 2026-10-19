@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from grip_hook import cli as cli_module
 from grip_hook import integrations
 from grip_hook.cli import cli
 from grip_hook.config import load_config, render_template
@@ -100,3 +101,40 @@ def test_init_stages(in_repo: Path) -> None:
     assert CliRunner().invoke(cli, args).exit_code == 0
     assert (in_repo / ".git" / "hooks" / "pre-commit").exists()
     assert not (in_repo / ".git" / "hooks" / "pre-push").exists()
+
+
+def test_init_asks_in_a_terminal(in_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        integrations.shutil, "which", lambda name: "/usr/bin/claude" if name == "claude" else None
+    )
+    monkeypatch.setattr(cli_module, "_interactive", lambda: True)
+    result = CliRunner().invoke(cli, ["init", "--no-agents"], input="\n85\nboth\n")
+    assert result.exit_code == 0, result.output
+    assert "Which model asks and grades the questions?" in result.output
+    cfg = load_config(in_repo)
+    assert (cfg.provider, cfg.passing_score) == ("claude-code", 85)  # Enter kept the default
+    hooks = in_repo / ".git" / "hooks"
+    assert (hooks / "pre-commit").exists() and (hooks / "pre-push").exists()
+
+
+def test_init_yes_takes_the_defaults_without_asking(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli_module, "_interactive", lambda: True)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    result = CliRunner().invoke(cli, ["init", "--yes", "--no-hook", "--no-agents"])
+    assert result.exit_code == 0, result.output
+    assert "Which model" not in result.output
+    assert load_config(in_repo).provider == "anthropic"
+    assert "ANTHROPIC_API_KEY" in result.output or "ant auth login" in result.output
+
+
+def test_install_says_which_model_auto_picked(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        integrations.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None
+    )
+    result = CliRunner().invoke(cli, ["install"])
+    assert result.exit_code == 0, result.output
+    assert "codex (provider auto)" in result.output

@@ -4,6 +4,13 @@ A provider turns a diff into questions and answers into grades. All of them use 
 prompts and the same JSON schemas, so the quality of the quiz depends on the model you
 pick, not on the transport.
 
+## Which one runs
+
+With no `provider` set anywhere, grip uses `auto`: the first of Claude Code, Codex and
+Gemini CLI it finds on `PATH`, and the Anthropic API when there is none. `grip status`
+and `grip install` say which one that is. `grip init` asks, and writes your choice to
+`.grip.toml`; `provider = "auto"` there lets each teammate use the agent they have.
+
 ## Coding agents you already have
 
 If Claude Code, Codex or Gemini CLI is installed and signed in, grip can drive it in
@@ -52,7 +59,7 @@ call, so raise it if you see timeouts.
     well-formed. Gemini usually complies but can occasionally answer with prose, which
     grip reports as a provider error (retry, or set `fail_open = true`).
 
-## Anthropic (default)
+## Anthropic
 
 Uses the official `anthropic` SDK with structured outputs, so the questions and grades
 are always well-formed.

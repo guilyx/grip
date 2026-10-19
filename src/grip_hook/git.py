@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,14 @@ ZERO_SHA = "0" * 40
 LS_REMOTE_TIMEOUT = 15.0
 """Seconds to wait for ``git ls-remote`` before trusting the local remote-tracking refs."""
 _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...]\n"
+
+
+_HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+
+
+def _short(rev: str) -> str:
+    """A full hash shortened to 12 characters; a branch name or other spelling as is."""
+    return rev[:12] if _HASH.fullmatch(rev) else rev
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,7 +250,7 @@ class Git:
         self, base: str, head: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
-        return self._collect(f"{base[:12]}..{head[:12]}", [base, head], exclude, max_bytes)
+        return self._collect(f"{_short(base)}..{_short(head)}", [base, head], exclude, max_bytes)
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000

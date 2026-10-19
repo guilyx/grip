@@ -361,3 +361,13 @@ def test_anthropic_board() -> None:
     assert call["output_format"] is Board
     assert call["system"] == BOARD_SYSTEM_PROMPT
     assert "fix this" in call["messages"][0]["content"]
+
+
+def test_anthropic_without_credentials_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    client = anthropic.Anthropic(api_key=None, auth_token=None)
+    provider = AnthropicProvider(Config(provider="anthropic"), client=client)
+    with pytest.raises(ProviderError, match="no credentials") as caught:
+        provider.generate_questions(DIFF, Difficulty.NORMAL)
+    assert "claude-code" in str(caught.value)

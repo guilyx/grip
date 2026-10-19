@@ -12,6 +12,19 @@ All notable changes to this project are documented here. The format follows
   had been deleted upstream (a merged pull request) but not pruned locally: the stale
   `origin/...` ref made them look pushed. grip now asks the remote with `git ls-remote`
   whenever the local refs say a new branch has nothing to send.
+- With no provider configured, grip used the Anthropic API even when Claude Code, Codex or
+  Gemini CLI was installed, and without an API key it crashed with a traceback. The
+  default provider is now `auto`: the first installed coding agent, else Anthropic. A
+  missing Anthropic key is now a clear error that says what to set.
+- `grip quiz --range main..feat/x` cut branch names to 12 characters in its header
+  (`main..feat/kidnap-`); only full hashes are shortened now.
+
+### Changed
+
+- `grip init` asks, in a terminal, which model to use, the pass mark and whether to quiz
+  before pushes, commits or both, with defaults detected on the machine, then says what
+  the chosen provider still needs. `--yes` takes every default; scripts are not asked.
+- `grip install` says which model will write the questions when none is configured.
 
 ### Documentation
 

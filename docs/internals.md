@@ -195,6 +195,10 @@ questions with `question`, `rubric` and `focus`) and a `GradeSheet` (exactly fiv
 of 0 to 20 with feedback, and a verdict). Their JSON schemas are what each backend is
 asked to fill, and the field descriptions are written for the model to read.
 
+Which backend runs is `provider`. The default, `auto`, is resolved on each machine: the
+first of `claude`, `codex` and `gemini` found on `PATH`, else `anthropic`. So a team can
+commit `provider = "auto"` and each person uses the agent they already pay for.
+
 | Provider | How it gets JSON that matches the schema |
 | --- | --- |
 | `anthropic` | The SDK's `messages.parse` with the pydantic model as `output_format` (structured outputs), up to 16k tokens, two retries, the configured `effort` on models that accept it |

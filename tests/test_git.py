@@ -156,6 +156,17 @@ def test_new_branch_is_quizzed_when_a_remote_tracking_ref_is_stale(
     assert diff.files == ("kidnap.py",)
 
 
+def test_range_description_keeps_branch_names(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    run_git("checkout", "-q", "-b", "feat/kidnap-detection")
+    stage_change("k.py", "x = 1\n")
+    run_git("commit", "-q", "-m", "k")
+    assert git.range_diff("main", "feat/kidnap-detection").description == (
+        "main..feat/kidnap-detection"
+    )
+
+
 def test_live_check_falls_back_when_the_remote_is_unreachable(
     git: Git, run_git: Callable[..., str]
 ) -> None:

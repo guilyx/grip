@@ -6,6 +6,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import shutil
 import subprocess
 import sys
 import webbrowser
@@ -32,8 +33,11 @@ from grip_hook.agent import (
     report_payload,
 )
 from grip_hook.config import (
+    AGENT_PROVIDERS,
+    AUTO_PROVIDER,
     DEFAULT_PASSING_SCORE,
     Config,
+    auto_provider,
     describe,
     load_config,
     render_template,
@@ -41,7 +45,7 @@ from grip_hook.config import (
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
 from grip_hook.git import Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
-from grip_hook.integrations import AGENTS, Action, agent, apply, detect, is_installed
+from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory, SkipState
 from grip_hook.models import Difficulty, QuestionSet, Report, Stage
 from grip_hook.platform import (
@@ -634,10 +638,92 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
 
 def _default_provider() -> str:
     """The provider ``grip init`` picks: a signed-in coding agent when there is one."""
-    for key in ("claude-code", "codex", "gemini"):
-        if is_installed(agent(key)):
-            return key
-    return "anthropic"
+    return auto_provider()
+
+
+_PROVIDER_HINTS = {
+    "claude-code": "Claude Code, already signed in: no key, no extra bill",
+    "codex": "Codex CLI, already signed in: no key, no extra bill",
+    "gemini": "Gemini CLI, already signed in: no key, no extra bill",
+    "auto": "each teammate's installed coding agent, else anthropic",
+    "anthropic": "Anthropic API: needs ANTHROPIC_API_KEY or `ant auth login`",
+    "ollama": "a local model through Ollama: free, set `model` in .grip.toml",
+    "openai": "any OpenAI-compatible API: set `base_url` and OPENAI_API_KEY",
+}
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _InitChoices:
+    provider: str
+    passing_score: int
+    stages: tuple[str, ...]
+    agents: bool
+
+
+def _init_wizard(
+    defaults: _InitChoices,
+    *,
+    ask_provider: bool,
+    ask_score: bool,
+    ask_stages: bool,
+    ask_agents: bool,
+) -> _InitChoices:
+    """Ask, in the terminal, for what the flags did not say. Enter keeps each default."""
+    _out.print("[bold]grip init[/bold] [dim]· Enter keeps the default in brackets[/dim]\n")
+    provider = defaults.provider
+    if ask_provider:
+        installed = [name for name, command in AGENT_PROVIDERS if shutil.which(command)]
+        options = [*installed, "auto", "anthropic", "ollama", "openai"]
+        _out.print("[bold]Which model asks and grades the questions?[/bold]")
+        for name in options:
+            _out.print(f"  [cyan]{name:<12}[/cyan] {_PROVIDER_HINTS[name]}")
+        provider = click.prompt(
+            "Provider", type=click.Choice(options), default=defaults.provider, show_choices=False
+        )
+    score = defaults.passing_score
+    if ask_score:
+        score = click.prompt(
+            f"\nPass mark, out of {MAX_SCORE}", type=click.IntRange(0, MAX_SCORE), default=score
+        )
+    stages = defaults.stages
+    if ask_stages:
+        when = click.prompt(
+            "\nQuiz before every push, every commit, or both?",
+            type=click.Choice(["push", "commit", "both"]),
+            default="push",
+        )
+        stages = {"push": ("pre-push",), "commit": ("pre-commit",)}.get(
+            when, ("pre-commit", "pre-push")
+        )
+    agents = defaults.agents
+    if ask_agents and (found := detect()):
+        names = ", ".join(a.name for a in found)
+        agents = click.confirm(
+            f"\nTell the coding agents here ({names}) to run the quiz before they push?",
+            default=True,
+        )
+    _out.print()
+    return _InitChoices(provider, score, stages, agents)
+
+
+def _interactive() -> bool:
+    """Whether someone is at the keyboard to answer ``grip init``'s questions."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _provider_tip(provider: str) -> str | None:
+    """What still has to happen for ``provider`` to work, if anything."""
+    resolved = auto_provider() if provider == "auto" else provider
+    command = dict(AGENT_PROVIDERS).get(resolved)
+    if command and not shutil.which(command):
+        return f"`{command}` is not on PATH yet; install it and sign in before the next push."
+    if resolved == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
+        return "set ANTHROPIC_API_KEY (or run `ant auth login`) before the next push."
+    if resolved == "ollama":
+        return "set `model` in .grip.toml to a model you have pulled, e.g. qwen3:14b."
+    if resolved == "openai":
+        return "set `base_url` in .grip.toml and export OPENAI_API_KEY."
+    return None
 
 
 @cli.command(name="init")
@@ -669,6 +755,7 @@ def _default_provider() -> str:
 @click.option("--no-hook", is_flag=True, help="Do not install a git hook.")
 @click.option("--no-agents", is_flag=True, help="Do not write coding-agent rule files.")
 @click.option("--force", is_flag=True, help="Overwrite an existing .grip.toml.")
+@click.option("--yes", "-y", is_flag=True, help="Take every default instead of asking.")
 def init_cmd(
     *,
     provider: str | None,
@@ -678,34 +765,56 @@ def init_cmd(
     no_hook: bool,
     no_agents: bool,
     force: bool,
+    yes: bool,
 ) -> None:
     """Set a repository up in one go: .grip.toml, the git hook and the agent rule files.
 
-    Picks a provider you will not need a key for when Claude Code, Codex or Gemini CLI is
-    installed. Everything it writes is meant to be committed so the whole team shares it.
+    In a terminal it asks which model to use, the pass mark and when to quiz, with
+    defaults picked for this machine; flags answer a question up front and --yes takes
+    every default. It picks a provider you will not need a key for when Claude Code, Codex
+    or Gemini CLI is installed. Everything it writes is meant to be committed so the whole
+    team shares it.
     """
     git = Git()
     root = git.root()
     toml_path = root / ".grip.toml"
-    if toml_path.exists() and not force:
+    writing = force or not toml_path.exists()
+    choices = _InitChoices(
+        provider=(provider or _default_provider()).lower(),
+        passing_score=DEFAULT_PASSING_SCORE if passing_score is None else passing_score,
+        stages=stages or (Stage.PRE_PUSH.value,),
+        agents=not no_agents,
+    )
+    if not yes and _interactive():
+        choices = _init_wizard(
+            choices,
+            ask_provider=writing and provider is None,
+            ask_score=writing and passing_score is None,
+            ask_stages=not no_hook and not stages,
+            ask_agents=not no_agents,
+        )
+    if not writing:
         _out.print(
             f"[dim]grip: {_pretty_path(toml_path)} exists, keeping it (--force overwrites)[/dim]"
         )
     else:
-        chosen = (provider or _default_provider()).lower()
         text = render_template(
-            provider=chosen,
-            passing_score=DEFAULT_PASSING_SCORE if passing_score is None else passing_score,
+            provider=choices.provider,
+            passing_score=choices.passing_score,
             difficulty=difficulty or Difficulty.NORMAL.value,
         )
         toml_path.write_text(text, "utf-8")
-        _out.print(f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {chosen})")
+        _out.print(
+            f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {choices.provider})"
+        )
+        if tip := _provider_tip(choices.provider):
+            _out.print(f"[yellow]grip:[/yellow] {tip}")
     if not no_hook:
-        for stage in stages or (Stage.PRE_PUSH.value,):
+        for stage in choices.stages:
             result = install(git, Stage(stage), append=True)
             how = "appended to" if result.appended else "installed at"
             _out.print(f"[green]grip:[/green] {stage} hook {how} {_pretty_path(result.path)}")
-    if not no_agents:
+    if choices.agents:
         changes = apply(root, detect())
         past = {Action.WRITTEN: "wrote", Action.UPDATED: "updated"}
         for change in changes:
@@ -808,6 +917,15 @@ def install_cmd(stages: tuple[str, ...], force: bool, append: bool) -> None:
         result = install(git, Stage(stage), force=force, append=append)
         how = "appended to" if result.appended else "installed at"
         _out.print(f"[green]grip:[/green] {stage} hook {how} {result.path}")
+    cfg = _config(git)
+    if cfg.provider == AUTO_PROVIDER:
+        _out.print(
+            f"[dim]grip: no provider configured, so the questions come from "
+            f"{cfg.provider_name} (provider auto). `grip init` sets the model, the pass mark "
+            "and the team's defaults.[/dim]"
+        )
+        if tip := _provider_tip(cfg.provider):
+            _out.print(f"[yellow]grip:[/yellow] {tip}")
     _out.print("[dim]Run `grip status` to check, `grip uninstall` to remove.[/dim]")
 
 
