@@ -125,7 +125,7 @@ get per-question feedback on what to re-read.
 
 </div>
 
-[Read the details](how-it-works.md){ .md-button }
+[Follow one real change](walkthrough.md){ .md-button .md-button--primary } [Inside grip](internals.md){ .md-button }
 
 ## What you can do with it
 

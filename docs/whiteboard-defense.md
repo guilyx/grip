@@ -55,6 +55,20 @@ memory. Questions favour the riskiest and most surprising parts of the diff.
     does. It draws the change, its parts, how they connect and which inputs are untrusted,
     and pins the questions to it in your browser.
 
+## Why now
+
+Generated code, big refactors, late-night pastes: it is easy to ship a change you could
+not explain in a code review. The gap is measured, not imagined. In METR's 2025
+randomised trial, experienced open-source developers using AI tools were
+[19% slower while believing they were 20% faster](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/).
+GitClear's analysis of 153 million changed lines found
+[code churn on track to double since AI assistants arrived](https://www.gitclear.com/coding_on_copilot_data_shows_ais_downward_pressure_on_code_quality).
+The [2024 DORA report](https://dora.dev/research/2024/dora-report/) linked higher AI
+adoption to lower delivery stability, and the
+[2025 Stack Overflow survey](https://survey.stackoverflow.co/2025/ai) put developer trust
+in AI output at a low. Each of those tools checks the code; grip checks the person who is
+about to ship it.
+
 ## Prototype freely, defend what ships
 
 grip should cost nothing where the bar does not apply.

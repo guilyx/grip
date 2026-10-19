@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- A shorter README in the usual open-source shape: what grip is, install, quick start,
+  configuration, links. The long-form material moved to the docs site.
+- New [walkthrough](https://guilyx.github.io/grip/walkthrough/): one real change, from
+  `git commit` to an accepted push, with the real questions, grades and screenshots.
+- New [inside grip](https://guilyx.github.io/grip/internals/) deep dive: the checks before
+  a quiz, diff collection, prompts, structured output per provider, rubric grading, pass
+  memory, the agent flow, the whiteboard's validation, layout and server, and what is
+  stored or sent.
+- The docs navigation is regrouped into Get started, Guides, Deep dive, Reference and
+  Project.
+
 ## [0.2.1] - 2026-10-19
 
 grip is on PyPI.
