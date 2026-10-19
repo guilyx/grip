@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Releases are automatic. Each pull request carries one label, `release:patch`,
+  `release:minor`, `release:major` or `release:none`; merging a labelled one bumps the
+  version, dates the changelog, tags `main` and publishes to PyPI and GitHub. A check
+  makes sure every pull request has exactly one.
+- `grip init` asks, in a terminal, which model to use, the pass mark and whether to quiz
+  before pushes, commits or both, with defaults detected on the machine, then says what
+  the chosen provider still needs. `--yes` takes every default; scripts are not asked.
+- `grip install` says which model will write the questions when none is configured.
+
 ### Fixed
 
 - Pushing a new branch said "nothing to quiz" when its commits were also on a branch that
@@ -18,13 +29,6 @@ All notable changes to this project are documented here. The format follows
   missing Anthropic key is now a clear error that says what to set.
 - `grip quiz --range main..feat/x` cut branch names to 12 characters in its header
   (`main..feat/kidnap-`); only full hashes are shortened now.
-
-### Changed
-
-- `grip init` asks, in a terminal, which model to use, the pass mark and whether to quiz
-  before pushes, commits or both, with defaults detected on the machine, then says what
-  the chosen provider still needs. `--yes` takes every default; scripts are not asked.
-- `grip install` says which model will write the questions when none is configured.
 
 ### Documentation
 
