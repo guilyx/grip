@@ -12,6 +12,7 @@ Precedence, highest first:
 from __future__ import annotations
 
 import os
+import shutil
 import tomllib
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
@@ -47,6 +48,27 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
 
 ENV_PREFIX = "GRIP_"
 
+AUTO_PROVIDER = "auto"
+AGENT_PROVIDERS: tuple[tuple[str, str], ...] = (
+    ("claude-code", "claude"),
+    ("codex", "codex"),
+    ("gemini", "gemini"),
+)
+"""Coding-agent providers ``auto`` tries, in order, with the command each one needs."""
+
+
+def auto_provider() -> str:
+    """What ``provider = "auto"`` means on this machine.
+
+    A coding agent that is installed (and so, usually, signed in) needs no API key and adds
+    no bill, so the first of Claude Code, Codex and Gemini CLI on ``PATH`` wins; without
+    one, the Anthropic API.
+    """
+    for name, command in AGENT_PROVIDERS:
+        if shutil.which(command):
+            return name
+    return "anthropic"
+
 
 @dataclass(frozen=True, slots=True)
 class Config:
@@ -55,9 +77,10 @@ class Config:
     passing_score: int = DEFAULT_PASSING_SCORE
     """Minimum Grip Score (0-100) required to let the commit or push through."""
 
-    provider: str = "anthropic"
-    """Provider name: ``anthropic``, ``openai``, ``ollama``, ``claude-code``, ``codex``,
-    ``gemini`` or ``fake``."""
+    provider: str = AUTO_PROVIDER
+    """Provider name: ``auto``, ``anthropic``, ``openai``, ``ollama``, ``claude-code``,
+    ``codex``, ``gemini`` or ``fake``. ``auto`` picks an installed coding agent, else
+    ``anthropic``; see :func:`auto_provider`."""
 
     model: str = ""
     """Model identifier passed to the provider. Empty means the provider's default."""
@@ -105,6 +128,12 @@ class Config:
         if not self.provider:
             raise ConfigError("provider must not be empty")
         return self
+
+    @property
+    def provider_name(self) -> str:
+        """The provider that will actually run: ``auto`` resolved on this machine."""
+        name = self.provider.lower()
+        return auto_provider() if name == AUTO_PROVIDER else name
 
 
 _FIELD_NAMES = {f.name for f in fields(Config)}
@@ -205,7 +234,8 @@ passing_score = {passing_score}
 # easy | normal | hard
 difficulty = "{difficulty}"
 
-# anthropic | claude-code | codex | gemini | openai | ollama | fake
+# auto | anthropic | claude-code | codex | gemini | openai | ollama | fake
+# (auto: an installed coding agent, else anthropic)
 provider = "{provider}"
 
 # model = ""                   # empty: the provider's default
@@ -239,16 +269,21 @@ def describe(cfg: Config) -> list[tuple[str, str]]:
             text = value.value
         else:
             text = str(value) if value != "" else "(provider default)"
+        if f.name == "provider" and value == AUTO_PROVIDER:
+            text = f"{AUTO_PROVIDER} ({cfg.provider_name})"
         rows.append((f.name, text))
     return rows
 
 
 __all__ = [
+    "AGENT_PROVIDERS",
+    "AUTO_PROVIDER",
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
     "TEMPLATE",
     "Config",
+    "auto_provider",
     "describe",
     "load_config",
     "render_template",

@@ -120,7 +120,11 @@ already-defended diffs pass silently.
 - **The remote branch exists:** diff the remote sha against the local sha.
 - **The branch is new** (the remote sha is all zeros): find the oldest commit reachable
   from the local sha but not from any ref of that remote, and diff from its parent. When
-  that commit is a root commit, diff from the empty tree.
+  that commit is a root commit, diff from the empty tree. When the local remote-tracking
+  refs say every commit is already there, grip checks with the remote itself
+  (`git ls-remote`) before believing them: a branch deleted upstream after its pull
+  request merged stays in `refs/remotes` until `git fetch --prune`, and would otherwise
+  hide commits the remote no longer has.
 - **A deletion** (local sha all zeros): nothing to quiz.
 
 Several refs pushed at once are merged into one patch, so one push is one quiz.
@@ -190,6 +194,10 @@ questions in the expected shape.
 questions with `question`, `rubric` and `focus`) and a `GradeSheet` (exactly five grades
 of 0 to 20 with feedback, and a verdict). Their JSON schemas are what each backend is
 asked to fill, and the field descriptions are written for the model to read.
+
+Which backend runs is `provider`. The default, `auto`, is resolved on each machine: the
+first of `claude`, `codex` and `gemini` found on `PATH`, else `anthropic`. So a team can
+commit `provider = "auto"` and each person uses the agent they already pay for.
 
 | Provider | How it gets JSON that matches the schema |
 | --- | --- |

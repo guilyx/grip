@@ -42,7 +42,7 @@ class OpenAICompatibleProvider:
     name = "openai"
 
     def __init__(self, cfg: Config, opener: Any = None) -> None:
-        self.name = cfg.provider.lower()
+        self.name = cfg.provider_name
         if not cfg.model:
             raise ProviderError(
                 f"the {self.name} provider needs a model: set `model = ...` in .grip.toml"

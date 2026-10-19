@@ -70,9 +70,9 @@ The agent providers shell out to a CLI that is already installed and signed in.
 
 
 def get_provider(cfg: Config) -> Provider:
-    """Instantiate the provider named by ``cfg.provider``."""
+    """Instantiate the provider named by ``cfg.provider`` (``auto`` resolved first)."""
     try:
-        factory = REGISTRY[cfg.provider.lower()]
+        factory = REGISTRY[cfg.provider_name]
     except KeyError as exc:
         known = ", ".join(sorted(REGISTRY))
         raise ConfigError(f"unknown provider {cfg.provider!r}; known providers: {known}") from exc

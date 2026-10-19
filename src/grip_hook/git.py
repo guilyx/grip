@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +12,17 @@ from pathlib import Path
 from grip_hook.errors import GitError
 
 ZERO_SHA = "0" * 40
+LS_REMOTE_TIMEOUT = 15.0
+"""Seconds to wait for ``git ls-remote`` before trusting the local remote-tracking refs."""
 _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...]\n"
+
+
+_HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+
+
+def _short(rev: str) -> str:
+    """A full hash shortened to 12 characters; a branch name or other spelling as is."""
+    return rev[:12] if _HASH.fullmatch(rev) else rev
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +150,55 @@ class Git:
         """
         not_remotes = f"--remotes={remote}" if remote else "--remotes"
         out = self.run("rev-list", "--reverse", local_sha, "--not", not_remotes, check=False)
-        commits = out.split()
+        return self._base_before(out.split())
+
+    def unpushed_base_live(self, local_sha: str, remote: str) -> str | None:
+        """:meth:`unpushed_base` against the refs ``remote`` has now, not the local copies.
+
+        Remote-tracking refs go stale: a branch deleted upstream after its pull request
+        merged stays in ``refs/remotes`` until ``git fetch --prune``, so its commits look
+        pushed when the remote no longer has them. This asks the remote with
+        ``git ls-remote``. Returns ``None`` when every commit is on the remote, or when the
+        remote cannot be reached (then the local refs are all there is to go on).
+        """
+        try:
+            listed = subprocess.run(
+                ["git", "ls-remote", "--heads", "--tags", remote],
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                timeout=LS_REMOTE_TIMEOUT,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if listed.returncode != 0:
+            return None
+        shas = {line.split()[0] for line in listed.stdout.splitlines() if line.strip()}
+        # Only commits this repository has can be excluded; peeled tags arrive as commits.
+        checked = self.run(
+            "cat-file", "--batch-check", check=False, input_text="".join(f"{s}\n" for s in shas)
+        )
+        pushed = [
+            parts[0]
+            for parts in (line.split() for line in checked.splitlines())
+            if len(parts) >= 2 and parts[1] == "commit"
+        ]
+        out = self.run(
+            "rev-list",
+            "--reverse",
+            "--stdin",
+            local_sha,
+            check=False,
+            input_text="".join(f"^{sha}\n" for sha in pushed),
+        )
+        return self._base_before(out.split())
+
+    def _base_before(self, commits: list[str]) -> str | None:
+        """The parent of the oldest of ``commits`` (the empty tree for a root commit)."""
         if not commits:
             return None
         # Resolved to a hash: a ``sha^`` spelling would lose its ``^`` when shortened for
@@ -191,7 +250,7 @@ class Git:
         self, base: str, head: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
-        return self._collect(f"{base[:12]}..{head[:12]}", [base, head], exclude, max_bytes)
+        return self._collect(f"{_short(base)}..{_short(head)}", [base, head], exclude, max_bytes)
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
@@ -217,6 +276,10 @@ class Git:
                 base = ref.remote_sha
             else:
                 base = self.unpushed_base(ref.local_sha, remote)
+                if base is None and ref.is_new and remote:
+                    # A new branch that looks fully pushed may only look so through stale
+                    # remote-tracking refs; git would not be sending it otherwise.
+                    base = self.unpushed_base_live(ref.local_sha, remote)
             if base is None:
                 continue
             part = self.range_diff(base, ref.local_sha, exclude, max_bytes)

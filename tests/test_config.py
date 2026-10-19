@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from grip_hook.config import DEFAULT_EXCLUDES, Config, describe, load_config
+from grip_hook import config as config_module
+from grip_hook.config import DEFAULT_EXCLUDES, Config, auto_provider, describe, load_config
 from grip_hook.errors import ConfigError
 from grip_hook.models import Difficulty
 
@@ -73,3 +74,17 @@ def test_describe_renders_every_field() -> None:
     assert rows["api_key_env"] == "(provider default)"
     assert rows["model"] == "(provider default)"
     assert "*.lock" in rows["exclude"]
+
+
+def test_auto_provider_prefers_an_installed_coding_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    installed = {"gemini", "codex"}
+    monkeypatch.setattr(
+        config_module.shutil, "which", lambda name: f"/bin/{name}" if name in installed else None
+    )
+    assert auto_provider() == "codex"  # Claude Code, Codex, Gemini CLI, in that order
+    assert Config().provider == "auto"
+    assert Config().provider_name == "codex"
+    assert Config(provider="Anthropic").provider_name == "anthropic"
+    assert dict(describe(Config()))["provider"] == "auto (codex)"
+    installed.clear()
+    assert Config().provider_name == "anthropic"
