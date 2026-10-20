@@ -16,6 +16,21 @@ grip whiteboard            # your staged change
 grip whiteboard --unpushed # everything not yet on a remote
 ```
 
+## From the hook
+
+The command is one way in; the git hook is the other. Set `hook_mode` and every commit or
+push the hook guards is defended on the board instead of quizzed in the terminal:
+
+```toml
+# .grip.toml
+hook_mode = "whiteboard"
+```
+
+The hook prints the address, opens the browser and waits for you to hand in. A pass lets
+the push through; a score below the mark blocks it, and the page shows what each answer
+missed. Where no browser can be opened (over SSH, no display) the hook asks in the
+terminal as usual. Retrying the same diff reuses the board, so only the grading runs again.
+
 ## What it asks
 
 Every board asks three things, and two more when the change calls for them:

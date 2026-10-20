@@ -250,6 +250,20 @@ the unpushed commits at the whiteboard and the next `git push` of the same commi
 the quiz, which is exactly what happens in the walkthrough. Amend one line and the digest
 changes, so the next push asks again.
 
+### Reusing questions on a retry
+
+A failed quiz is usually followed by a second attempt on the same diff. The questions
+written for that diff are still good, so grip keeps them: `cache.py` wraps the provider,
+and a question set or a board is stored in `.git/grip/cache/` under a hash of everything
+that shaped it. That is the kind (questions or board), the diff digest, the task context,
+the difficulty, the provider and the model; change any one and the model is asked again.
+A retry then costs one grading call instead of two, and a whiteboard opens at once
+instead of being redrawn. Grading is never cached, because the answers are what changed.
+A board that failed validation is replaced by the corrected one, so a retry starts from a
+board that passed the checks. Entries expire after `cache_hours` (24 by default; 0 turns
+the cache off), and `--fresh` skips it for one run. `grip submit` never uses it: a score
+reported to Keep A Grip comes from questions written for that attempt.
+
 `grip skip` writes `{"once": true}` to `.git/grip/skip.json`, consumed by the next hook
 run; `grip skip --hours N` writes a deadline; `grip resume` clears both. Only hooks and
 the agent push gate read this file. A manual `grip quiz` always runs.
@@ -374,6 +388,7 @@ with no rubrics and no grading, for sharing a board.
 | Passed digests | `.git/grip/passed.json` | No |
 | A quiz waiting for an agent | `.git/grip/pending.json` | No |
 | Skips and pauses | `.git/grip/skip.json` | No |
+| Questions and boards kept for a retry | `.git/grip/cache/` | No |
 
 grip sends no telemetry. With `claude-code`, `codex`, `gemini` or `ollama` as the
 provider, the diff goes wherever that tool already sends your code, and nowhere new.
