@@ -120,9 +120,13 @@ def questions_payload(pending: PendingQuiz, cfg: Config) -> dict[str, Any]:
 
 
 def parse_answers(text: str) -> list[str]:
-    """Accept ``["a", "b", ...]`` or ``{"answers": [...]}``; missing answers count as blank."""
+    """Accept ``["a", "b", ...]`` or ``{"answers": [...]}``; missing answers count as blank.
+
+    Raw line breaks inside a string are accepted and kept: an answer pasted in paragraphs
+    is often written into the JSON as it is, and strict JSON would reject it.
+    """
     try:
-        data = json.loads(text)
+        data = json.loads(text, strict=False)
     except json.JSONDecodeError as exc:
         raise GripError(f"answers must be JSON: {exc}") from exc
     if isinstance(data, dict):

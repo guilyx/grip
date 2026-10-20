@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import select
 import sys
 from dataclasses import dataclass
 from typing import IO, Protocol
@@ -21,6 +22,9 @@ from grip_hook.errors import NoTerminalError
 _MIN_WIDTH = 40
 """Narrower terminals get a fixed width; rich cannot lay out panels below this."""
 
+PASTE_GAP = 0.05
+"""Seconds to wait for more input after a line. Lines arriving faster are a paste."""
+
 
 class Terminal(Protocol):
     """Minimal interface the quiz needs: a rich console plus a way to read a line."""
@@ -29,6 +33,10 @@ class Terminal(Protocol):
 
     def read_line(self, prompt: str = "") -> str:
         """Read one line of input from the developer (without the trailing newline)."""
+        ...
+
+    def pending(self) -> bool:
+        """``True`` when another line is already waiting: the rest of a pasted block."""
         ...
 
     def close(self) -> None:
@@ -52,6 +60,9 @@ class StreamTerminal:
         if line == "":
             raise EOFError
         return line.rstrip("\r\n")
+
+    def pending(self) -> bool:  # noqa: D102 - protocol documented
+        return False
 
     def close(self) -> None:  # noqa: D102 - protocol documented
         return None
@@ -82,6 +93,21 @@ class TtyTerminal:
         if line == "":
             raise EOFError
         return line.rstrip("\r\n")
+
+    def pending(self) -> bool:
+        """``True`` when another line arrives within :data:`PASTE_GAP`: a paste.
+
+        A terminal in line mode hands over one line per read, so nothing waits in Python's
+        buffer and the file descriptor tells. Not detected on Windows, where the console
+        cannot be polled; there each pasted line answers the next question.
+        """
+        if sys.platform == "win32":
+            return False
+        try:
+            ready, _, _ = select.select([self._reader.fileno()], [], [], PASTE_GAP)
+        except (OSError, ValueError):
+            return False
+        return bool(ready)
 
     def close(self) -> None:
         """Close the TTY handles if we opened them."""

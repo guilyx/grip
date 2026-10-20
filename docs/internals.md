@@ -130,6 +130,13 @@ already-defended diffs pass silently.
 Several refs pushed at once are merged into one patch, so one push is one quiz.
 `--unpushed` uses the same "oldest commit not on a remote" rule against every remote.
 
+A push can send nothing new while the branch was never quizzed: its commits reached the
+remote with `--no-verify`, from another clone, or under another branch name. Then the hook
+lets the push through, but says so. It compares the branch with the default branch the way
+`grip quiz --branch` does (from `git merge-base` with `origin/HEAD`, else `origin/main` or
+`origin/master`, else a local `main` or `master`) and, when that diff never passed, prints
+`its commits are already on origin/feat ... run grip quiz --branch`.
+
 The patch is then shaped for a model:
 
 - **Exclusions.** `exclude` globs (lockfiles, minified bundles, source maps, snapshots and

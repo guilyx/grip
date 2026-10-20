@@ -197,6 +197,41 @@ class Git:
         )
         return self._base_before(out.split())
 
+    def default_branch(self) -> str | None:
+        """The branch pull requests here merge into, as a revision (``origin/main``).
+
+        That is what ``<remote>/HEAD`` points at, for the current branch's remote (else
+        ``origin``, else the first remote), then ``<remote>/main`` or ``<remote>/master``,
+        then a local ``main`` or ``master``. ``None`` when none of them exists.
+        """
+        remotes = self.run("remote", check=False).split()
+        upstream = self.run(
+            "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
+        ).strip()
+        remote = next(
+            (r for r in remotes if upstream.startswith(f"{r}/")),
+            "origin" if "origin" in remotes else (remotes[0] if remotes else ""),
+        )
+        candidates: list[str] = []
+        if remote:
+            head = self.run(
+                "symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD", check=False
+            ).strip()
+            candidates += [head, f"{remote}/main", f"{remote}/master"]
+        candidates += ["main", "master"]
+        return next((c for c in candidates if c and self.rev_exists(c)), None)
+
+    def branch_base(self, head: str = "HEAD") -> tuple[str, str] | None:
+        """``(default branch, merge base)`` for ``head``: where its pull request starts.
+
+        ``None`` when there is no default branch or it shares no history with ``head``.
+        """
+        default = self.default_branch()
+        if default is None:
+            return None
+        base = self.run("merge-base", default, head, check=False).strip()
+        return (default, base) if base else None
+
     def _base_before(self, commits: list[str]) -> str | None:
         """The parent of the oldest of ``commits`` (the empty tree for a root commit)."""
         if not commits:
@@ -247,10 +282,16 @@ class Git:
         return self._collect("staged changes", ["--cached"], exclude, max_bytes)
 
     def range_diff(
-        self, base: str, head: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
+        self,
+        base: str,
+        head: str,
+        exclude: tuple[str, ...] = (),
+        max_bytes: int = 200_000,
+        description: str | None = None,
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
-        return self._collect(f"{_short(base)}..{_short(head)}", [base, head], exclude, max_bytes)
+        description = description or f"{_short(base)}..{_short(head)}"
+        return self._collect(description, [base, head], exclude, max_bytes)
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000

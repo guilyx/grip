@@ -37,6 +37,9 @@ branch). Add `--questions-only` to skip the grading and just print the questions
    EOF
    ```
 
+   Copy each answer exactly, line breaks included: write them as `\n` inside the JSON
+   string. Never join paragraphs or drop the breaks between them.
+
 6. Show the per-question scores and feedback, then the Grip Score. Below the pass mark,
    suggest which parts of the diff to read before approving, taken from the feedback.
 

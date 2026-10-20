@@ -34,11 +34,15 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
    EOF
    ```
 
+   Copy each answer exactly, line breaks included: write them as `\n` inside the JSON
+   string. Never join paragraphs or drop the breaks between them.
+
 5. Show the result as a short table: question number, focus, score out of 20, feedback.
    Then the Grip Score against the pass mark and the verdict.
    - Exit code 0: they passed. The diff is remembered, so `git push` goes through.
    - Exit code 1: they failed. Suggest what to re-read from the feedback and offer to
-     run `/grip` again for a fresh set of questions.
+     run `/grip` again: the same diff gets the same questions, answered with the
+     feedback in mind (`grip ask --fresh` asks for new ones).
 
 ## Notes
 

@@ -162,13 +162,13 @@ def test_status_activity(
 
     stage_change("a.py", "x = 1\n")
     result = runner.invoke(cli, ["status"])
-    assert "not quizzed yet" in result.output
+    assert "not quizzed (1 file)" in result.output
 
     terminal(GOOD)
     assert runner.invoke(cli, ["quiz"]).exit_code == 0
     result = runner.invoke(cli, ["status"])
     assert "100/100 PASS" in result.output and "just now" in result.output
-    assert "passed, remembered" in result.output
+    assert "passed 100/100 at " in result.output and "remembered" in result.output
 
 
 def test_statusline(

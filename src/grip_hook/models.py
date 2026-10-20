@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT
 
@@ -71,6 +71,12 @@ class Answer(BaseModel):
 
     question_index: int
     text: str
+
+    @field_validator("text")
+    @classmethod
+    def _tidy(cls, text: str) -> str:
+        """Line breaks kept as newlines, whatever the platform sent; outer blanks trimmed."""
+        return text.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
 class QuestionGrade(BaseModel):

@@ -17,6 +17,7 @@ from typing import Any
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT, __version__
@@ -250,7 +251,8 @@ def _decide(
         return 0
     raise QuizFailed(
         f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
-        f"{report.passing_score}. {retry_hint} Report: {_pretty_path(saved)}"
+        f"{report.passing_score}. {retry_hint} `grip last` shows the feedback again "
+        f"(report: {_pretty_path(saved)})."
     )
 
 
@@ -323,6 +325,9 @@ def cli() -> None:
 @cli.command()
 @click.option("--staged", "mode", flag_value="staged", default=True, help="Quiz staged changes.")
 @click.option("--unpushed", "mode", flag_value="unpushed", help="Quiz commits not on any remote.")
+@click.option(
+    "--branch", "mode", flag_value="branch", help="Quiz the branch since it left main: its PR."
+)
 @click.option("--range", "rev_range", default=None, help="Quiz an explicit BASE..HEAD range.")
 @quiz_options
 def quiz(
@@ -338,8 +343,23 @@ def quiz(
     sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
 
 
+def _branch_diff(git: Git, cfg: Config) -> Diff | None:
+    """The current branch since its merge base with the default branch: its pull request.
+
+    ``None`` when there is no default branch to compare with.
+    """
+    found = git.branch_base()
+    if found is None:
+        return None
+    default, base = found
+    branch = git.run("rev-parse", "--abbrev-ref", "HEAD", check=False).strip() or "HEAD"
+    return git.range_diff(
+        base, "HEAD", cfg.exclude, cfg.max_diff_bytes, description=f"{branch} vs {default}"
+    )
+
+
 def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Diff:
-    """The diff for ``--staged`` (default), ``--unpushed`` or ``--range BASE..HEAD``."""
+    """The diff for ``--staged`` (default), ``--unpushed``, ``--branch`` or ``--range``."""
     if rev_range:
         base, sep, head = rev_range.partition("..")
         if not sep or not base:
@@ -351,6 +371,14 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
         if base_sha is None:
             return Diff("unpushed commits", "", "", ())
         return git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes)
+    if mode == "branch":
+        diff = _branch_diff(git, cfg)
+        if diff is None:
+            raise GripError(
+                "no default branch to compare with (no origin/HEAD, main or master); "
+                "use --range BASE..HEAD"
+            )
+        return diff
     return git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
 
 
@@ -359,6 +387,9 @@ def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         click.option("--staged", "mode", flag_value="staged", default=True, help="Staged changes."),
         click.option(
             "--unpushed", "mode", flag_value="unpushed", help="Commits not on any remote."
+        ),
+        click.option(
+            "--branch", "mode", flag_value="branch", help="The branch since it left main."
         ),
         click.option("--range", "rev_range", default=None, help="An explicit BASE..HEAD range."),
     ]
@@ -651,7 +682,9 @@ def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | Non
         return None
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
         return None
-    what = "unpushed commits" if mode == "unpushed" else "staged changes"
+    what = {"unpushed": "unpushed commits", "branch": "branch's commits"}.get(
+        mode, "staged changes"
+    )
     return f"the {what} have not passed a grip quiz yet ({len(diff.files)} files)."
 
 
@@ -725,7 +758,37 @@ def hook(
         diff = git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
     else:
         diff = _push_diff(git, cfg, hook_args)
+        if diff.is_empty:
+            _skip(_nothing_pushed(git, cfg))
+            return
     sys.exit(_run(git, diff, cfg, stage_enum, report_path))
+
+
+def _nothing_pushed(git: Git, cfg: Config) -> str:
+    """Why a push has nothing to quiz, and what to quiz when the branch was never quizzed.
+
+    A push sends nothing new when its commits already reached the remote some other way
+    (pushed with --no-verify, from another clone, under another branch name). The branch
+    still differs from the default branch, and that diff may never have passed.
+    """
+    nothing = "nothing to quiz: this push sends no commits the remote does not have."
+    try:
+        branch = _branch_diff(git, cfg)
+    except GripError:
+        return nothing
+    if branch is None or branch.is_empty:
+        return nothing
+    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(branch.digest):
+        return nothing
+    upstream = git.run(
+        "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
+    ).strip()
+    where = upstream or "the remote"
+    return (
+        f"nothing to quiz in this push: its commits are already on {where}. "
+        f"The branch ({branch.description}, {_files(branch)}) has not passed a "
+        "quiz; run `grip quiz --branch`."
+    )
 
 
 def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
@@ -1097,17 +1160,37 @@ def _ago(when: datetime, now: datetime | None = None) -> str:
     return "just now"
 
 
+def _files(diff: Diff) -> str:
+    count = len(diff.files)
+    return f"{count} file{'' if count == 1 else 's'}"
+
+
+def _at(when: datetime, now: datetime | None = None) -> str:
+    """``at 17:52`` today, ``on 2026-10-18 17:52`` before, in local time."""
+    local = when.astimezone()
+    today = (now or datetime.now(UTC)).astimezone().date()
+    return f"at {local:%H:%M}" if local.date() == today else f"on {local:%Y-%m-%d %H:%M}"
+
+
 def _diff_state(git: Git, cfg: Config, mode: str) -> str:
-    """``nothing``, ``passed`` or ``not quizzed`` for the staged or unpushed diff."""
+    """Whether the staged, unpushed or branch diff passed: ``passed 98 at 17:52``."""
     try:
         diff = _select_diff(git, cfg, mode, None)
     except GripError as exc:
-        return f"[yellow]could not check[/yellow] ({exc})"
+        return f"[yellow]could not check[/yellow] ({escape(str(exc))})"
     if diff.is_empty:
         return "[dim]nothing[/dim]"
-    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
-        return "[green]passed[/green], remembered"
-    return f"[yellow]not quizzed yet[/yellow] ({len(diff.files)} files)"
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    files = _files(diff)
+    latest = memory.latest_for(diff.digest)
+    score = f"{latest.score}/{MAX_SCORE} {_at(latest.created_at)}" if latest else ""
+    if memory.has_passed(diff.digest):
+        return f"[green]passed[/green] {score}".rstrip() + ", remembered"
+    if latest is None:
+        return f"[yellow]not quizzed[/yellow] ({files})"
+    if latest.passed:
+        return f"[yellow]passed {score}, no longer remembered[/yellow] ({files})"
+    return f"[red]failed[/red] {score} ({files}); `grip last` shows why"
 
 
 def _print_activity(git: Git, cfg: Config) -> None:
@@ -1123,6 +1206,9 @@ def _print_activity(git: Git, cfg: Config) -> None:
         table.add_row("last quiz", f"{report.score}/{MAX_SCORE} {verdict}, {when}")
     table.add_row("staged changes", _diff_state(git, cfg, "staged"))
     table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    default = git.default_branch()
+    if default is not None:
+        table.add_row(f"branch vs {default}", _diff_state(git, cfg, "branch"))
     skip = SkipState(git.git_dir()).describe()
     table.add_row("skipping", f"[yellow]{skip}[/yellow]" if skip else "[dim]no[/dim]")
     _out.print(table)
@@ -1273,8 +1359,9 @@ def last_cmd(as_json: bool) -> None:
         number = f"[bold cyan]Q{grade_.question_index + 1}[/bold cyan]"
         _out.print(f"{number} [dim]({q.focus})[/dim] {q.question}")
         answer = by_index.get(grade_.question_index, "") or "(no answer)"
-        _out.print(f"  [bold]>[/bold] {answer}")
-        _out.print(f"  {grade_.score}/{POINTS_PER_QUESTION}: {grade_.feedback}\n")
+        indented = escape(answer).replace("\n", "\n    ")
+        _out.print(f"  [bold]>[/bold] {indented}")
+        _out.print(f"  {grade_.score}/{POINTS_PER_QUESTION}: {escape(grade_.feedback)}\n")
     _out.print(report.verdict)
 
 
