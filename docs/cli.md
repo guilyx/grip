@@ -9,6 +9,7 @@ Run the quiz now, without a hook.
 ```bash
 grip quiz                       # staged changes
 grip quiz --unpushed            # commits not on any remote
+grip quiz --branch              # the branch since it left main: its pull request
 grip quiz --range main..HEAD    # explicit range
 grip quiz --passing-score 90 --difficulty hard
 grip quiz --provider fake       # offline dry run
@@ -19,6 +20,14 @@ grip quiz --fresh               # new questions, even for a diff quizzed recentl
 Trying again on the same diff reuses the questions from the last attempt (see
 [`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for
 new ones. `grip whiteboard` reuses its board the same way.
+
+`--branch` diffs from the merge base with the default branch: what `origin/HEAD` points
+at, else `origin/main` or `origin/master`, else a local `main` or `master`. It is the
+"quiz my PR" command, whatever has or has not been pushed yet.
+
+Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
+pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
+pasted line still answers the next question.)
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
 
@@ -31,6 +40,7 @@ they connect and five questions pinned to them come from your diff. Answers are 
 ```bash
 grip whiteboard                         # staged changes
 grip whiteboard --unpushed              # commits not on any remote
+grip whiteboard --branch                # the whole branch since main
 grip whiteboard --range main..HEAD      # explicit range
 grip whiteboard --interview             # rubrics visible to the person asking; nothing recorded
 grip whiteboard --export board.html     # standalone page, no rubrics, nothing graded
@@ -61,7 +71,8 @@ Accepts the same `--passing-score`, `--provider`, `--model`, `--difficulty` and
 The quiz in three non-interactive steps, for coding agents. `ask` prints the questions as
 JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
 remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
-`--unpushed` and `--range` selectors as `grip quiz`. See [Coding agents](agents.md).
+`--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
+answer's JSON string are accepted and kept. See [Coding agents](agents.md).
 
 ```bash
 grip ask --unpushed
@@ -132,8 +143,19 @@ with a marker line so `uninstall` never touches a hook it does not own.
 ## `grip status`
 
 Shows which stages have grip installed, whether a foreign hook is in the way, the last
-quiz (score, pass or fail, how long ago), whether the staged and unpushed diffs have
-already passed, whether hooks are paused, and the effective configuration.
+quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
+configuration, and for each of the staged changes, the unpushed commits and the branch
+against the default branch, where it stands:
+
+```text
+staged changes          nothing
+unpushed commits        nothing
+branch vs origin/main   not quizzed (4 files)
+```
+
+`passed 98/100 at 17:52, remembered`, `failed 40/100 at 17:40` and `not quizzed` read as
+they say. A branch whose commits are all on the remote can still be unquizzed:
+`grip quiz --branch` covers it.
 
 ## `grip skip` / `grip resume`
 

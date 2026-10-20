@@ -53,11 +53,38 @@ def render_intro(term: Terminal, diff: Diff, cfg: Config, stage: Stage) -> None:
     term.console.print(Panel(body, title="grip", subtitle="keep a grip on your code", expand=False))
 
 
+def read_answer(term: Terminal, prompt: str) -> str:
+    """One answer: the line typed, or every line of a paste, line breaks kept.
+
+    A paste arrives faster than anyone types, so the lines already waiting after the first
+    belong to the same answer, blank lines between paragraphs included. A paste can stop
+    mid-line and leave its last line waiting for Enter, so a pasted answer runs on to the
+    next empty line.
+    """
+    lines = [term.read_line(prompt)]
+    if not term.pending():
+        return lines[0]
+    try:
+        while True:
+            while term.pending():
+                lines.append(term.read_line())
+            line = term.read_line()
+            if not line.strip():
+                break
+            lines.append(line)
+    except EOFError:
+        pass
+    return "\n".join(lines).strip()
+
+
 def ask_questions(term: Terminal, question_set: QuestionSet) -> list[Answer]:
     """Present each question and collect one line of answer for it."""
     console = term.console
     console.print(f"\n[dim]{escape(question_set.summary)}[/dim]\n")
-    console.print("[dim]Answer in a sentence or two. Press Enter on an empty line to skip.[/dim]\n")
+    console.print(
+        "[dim]Answer in a sentence or two. Press Enter on an empty line to skip. "
+        "A pasted answer can span lines; an empty line ends it.[/dim]\n"
+    )
     answers: list[Answer] = []
     for i, q in enumerate(question_set.questions):
         console.print(
@@ -65,10 +92,10 @@ def ask_questions(term: Terminal, question_set: QuestionSet) -> list[Answer]:
             f"{escape(q.question)}"
         )
         try:
-            text = term.read_line("[bold]> [/bold]")
+            text = read_answer(term, "[bold]> [/bold]")
         except EOFError:
             text = ""
-        answers.append(Answer(question_index=i, text=text.strip()))
+        answers.append(Answer(question_index=i, text=text))
         console.print()
     return answers
 
@@ -103,6 +130,7 @@ def render_result(
         f"[{style}]Grip Score: {total}/{MAX_SCORE}[/{style}]  "
         + ("[bold green]PASS[/bold green]" if passed else "[bold red]FAIL[/bold red]")
         + f" [dim](pass mark {cfg.passing_score})[/dim]"
+        + ("" if passed else "  [dim]re-read: grip last[/dim]")
     )
     console.print(Panel(Text.from_markup(f"{headline}\n\n{escape(sheet.verdict)}"), expand=False))
 

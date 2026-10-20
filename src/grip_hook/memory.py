@@ -86,6 +86,23 @@ class PassMemory:
         except (OSError, ValidationError):
             return None
 
+    def latest_for(self, digest: str) -> Report | None:
+        """The most recent graded quiz on the diff ``digest``, pass or fail, if any."""
+        try:
+            lines = self.history_path.read_text("utf-8").splitlines()
+        except OSError:
+            return None
+        for line in reversed(lines):
+            if digest not in line:
+                continue
+            try:
+                report = Report.model_validate_json(line)
+            except ValidationError:
+                continue
+            if report.diff_digest == digest:
+                return report
+        return None
+
     def save_report(self, report: Report) -> Path:
         """Write the last report as JSON and return its path."""
         self.dir.mkdir(parents=True, exist_ok=True)

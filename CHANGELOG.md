@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `grip quiz --branch` quizzes the branch since it left the default branch, the diff of
+  its pull request, without typing `--range main..feat/x`. `grip ask`, `grip check` and
+  `grip whiteboard` take it too.
+- `grip status` shows where the branch stands against the default branch, and every row
+  says when and how it was quizzed: `branch vs origin/main  passed 98/100 at 17:52`,
+  `failed 40/100 at 17:40`, `not quizzed (4 files)`.
+
+### Changed
+
+- A push with nothing new to quiz says why, and when its commits are already on the
+  remote but the branch never passed a quiz, says to run `grip quiz --branch`.
+- A failed quiz points to `grip last`, on the score line and in the final message.
+
+### Fixed
+
+- Answers in paragraphs keep their line breaks. A paste in the terminal is one answer,
+  blank lines included, ending at the next empty line, instead of spilling into the next
+  questions. `grip grade` accepts raw line breaks inside the JSON strings, which coding
+  agents write when they copy an answer as it is; the `/grip` skills say to keep them.
+  `grip last` indents the lines of a long answer.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

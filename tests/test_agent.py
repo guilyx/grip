@@ -13,6 +13,7 @@ from grip_hook import QUESTION_COUNT
 from grip_hook.agent import PendingStore, gated_mode, parse_answers
 from grip_hook.cli import cli
 from grip_hook.errors import GripError
+from grip_hook.models import Answer
 
 GOOD = ["this is a long and specific answer because reasons"] * QUESTION_COUNT
 BAD = [""] * QUESTION_COUNT
@@ -151,6 +152,27 @@ def test_parse_answers() -> None:
     for bad in ("not json", '{"answers": "x"}', "[1, 2]", json.dumps(["a"] * 6)):
         with pytest.raises(GripError):
             parse_answers(bad)
+
+
+def test_parse_answers_keeps_raw_line_breaks() -> None:
+    # Strict JSON rejects a raw newline in a string; an agent would then glue the lines.
+    assert parse_answers('["capped at 800).\n\nSUPERSEDED drops it", "b"]')[0] == (
+        "capped at 800).\n\nSUPERSEDED drops it"
+    )
+    assert Answer(question_index=0, text=" one\r\ntwo\rthree ").text == "one\ntwo\nthree"
+
+
+def test_multi_line_answers_survive_grading_and_show_indented(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    assert runner.invoke(cli, ["ask"]).exit_code == 0
+    answer = "capped at 800).\n\nSUPERSEDED doesn't drop the row"
+    raw = '["' + answer + '", "b", "c", "d", "e"]'  # raw line breaks, as an agent writes it
+    runner.invoke(cli, ["grade", "--answers", "-"], input=raw)
+    assert _json(runner.invoke(cli, ["last", "--json"]))["answers"][0] == answer  # type: ignore[index]
+    shown = runner.invoke(cli, ["last"]).output
+    assert "capped at 800).\n    \n    SUPERSEDED doesn't drop the row" in shown
 
 
 # -- check and the Claude Code hook ------------------------------------------------------
