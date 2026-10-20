@@ -1,7 +1,7 @@
 {
   "name": "grip",
   "description": "Quiz yourself on your diff before Claude pushes it. /grip asks five questions about the change and scores you out of 100, /grip-whiteboard lets you defend it on a whiteboard in the browser, and a hook blocks `git push` until the diff has passed.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "author": {
     "name": "Erwin L.",
     "url": "https://github.com/guilyx"

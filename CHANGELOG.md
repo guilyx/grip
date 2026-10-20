@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - A retry reuses the questions. Quizzing the same diff again (after a failed quiz, from the
@@ -220,7 +222,8 @@ The first public release.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 
-[Unreleased]: https://github.com/guilyx/grip/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/guilyx/grip/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/guilyx/grip/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/guilyx/grip/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/guilyx/grip/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/guilyx/grip/compare/v0.1.0...v0.2.0

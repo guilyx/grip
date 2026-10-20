@@ -94,7 +94,7 @@ To do it by hand, choose one of the two approaches.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/guilyx/grip
-        rev: v0.2.2
+        rev: v0.3.0
         hooks:
           - id: grip          # runs at pre-push
           # - id: grip-commit # runs at pre-commit
