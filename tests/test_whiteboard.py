@@ -16,7 +16,7 @@ from click.testing import CliRunner
 from grip_hook import QUESTION_COUNT
 from grip_hook.cli import cli
 from grip_hook.config import Config
-from grip_hook.errors import ProviderError
+from grip_hook.errors import NoTerminalError, ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Difficulty
 from grip_hook.providers.fake import FakeProvider, load_script
@@ -565,9 +565,17 @@ def test_the_hook_falls_back_to_the_terminal_without_a_browser(
     board_hook: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("grip_hook.cli._browser_available", lambda: False)
+    asked: list[bool] = []
+
+    def no_terminal() -> Any:  # the real one would wait on the console
+        asked.append(True)
+        raise NoTerminalError("no terminal in this test")
+
+    monkeypatch.setattr("grip_hook.cli.open_terminal", no_terminal)
     _AutoServer.page = ""
     result = CliRunner().invoke(cli, ["hook", "pre-commit"])
     assert "no browser can be opened" in result.output
+    assert asked == [True]
     assert _AutoServer.page == ""
 
 
