@@ -55,6 +55,7 @@ def test_dashed_keys_and_bools(tmp_path: Path) -> None:
         "unknown_option = 1\n",
         "exclude = 3\n",
         "timeout = 0\n",
+        "hook_mode = 'slides'\n",
         "this is not toml\n",
     ],
 )

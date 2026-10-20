@@ -24,6 +24,7 @@ grip reads configuration from four places. Higher in the list wins.
 | `max_diff_bytes` | `200000` | Larger patches are truncated before being sent. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
 | `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
+| `hook_mode` | `"quiz"` | What the git hook asks for. `quiz`: questions in the terminal. `whiteboard`: the [whiteboard](whiteboard.md) opens in your browser and you defend the change there. With no browser to open (over SSH, no display), the hook falls back to the terminal quiz. `grip quiz` always asks in the terminal. |
 | `require_tty` | `false` | Fail (exit 2) instead of skipping when no interactive terminal is available. |
 | `fail_open` | `false` | Let the commit or push through when the provider errors out. |
 | `timeout` | `120` | Per-request timeout for provider calls, in seconds. |
@@ -50,6 +51,14 @@ passing_score = 80
 difficulty = "hard"
 remember_passes_hours = 4
 ```
+
+Defend every push on the whiteboard instead of in the terminal:
+
+```toml
+hook_mode = "whiteboard"
+```
+
+Or for yourself only: `export GRIP_HOOK_MODE=whiteboard`.
 
 A local-only setup with Ollama:
 

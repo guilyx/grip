@@ -528,3 +528,63 @@ def test_bad_submissions_are_rejected_before_grading(
         assert isinstance(result.exception, ValueError)
     result = _run(monkeypatch, {"ticks": [[True]]}, "--interview")
     assert isinstance(result.exception, ValueError)
+
+
+# -- the hook, with hook_mode = "whiteboard" ---------------------------------------------
+
+
+@pytest.fixture
+def board_hook(in_repo: Path, monkeypatch: pytest.MonkeyPatch, run_git: Callable[..., str]) -> Path:
+    for name in ("GRIP_SKIP", "CI", "GRIP_HOOK_MODE"):
+        monkeypatch.delenv(name, raising=False)
+    config = in_repo / ".grip.toml"
+    config.write_text(config.read_text("utf-8") + 'hook_mode = "whiteboard"\n', "utf-8")
+    monkeypatch.setattr("grip_hook.cli.WhiteboardServer", _AutoServer)
+    monkeypatch.setattr("grip_hook.cli.webbrowser.open", lambda _url: True)
+    run_git("add", "api/handlers.py")
+    return in_repo
+
+
+def test_the_hook_defends_on_the_whiteboard(
+    board_hook: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("grip_hook.cli._browser_available", lambda: True)
+    _AutoServer.payload = {"answers": ["", "", "", "", ""]}
+    result = CliRunner().invoke(cli, ["hook", "pre-commit"])
+    assert result.exit_code == 1
+    assert "below the pass mark" in result.output
+    assert '"mode": "defend"' in _AutoServer.page
+    _AutoServer.payload = {"answers": GOOD}
+    result = CliRunner().invoke(cli, ["hook", "pre-commit"])
+    assert result.exit_code == 0, result.output
+    assert "Defended" in result.output
+    assert CliRunner().invoke(cli, ["check"]).exit_code == 0
+
+
+def test_the_hook_falls_back_to_the_terminal_without_a_browser(
+    board_hook: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("grip_hook.cli._browser_available", lambda: False)
+    _AutoServer.page = ""
+    result = CliRunner().invoke(cli, ["hook", "pre-commit"])
+    assert "no browser can be opened" in result.output
+    assert _AutoServer.page == ""
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({"BROWSER": "firefox", "SSH_TTY": "/dev/pts/0"}, True),
+        ({"SSH_CONNECTION": "1.2.3.4 22 5.6.7.8 22", "DISPLAY": ":0"}, False),
+    ],
+)
+def test_browser_available(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], expected: bool
+) -> None:
+    from grip_hook.cli import _browser_available  # noqa: PLC0415
+
+    for name in ("BROWSER", "SSH_CONNECTION", "SSH_TTY", "DISPLAY", "WAYLAND_DISPLAY"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    assert _browser_available() is expected

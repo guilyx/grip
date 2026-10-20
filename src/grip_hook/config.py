@@ -70,6 +70,9 @@ def auto_provider() -> str:
     return "anthropic"
 
 
+HOOK_MODES = ("quiz", "whiteboard")
+
+
 @dataclass(frozen=True, slots=True)
 class Config:
     """Resolved grip configuration."""
@@ -111,6 +114,11 @@ class Config:
     is quizzed again, so a retry after a failed quiz costs one grading call. ``0`` asks
     the model every time; ``--fresh`` does so once."""
 
+    hook_mode: str = "quiz"
+    """What the git hook asks for: ``quiz`` (questions in the terminal) or ``whiteboard``
+    (defend a board of the change in the browser, as ``grip whiteboard --defend`` does).
+    The whiteboard falls back to the terminal quiz when no browser can be opened."""
+
     require_tty: bool = False
     """Fail instead of skipping when no interactive terminal is available."""
 
@@ -134,6 +142,9 @@ class Config:
             raise ConfigError("timeout must be positive")
         if not self.provider:
             raise ConfigError("provider must not be empty")
+        if self.hook_mode not in HOOK_MODES:
+            allowed = ", ".join(HOOK_MODES)
+            raise ConfigError(f"hook_mode must be one of {allowed}, got {self.hook_mode!r}")
         return self
 
     @property
@@ -170,6 +181,8 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             return float(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"{name} must be a number, got {value!r}") from exc
+    if name == "hook_mode":
+        return str(value).strip().lower()
     if name in {"require_tty", "fail_open"}:
         if isinstance(value, bool):
             return value
@@ -246,6 +259,7 @@ difficulty = "{difficulty}"
 provider = "{provider}"
 
 # model = ""                   # empty: the provider's default
+# hook_mode = "quiz"           # quiz | whiteboard (defend a board in the browser)
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
 # fail_open = false            # let the commit through when the provider is down
@@ -289,6 +303,7 @@ __all__ = [
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
+    "HOOK_MODES",
     "TEMPLATE",
     "Config",
     "auto_provider",

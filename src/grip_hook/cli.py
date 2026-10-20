@@ -203,6 +203,11 @@ def _run(
         _skip("this exact diff already passed recently, skipping the quiz.")
         return 0
 
+    if cfg.hook_mode == "whiteboard" and stage is not Stage.MANUAL:
+        if _browser_available():
+            return _run_whiteboard(git, diff, cfg, stage, memory=memory, report_path=report_path)
+        _skip("hook_mode is whiteboard, but no browser can be opened here; asking in the terminal.")
+
     try:
         term = open_terminal()
     except NoTerminalError as exc:
@@ -215,27 +220,77 @@ def _run(
         provider = _provider(git, cfg)
         outcome = run_quiz(diff=diff, cfg=cfg, provider=provider, term=term, stage=stage)
     except ProviderError as exc:
-        if cfg.fail_open:
-            _skip(f"provider error, letting this through because fail_open is set: {exc}")
-            return 0
-        raise ProviderError(
-            f"{exc}\nNothing was sent upstream. To bypass grip once, set {SKIP_ENV}=1 "
-            "(or use git's --no-verify)."
-        ) from exc
+        return _provider_failed(cfg, exc)
     finally:
         term.close()
+    return _decide(git, memory, outcome.report, report_path, "Re-read your change and try again.")
 
-    saved = _record(git, memory, outcome.report)
+
+def _provider_failed(cfg: Config, exc: ProviderError) -> int:
+    """Let the push through when ``fail_open`` says so; otherwise block with the way out."""
+    if cfg.fail_open:
+        _skip(f"provider error, letting this through because fail_open is set: {exc}")
+        return 0
+    raise ProviderError(
+        f"{exc}\nNothing was sent upstream. To bypass grip once, set {SKIP_ENV}=1 "
+        "(or use git's --no-verify)."
+    ) from exc
+
+
+def _decide(
+    git: Git, memory: PassMemory, report: Report, report_path: Path | None, retry_hint: str
+) -> int:
+    """Record a graded quiz; exit 0 on a pass, raise :class:`QuizFailed` below the mark."""
+    saved = _record(git, memory, report)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(outcome.report.model_dump_json(indent=2), "utf-8")
-    if outcome.passed:
-        memory.record_pass(diff.digest)
+        report_path.write_text(report.model_dump_json(indent=2), "utf-8")
+    if report.passed:
+        memory.record_pass(report.diff_digest)
         return 0
     raise QuizFailed(
-        f"Grip Score {outcome.report.score}/{MAX_SCORE} is below the pass mark of "
-        f"{cfg.passing_score}. Re-read your change and try again. Report: {_pretty_path(saved)}"
+        f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
+        f"{report.passing_score}. {retry_hint} Report: {_pretty_path(saved)}"
     )
+
+
+def _browser_available() -> bool:
+    """Whether ``webbrowser`` can open a page someone will see (not over SSH, not headless)."""
+    if os.environ.get("BROWSER"):
+        return True
+    if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
+        return False
+    if sys.platform.startswith("linux") and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        return False
+    try:
+        webbrowser.get()
+    except webbrowser.Error:
+        return False
+    return True
+
+
+def _run_whiteboard(
+    git: Git,
+    diff: Diff,
+    cfg: Config,
+    stage: Stage,
+    *,
+    memory: PassMemory,
+    report_path: Path | None,
+) -> int:
+    """The hook, defended on the whiteboard instead of in the terminal."""
+    try:
+        provider = _provider(git, cfg)
+        with _err.status("grip is drawing the whiteboard..."):
+            board = generate_board(provider, diff, cfg.difficulty)
+        report = _defend_board(board, diff, cfg, provider, stage)
+    except ProviderError as exc:
+        return _provider_failed(cfg, exc)
+    code = _decide(git, memory, report, report_path, "The page shows what each answer missed.")
+    _err.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
+    return code
 
 
 def _record(git: Git, memory: PassMemory, report: Report) -> Path:
@@ -443,8 +498,71 @@ def whiteboard_cmd(
         _err.print(f"[green]grip:[/green] wrote the board to {_pretty_path(export_path)}")
         return
 
+    if interview:
+
+        def tick(payload: dict[str, Any]) -> dict[str, Any]:
+            return _interview_result(board, payload, cfg.passing_score)
+
+        result = _serve_board(page, tick, port=port, open_browser=not no_open)
+        _out.print(f"Interview score: {result['score']}/{MAX_SCORE} (not recorded)")
+        return
+    report = _defend_board(
+        board, diff, cfg, provider, Stage.MANUAL, port=port, open_browser=not no_open, page=page
+    )
+    _decide(git, memory, report, report_path, "The page shows what each answer missed.")
+    _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
+
+
+def _serve_board(
+    page: str,
+    submit: Callable[[dict[str, Any]], dict[str, Any]],
+    *,
+    port: int = 0,
+    open_browser: bool = True,
+) -> dict[str, Any]:
+    """Serve ``page`` until it is handed in; return what ``submit`` answered."""
+    server = WhiteboardServer(page, submit, port=port)
+    click.echo(server.url)
+    _err.print(
+        "[bold]grip:[/bold] the whiteboard is open at the address above. "
+        "Answer there; this waits until you hand in (Ctrl-C to stop)."
+    )
+    if open_browser:
+        webbrowser.open(server.url)
+    try:
+        result = server.serve()
+    except KeyboardInterrupt:
+        raise GripError("stopped before handing in; nothing was recorded.") from None
+    if result is None:
+        minutes = IDLE_SECONDS // 60
+        raise GripError(f"no answers after {minutes} idle minutes; nothing was recorded.")
+    return result
+
+
+def _defend_board(
+    board: Board,
+    diff: Diff,
+    cfg: Config,
+    provider: Provider,
+    stage: Stage,
+    *,
+    port: int = 0,
+    open_browser: bool = True,
+    page: str | None = None,
+) -> Report:
+    """Serve ``board`` for a defense and return the graded report."""
+    if page is None:
+        page = render_page(
+            board_data(
+                board,
+                mode="defend",
+                passing_score=cfg.passing_score,
+                description=diff.description,
+                files=list(diff.files),
+            )
+        )
     pending = PendingQuiz(
-        stage=Stage.MANUAL,
+        stage=stage,
         provider=provider.name,
         model=provider.model,
         description=diff.description,
@@ -457,8 +575,6 @@ def whiteboard_cmd(
     graded: list[Report] = []
 
     def submit(payload: dict[str, Any]) -> dict[str, Any]:
-        if interview:
-            return _interview_result(board, payload, cfg.passing_score)
         report = grade(pending, _answers_from(payload), cfg, provider)
         graded.append(report)
         return {
@@ -470,38 +586,8 @@ def whiteboard_cmd(
             "recorded": True,
         }
 
-    server = WhiteboardServer(page, submit, port=port)
-    click.echo(server.url)
-    _err.print(
-        "[bold]grip:[/bold] the whiteboard is open at the address above. "
-        "Answer there; this waits until you hand in (Ctrl-C to stop)."
-    )
-    if not no_open:
-        webbrowser.open(server.url)
-    try:
-        result = server.serve()
-    except KeyboardInterrupt:
-        raise GripError("stopped before handing in; nothing was recorded.") from None
-    if result is None:
-        minutes = IDLE_SECONDS // 60
-        raise GripError(f"no answers after {minutes} idle minutes; nothing was recorded.")
-    if interview:
-        _out.print(f"Interview score: {result['score']}/{MAX_SCORE} (not recorded)")
-        return
-    report = graded[-1]
-    saved = _record(git, memory, report)
-    if report_path is not None:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(report.model_dump_json(indent=2), "utf-8")
-    if report.passed:
-        memory.record_pass(report.diff_digest)
-        _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
-        return
-    raise QuizFailed(
-        f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
-        f"{report.passing_score}. The page shows what each answer missed. "
-        f"Report: {_pretty_path(saved)}"
-    )
+    _serve_board(page, submit, port=port, open_browser=open_browser)
+    return graded[-1]
 
 
 def _answers_from(payload: dict[str, Any]) -> list[str]:

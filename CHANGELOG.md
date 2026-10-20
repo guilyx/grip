@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows
   provider and the model, live in `.git/grip/cache/` and expire after `cache_hours` (24 by
   default, 0 turns it off). `--fresh` asks for new questions once. `grip submit` never
   reuses questions.
+- The hook can use the whiteboard. With `hook_mode = "whiteboard"` (or
+  `GRIP_HOOK_MODE=whiteboard`), the pre-push and pre-commit hooks open the board in the
+  browser and the change is defended there instead of in the terminal. Where no browser
+  can be opened, over SSH or without a display, they fall back to the terminal quiz.
 
 ## [0.2.2] - 2026-10-19
 
