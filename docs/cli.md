@@ -13,7 +13,12 @@ grip quiz --range main..HEAD    # explicit range
 grip quiz --passing-score 90 --difficulty hard
 grip quiz --provider fake       # offline dry run
 grip quiz --report out.json     # also write the report here
+grip quiz --fresh               # new questions, even for a diff quizzed recently
 ```
+
+Trying again on the same diff reuses the questions from the last attempt (see
+[`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for
+new ones. `grip whiteboard` reuses its board the same way.
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
 

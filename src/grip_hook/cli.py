@@ -32,6 +32,7 @@ from grip_hook.agent import (
     questions_payload,
     report_payload,
 )
+from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.config import (
     AGENT_PROVIDERS,
     AUTO_PROVIDER,
@@ -66,6 +67,7 @@ from grip_hook.platform import (
     write_state,
 )
 from grip_hook.providers import REGISTRY, get_provider
+from grip_hook.providers.base import Provider
 from grip_hook.quiz import run_quiz
 from grip_hook.study import (
     DEFAULT_SINCE_DAYS,
@@ -131,6 +133,14 @@ def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         ),
         click.option("--model", default=None, help="Model identifier for the provider."),
         click.option(
+            "--fresh",
+            "cache_hours",
+            flag_value=0.0,
+            default=None,
+            type=float,
+            help="Ask the model for new questions even if this diff was quizzed recently.",
+        ),
+        click.option(
             "--difficulty",
             type=click.Choice([d.value for d in Difficulty], case_sensitive=False),
             default=None,
@@ -156,6 +166,24 @@ def _config(git: Git | None, **overrides: Any) -> Config:
 
 def _skip(reason: str) -> None:
     _err.print(f"[yellow]grip:[/yellow] {reason}")
+
+
+def _provider(git: Git, cfg: Config) -> Provider:
+    """The configured provider, answering from the question cache unless it is off."""
+    provider = get_provider(cfg)
+    if cfg.cache_hours <= 0:
+        return provider
+
+    def reused(kind: str, written: datetime) -> None:
+        minutes = max(1, round((datetime.now(UTC) - written).total_seconds() / 60))
+        ago = f"{minutes} min" if minutes < 120 else f"{round(minutes / 60)} h"
+        what = "board" if kind == "board" else "questions"
+        _err.print(
+            f"[dim]grip: same diff as {ago} ago, so the same {what}; only grading calls the "
+            "model. --fresh asks for new ones.[/dim]"
+        )
+
+    return CachedProvider(provider, GenerationCache(git.git_dir(), cfg.cache_hours), reused)
 
 
 def _run(
@@ -184,7 +212,7 @@ def _run(
         return 0
 
     try:
-        provider = get_provider(cfg)
+        provider = _provider(git, cfg)
         outcome = run_quiz(diff=diff, cfg=cfg, provider=provider, term=term, stage=stage)
     except ProviderError as exc:
         if cfg.fail_open:
@@ -306,7 +334,7 @@ def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overri
     if memory.has_passed(diff.digest):
         _emit({"status": "already-passed", "message": "this exact diff passed recently"})
         return
-    pending = ask(diff, cfg, get_provider(cfg), Stage.MANUAL)
+    pending = ask(diff, cfg, _provider(git, cfg), Stage.MANUAL)
     PendingStore(git.git_dir()).save(pending)
     _emit(questions_payload(pending, cfg))
 
@@ -396,7 +424,7 @@ def whiteboard_cmd(
     if defending and memory.has_passed(diff.digest):
         _skip("this exact diff already passed recently; nothing to defend.")
         return
-    provider = get_provider(cfg)
+    provider = _provider(git, cfg)
     with _err.status("grip is drawing the whiteboard..."):
         board = generate_board(provider, diff, cfg.difficulty)
     board_mode: Mode = "export" if export_path else "interview" if interview else "defend"

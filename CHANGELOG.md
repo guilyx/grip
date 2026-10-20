@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A retry reuses the questions. Quizzing the same diff again (after a failed quiz, from the
+  hook, `grip quiz` or `grip ask`) reuses the questions written for it, so only the
+  grading calls the model; `grip whiteboard` reuses its board the same way, which skips
+  the slowest call. Entries are keyed by the diff, the task context, the difficulty, the
+  provider and the model, live in `.git/grip/cache/` and expire after `cache_hours` (24 by
+  default, 0 turns it off). `--fresh` asks for new questions once. `grip submit` never
+  reuses questions.
+
 ## [0.2.2] - 2026-10-19
 
 ### Changed

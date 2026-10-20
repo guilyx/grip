@@ -106,6 +106,11 @@ class Config:
     remember_passes_hours: float = 24.0
     """How long a passed diff stays valid without re-quizzing. ``0`` disables."""
 
+    cache_hours: float = 24.0
+    """How long the questions and boards written for a diff are reused when the same diff
+    is quizzed again, so a retry after a failed quiz costs one grading call. ``0`` asks
+    the model every time; ``--fresh`` does so once."""
+
     require_tty: bool = False
     """Fail instead of skipping when no interactive terminal is available."""
 
@@ -123,6 +128,8 @@ class Config:
             raise ConfigError("max_diff_bytes must be positive")
         if self.remember_passes_hours < 0:
             raise ConfigError("remember_passes_hours must be zero or positive")
+        if self.cache_hours < 0:
+            raise ConfigError("cache_hours must be zero or positive")
         if self.timeout <= 0:
             raise ConfigError("timeout must be positive")
         if not self.provider:
@@ -158,7 +165,7 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             return int(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"{name} must be an integer, got {value!r}") from exc
-    if name in {"remember_passes_hours", "timeout"}:
+    if name in {"remember_passes_hours", "cache_hours", "timeout"}:
         try:
             return float(value)
         except (TypeError, ValueError) as exc:
@@ -240,6 +247,7 @@ provider = "{provider}"
 
 # model = ""                   # empty: the provider's default
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
+# cache_hours = 24             # a retry reuses the questions written for the same diff
 # fail_open = false            # let the commit through when the provider is down
 """
 

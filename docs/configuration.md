@@ -23,6 +23,7 @@ grip reads configuration from four places. Higher in the list wins.
 | `exclude` | lockfiles and generated files | Globs removed from the diff. Patterns without `/` match at any depth. |
 | `max_diff_bytes` | `200000` | Larger patches are truncated before being sent. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
+| `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
 | `require_tty` | `false` | Fail (exit 2) instead of skipping when no interactive terminal is available. |
 | `fail_open` | `false` | Let the commit or push through when the provider errors out. |
 | `timeout` | `120` | Per-request timeout for provider calls, in seconds. |
