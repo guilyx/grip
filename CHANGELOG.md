@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README and the PyPI page lead with what grip does ("a git hook that won't let you
+  push code you can't explain"), show the whiteboard first, and start with a 30-second
+  offline try-out: a throwaway repository and `--provider fake`, no hook, no API key.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added

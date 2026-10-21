@@ -1,6 +1,6 @@
 # grip
 
-**Pass the whiteboard defense before you push.**
+**A git hook that won't let you push code you can't explain.**
 
 [![CI](https://github.com/guilyx/grip/actions/workflows/ci.yml/badge.svg)](https://github.com/guilyx/grip/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/grip-hook)](https://pypi.org/project/grip-hook/)
@@ -8,15 +8,33 @@
 [![Docs](https://img.shields.io/badge/docs-guilyx.github.io%2Fgrip-ff8644)](https://guilyx.github.io/grip/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/guilyx/grip/blob/main/LICENSE)
 
-grip is a git hook that asks you five questions about your own diff before it leaves your
-machine: what it does, why it is built this way, where it fails, what could go wrong, how
-you know it works. A model writes the questions and a hidden rubric from the diff, then
-grades your answers. Score below your team's pass mark and the push is blocked.
+![grip whiteboard: the change drawn as parts and arrows, with a question about a malicious client pinned to it](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/whiteboard.png)
 
-It checks the developer, not the code: you can ship code a model wrote, as long as you can
-explain and defend it.
+Before your code leaves your machine, grip reads the diff and asks you about it: why it is
+built this way, where it fails, what a malicious caller could do, how you know it works.
+In the terminal, or on a whiteboard of your change in the browser. A model grades your
+answers out of 100. Below your team's pass mark, the push waits.
 
-![grip blocking a commit with lazy answers, then letting it through after real ones](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/demo.gif)
+It checks the developer, not the code. Let AI write it; just be able to defend it.
+
+> "If I ask 'why did you do X instead of Y?', 'what happens if this actor behaves
+> maliciously?' [...] you should be able to answer confidently."
+> Mitchell Hashimoto, on [the whiteboard defense](https://guilyx.github.io/grip/whiteboard-defense/)
+> (not affiliated with grip)
+
+## Try it in 30 seconds
+
+No hook, no account, no API key: the `fake` provider asks scripted questions offline.
+
+```bash
+pipx install grip-hook                 # or: uv tool install grip-hook
+mkdir try-grip && cd try-grip && git init -q
+echo 'def add(a, b): return a + b' > math.py && git add math.py
+grip quiz --provider fake              # five questions in your terminal
+grip whiteboard --provider fake        # the same, drawn in your browser
+```
+
+Nothing is blocked until you install the hook with `grip init`.
 
 ## Features
 
@@ -43,6 +61,8 @@ Python 3.11 or newer, on Linux, macOS or Windows. This installs the `grip` comma
 `git grip` alias.
 
 ## Quick start
+
+![grip blocking a push with lazy answers, then letting it through after real ones](https://raw.githubusercontent.com/guilyx/grip/main/docs/assets/demo.gif)
 
 ```bash
 cd your-repo

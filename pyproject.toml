@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "grip-hook"
 dynamic = ["version"]
-description = "Pass the whiteboard defense before you push: a git hook that quizzes you on your own diff."
+description = "A git hook that won't let you push code you can't explain: it quizzes you on your own diff, or makes you defend it at a whiteboard."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Erwin L.", email = "erwin.lejeune15@gmail.com" }]
-keywords = ["git", "hook", "pre-commit", "pre-push", "quiz", "llm", "code-review", "understanding"]
+keywords = ["git", "git-hooks", "pre-commit", "pre-push", "quiz", "llm", "ai", "code-review", "claude-code", "codex", "cursor", "whiteboard", "developer-tools"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
