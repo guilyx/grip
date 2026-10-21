@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-21
+
 ### Changed
 
 - The README and the PyPI page lead with what grip does ("a git hook that won't let you
@@ -253,7 +255,8 @@ The first public release.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 
-[Unreleased]: https://github.com/guilyx/grip/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/guilyx/grip/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/guilyx/grip/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/guilyx/grip/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/guilyx/grip/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/guilyx/grip/compare/v0.2.1...v0.2.2
