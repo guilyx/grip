@@ -23,13 +23,15 @@ explain and defend it.
 - **Five questions from your diff**, graded against a hidden rubric into a Grip Score out
   of 100. Never line numbers or trivia.
 - **`grip whiteboard`**: your change drawn as parts and arrows in the browser, with the
-  questions pinned to it, including what a malicious actor could do.
+  questions pinned to it, including what a malicious actor could do. Set
+  `hook_mode = "whiteboard"` and every push is defended there.
 - **Works with what you have**: reuse Claude Code, Codex or Gemini CLI as the model (no
   API key), or use Anthropic, any OpenAI-compatible API, or Ollama locally.
 - **Inside coding agents**: `/grip` in Claude Code, Codex, Gemini CLI, Cursor and others,
   and a gate that keeps the agent from pushing until you pass.
-- **Out of the way when it should be**: a passed diff is remembered, `grip skip` lets one
-  push through, CI and non-interactive runs are skipped.
+- **Out of the way when it should be**: a passed diff is remembered, a retry reuses its
+  questions so only grading costs a call, `grip skip` lets one push through, CI and
+  non-interactive runs are skipped.
 
 ## Installation
 
@@ -55,6 +57,7 @@ Other commands you will use:
 
 ```bash
 grip quiz                  # quiz your staged changes now, no hook needed
+grip quiz --branch         # quiz the whole branch since main: your pull request
 grip whiteboard            # defend the change in the browser
 grip quiz --provider fake  # try it offline with a scripted grader
 grip skip                  # let the next push through

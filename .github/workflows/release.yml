@@ -181,3 +181,17 @@ jobs:
           tag_name: ${{ env.TAG }}
           body_path: release-notes.md
           files: dist/*
+
+  docs:
+    name: Publish the docs
+    needs: [build, github]
+    # The Pages environment deploys from main; a release from a pushed tag waits for the
+    # next docs change instead.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ needs.build.outputs.tag }}
