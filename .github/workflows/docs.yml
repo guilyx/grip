@@ -13,6 +13,14 @@ on:
       - "CHANGELOG.md"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+  # Called by release.yml once a release is out: its version bump is pushed with the
+  # workflow token, which starts no workflow, so the site would keep the old version.
+  workflow_call:
+    inputs:
+      ref:
+        description: Revision to build the site from
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -28,6 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
