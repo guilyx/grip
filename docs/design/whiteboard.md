@@ -130,8 +130,12 @@ without a browser.
   script, no network requests, system fonts with brand fallbacks.
 - Routes: `GET /TOKEN/` the page, `GET /TOKEN/board.json` the board **without rubrics**,
   `POST /TOKEN/answers` grade once and return the sheet.
-- The server exits after grading, on Ctrl-C, or after 20 idle minutes. Nothing is recorded
-  until grading succeeds.
+- The server exits after grading, on Ctrl-C, or after 20 minutes without a request that
+  carries the token. The open page sends `GET /TOKEN/heartbeat` every minute, so only a
+  closed tab times out. Nothing is recorded until grading succeeds.
+- The page keeps a draft of the answers in the tab's `sessionStorage`, under a digest of
+  the board, and drops it once graded. If grip has stopped, it shows the answers as text
+  with a Copy answers button instead of losing them.
 
 ## Defending this design
 

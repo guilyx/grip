@@ -88,8 +88,8 @@ grip whiteboard --no-open --port 8765   # print the address instead of opening a
 ```
 
 It takes the same `--provider`, `--model`, `--difficulty`, `--passing-score` and `--report`
-options as `grip quiz`. The page is served on `127.0.0.1` behind a random token and waits up
-to twenty idle minutes. Exit codes: `0` defended, skipped or exported, `1` below the pass
+options as `grip quiz`. The page is served on `127.0.0.1` behind a random token and waits
+while it is open in a browser, and up to twenty minutes after it is closed. Exit codes: `0` defended, skipped or exported, `1` below the pass
 mark, `2` error (including Ctrl-C or the idle timeout, which record nothing).
 
 ## `grip init`
