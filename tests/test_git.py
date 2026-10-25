@@ -4,7 +4,15 @@ from pathlib import Path
 import pytest
 
 from grip_hook.errors import GitError
-from grip_hook.git import ZERO_SHA, Diff, Git, PushedRef
+from grip_hook.git import (
+    EMPTY_TREES,
+    NO_COMMITS,
+    NOT_A_REPOSITORY,
+    ZERO_SHA,
+    Diff,
+    Git,
+    PushedRef,
+)
 
 
 def test_root_and_git_dir(git: Git, repo: Path) -> None:
@@ -19,13 +27,38 @@ def test_hooks_path_config(git: Git, repo: Path, run_git: Callable[..., str]) ->
 
 
 def test_run_failure_raises(git: Git) -> None:
-    with pytest.raises(GitError, match="rev-parse"):
+    # A failure without a plainer wording keeps git's message, not the command line.
+    with pytest.raises(GitError, match=r"^git rev-parse failed: fatal:"):
         git.run("rev-parse", "--verify", "does-not-exist")
 
 
 def test_not_a_repo(tmp_path: Path) -> None:
-    with pytest.raises(GitError):
+    with pytest.raises(GitError) as exc:
         Git(tmp_path).root()
+    assert str(exc.value) == NOT_A_REPOSITORY
+    # The raw command and git's own words stay available for GRIP_DEBUG.
+    assert "$ git rev-parse --show-toplevel" in exc.value.detail
+    assert "not a git repository" in exc.value.detail
+
+
+def test_no_commits_yet(empty_repo: Path) -> None:
+    git = Git(empty_repo)
+    assert not git.has_commits()
+    with pytest.raises(GitError) as exc:
+        git.run("rev-parse", "HEAD")
+    assert str(exc.value) == NO_COMMITS
+    assert "unknown revision" in exc.value.detail
+
+
+def test_unknown_revision_is_one_line(git: Git) -> None:
+    assert git.has_commits()
+    for base, head in (("nope", "HEAD"), ("HEAD", "nope")):
+        with pytest.raises(GitError) as exc:
+            git.range_diff(base, head, exclude=("*.lock", "*.min.js"))
+        assert str(exc.value) == "unknown revision 'nope'"
+        assert ":(exclude,glob)" in exc.value.detail
+    with pytest.raises(GitError, match=r"^unknown revision 'nope'$"):
+        git.run("merge-base", "nope", "HEAD")
 
 
 def test_staged_diff_empty(git: Git) -> None:
@@ -63,6 +96,10 @@ def test_truncation(git: Git, stage_change: Callable[[str, str], None]) -> None:
     assert diff.truncated
     assert "truncated by grip" in diff.patch
     assert len(diff.patch.encode()) < 700
+    # The whole size is kept so the quiz can say how much the model did not see.
+    assert diff.size == len(git.staged_diff().patch.encode())
+    assert diff.size > 25_000
+    assert not git.staged_diff().truncated
 
 
 def test_range_diff(
@@ -118,11 +155,21 @@ def test_unpushed_base_and_push_diff(
     refs = [PushedRef("refs/heads/main", head, "refs/heads/main", pushed)]
     diff = git.push_diff(refs, "origin")
     assert set(diff.files) == {"one.txt", "two.txt"}
+    assert diff.description == "2 commits on main → origin"
+    # The description is for people; the digest that remembers a pass is the patch alone.
+    assert diff.digest == git.range_diff(base, head).digest
 
     # New remote branch: fall back to "everything not on a remote".
     refs = [PushedRef("refs/heads/feature", head, "refs/heads/feature", ZERO_SHA)]
     diff = git.push_diff(refs, "origin")
     assert set(diff.files) == {"one.txt", "two.txt"}
+    assert diff.description == "2 commits on feature → origin"
+
+    # `git push origin HEAD:refs/heads/x` names the remote branch; a tag says it is one.
+    refs = [PushedRef("HEAD", head, "refs/heads/x", ZERO_SHA)]
+    assert git.push_diff(refs, "origin").description == "2 commits on x → origin"
+    refs = [PushedRef("refs/tags/v1", head, "refs/tags/v1", ZERO_SHA)]
+    assert git.push_diff(refs).description == "2 commits on tag v1"
 
     # Deletions are ignored.
     assert git.push_diff([PushedRef("(delete)", ZERO_SHA, "refs/heads/x", pushed)]).is_empty
@@ -133,7 +180,7 @@ def test_unpushed_base_and_push_diff(
         PushedRef("refs/heads/feature", head, "refs/heads/feature", ZERO_SHA),
     ]
     merged = git.push_diff(refs, "origin")
-    assert merged.description.startswith("push (")
+    assert merged.description == "2 commits on main → origin; 2 commits on feature → origin"
     assert set(merged.files) == {"one.txt", "two.txt"}
 
 
@@ -167,6 +214,39 @@ def test_range_description_keeps_branch_names(
     )
 
 
+def _fork(run_git: Callable[..., str], stage_change: Callable[[str, str], None]) -> None:
+    """A ``feat`` branch with ``f.txt`` and, after it forked, ``m.txt`` on main."""
+    run_git("checkout", "-q", "-b", "feat")
+    stage_change("f.txt", "f\n")
+    run_git("commit", "-q", "-m", "f")
+    run_git("checkout", "-q", "main")
+    stage_change("m.txt", "m\n")
+    run_git("commit", "-q", "-m", "m")
+
+
+def test_merge_base_diff_leaves_out_what_main_did_since(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    _fork(run_git, stage_change)
+    diff = git.merge_base_diff("main", "feat")
+    assert diff.files == ("f.txt",)
+    assert diff.description == "main...feat"
+    # Two dots compare the tips, so main's newer file shows up as deleted.
+    assert set(git.range_diff("main", "feat").files) == {"f.txt", "m.txt"}
+
+
+def test_merge_base_diff_errors(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    with pytest.raises(GitError, match="unknown revision 'nope'"):
+        git.merge_base_diff("nope", "HEAD")
+    run_git("checkout", "-q", "--orphan", "lonely")
+    stage_change("l.txt", "l\n")
+    run_git("commit", "-q", "-m", "l")
+    with pytest.raises(GitError, match="share no history"):
+        git.merge_base_diff("main", "lonely")
+
+
 def test_live_check_falls_back_when_the_remote_is_unreachable(
     git: Git, run_git: Callable[..., str]
 ) -> None:
@@ -182,13 +262,36 @@ def test_unpushed_base_without_remote_uses_empty_tree(
     head = run_git("rev-parse", "HEAD").strip()
     base = git.unpushed_base(head)
     assert base == git.empty_tree()
+    assert base in EMPTY_TREES
     diff = git.range_diff(base, head)
     assert set(diff.files) == {"README.md", "a.txt"}
+    # Never the empty tree's hash in what people read.
+    assert diff.description == f"everything since the first commit, up to {head[:12]}"
     new_branch = [PushedRef("refs/heads/main", head, "refs/heads/main", ZERO_SHA)]
-    assert set(git.push_diff(new_branch).files) == {"README.md", "a.txt"}
+    pushed = git.push_diff(new_branch, "origin")
+    assert set(pushed.files) == {"README.md", "a.txt"}
+    assert pushed.description == "2 commits on main → origin, everything since the first commit"
+    assert base[:12] not in pushed.description
+    assert git.describe_commits(base, head, branch="main", unpushed=True) == (
+        "2 unpushed commits on main, everything since the first commit"
+    )
+
+
+def test_describe_commits_counts_one_commit(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    base = run_git("rev-parse", "HEAD").strip()
+    stage_change("a.txt", "a\n")
+    run_git("commit", "-q", "-m", "a")
+    assert git.describe_commits(base, "HEAD", remote="origin") == "1 commit → origin"
+    assert git.current_branch() == "main"
+    run_git("checkout", "-q", "--detach")
+    assert git.current_branch() is None
 
 
 def test_diff_properties() -> None:
     empty = Diff("x", "", "   \n", ())
     assert empty.is_empty
     assert Diff("x", "", "+a", ("a",)).digest != Diff("x", "", "+b", ("a",)).digest
+    # Only the patch counts: a friendlier description must not forget a pass.
+    assert Diff("a..b", "s", "+a", ("a",)).digest == Diff("2 commits", "", "+a", (), size=9).digest

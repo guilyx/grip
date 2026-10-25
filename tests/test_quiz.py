@@ -16,7 +16,7 @@ from grip_hook.models import (
     Stage,
 )
 from grip_hook.providers.fake import FakeProvider
-from grip_hook.quiz import run_quiz
+from grip_hook.quiz import render_intro, run_quiz, truncation_note
 from tests.conftest import FakeTerminalFactory
 
 DIFF = Diff("staged changes", " a.py | 1 +", "+print('hi')\n", ("a.py",))
@@ -85,6 +85,37 @@ def test_wrong_question_count_is_a_provider_error(
         run_quiz(
             diff=DIFF, cfg=Config(), provider=BadCountProvider(5, 4), term=term, stage=Stage.MANUAL
         )
+
+
+def test_intro_names_the_scope_and_says_when_the_diff_was_cut(
+    make_terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    factory = make_terminal([])
+    cfg = Config(max_diff_bytes=200_000)
+    whole = Diff("3 commits on feat/x → origin", "", "+a\n", ("a.py",), size=4)
+    render_intro(factory(), whole, cfg, Stage.PRE_PUSH)
+    assert "5 questions about your 3 commits on feat/x → origin (pre-push)" in factory.text
+    assert "grip saw" not in factory.text
+
+    factory = make_terminal([])
+    cut = Diff("staged changes", "", "+a\n", ("a.py",), truncated=True, size=790_123)
+    render_intro(factory(), cut, cfg, Stage.MANUAL)
+    text = " ".join(factory.text.split())
+    assert "grip saw the first 200 KB of a 790 KB change (max_diff_bytes)." in text
+
+
+def test_truncation_note_sizes() -> None:
+    def cut(size: int) -> Diff:
+        return Diff("x", "", "+a", ("a",), truncated=True, size=size)
+
+    assert truncation_note(Diff("x", "", "+a", ("a",), size=3), 500) is None
+    assert truncation_note(cut(2_400_000), 500) == (
+        "grip saw the first 500 bytes of a 2.4 MB change (max_diff_bytes)."
+    )
+    # A diff rebuilt without its size (an older pending quiz) still says it was cut.
+    assert truncation_note(cut(0), 200_000) == (
+        "grip saw only the first 200 KB of this change (max_diff_bytes)."
+    )
 
 
 def test_grade_sheet_total_is_capped() -> None:

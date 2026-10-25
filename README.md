@@ -70,8 +70,9 @@ grip init        # writes .grip.toml, installs the pre-push hook
 git push         # grip asks five questions first
 ```
 
-`grip init` picks Claude Code, Codex or Gemini CLI as the model when one is installed.
-Otherwise set `ANTHROPIC_API_KEY`, or see [Providers](https://guilyx.github.io/grip/providers/).
+`grip init` writes `provider = "auto"`: each machine uses Claude Code, Codex or Gemini CLI
+when one is installed. Otherwise set `ANTHROPIC_API_KEY`, or see
+[Providers](https://guilyx.github.io/grip/providers/).
 
 Other commands you will use:
 
