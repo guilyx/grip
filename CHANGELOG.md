@@ -28,6 +28,8 @@ All notable changes to this project are documented here. The format follows
   and points to `grip ask` / `grip grade` or `grip whiteboard`, instead of skipping with
   exit 0. Hooks still skip unless `require_tty` is set, and the notice no longer reads
   "grip: grip needs".
+- A pasted answer that ends with an empty line ends there, instead of waiting for one
+  more Enter. Empty lines between pasted paragraphs are still kept.
 
 ## [0.4.1] - 2026-10-21
 
