@@ -1128,9 +1128,17 @@ def status_cmd() -> None:
     table.add_column("stage")
     table.add_column("state")
     table.add_column("path")
+    missing: list[str] = []
     for stage in INSTALLABLE_STAGES:
         s = status(git, stage)
-        if s.managed:
+        if s.grip_missing:
+            state = "[red]grip missing[/red]"
+            missing.append(
+                f"[red]grip:[/red] the {stage.value} hook runs {escape(s.grip_path or '')}, "
+                "which no longer exists. Unless grip is on the PATH your git client uses, the "
+                "hook skips the quiz; run `grip install` again to point it at this grip."
+            )
+        elif s.managed:
             state = "[green]installed[/green]"
         elif s.appended:
             state = "[green]appended[/green]"
@@ -1140,6 +1148,8 @@ def status_cmd() -> None:
             state = "[dim]not installed[/dim]"
         table.add_row(stage.value, state, str(s.path))
     _out.print(table)
+    for line in missing:
+        _out.print(line)
     if _truthy(os.environ.get("PRE_COMMIT")) or (git.root() / ".pre-commit-config.yaml").exists():
         _out.print(
             "[dim]pre-commit config detected: grip may also run via .pre-commit-config.yaml[/dim]"

@@ -138,11 +138,15 @@ grip uninstall                                 # remove from every stage
 ```
 
 Hooks go to `.git/hooks/` or to `core.hooksPath` when it is set. Files grip wrote start
-with a marker line so `uninstall` never touches a hook it does not own.
+with a marker line so `uninstall` never touches a hook it does not own. The hook runs the
+grip that installed it by absolute path, so it works from IDEs and GUI clients whose `PATH`
+lacks grip, and falls back to `PATH` when that grip is gone. After moving or reinstalling
+grip, run `grip install` again to update the path.
 
 ## `grip status`
 
-Shows which stages have grip installed, whether a foreign hook is in the way, the last
+Shows which stages have grip installed (`grip missing` when the grip a hook was
+installed with no longer exists), whether a foreign hook is in the way, the last
 quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
 configuration, and for each of the staged changes, the unpushed commits and the branch
 against the default branch, where it stands:
