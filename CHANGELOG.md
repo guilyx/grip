@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A missing API key for the `anthropic` or `openai` provider is reported before the
+  quiz starts, instead of after the "reading your diff" spinner. The message lists the
+  fixes: set the key variable (`api_key_env`, `ANTHROPIC_API_KEY` by default), use a
+  coding agent installed on the machine, or try `--provider fake`. The `openai` provider
+  no longer asks for a key when `base_url` points at a server of your own.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

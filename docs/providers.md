@@ -74,6 +74,11 @@ Credentials are resolved the way the SDK does: `ANTHROPIC_API_KEY`, then
 `ANTHROPIC_AUTH_TOKEN`, then a profile created by `ant auth login`. Set `api_key_env` to
 read the key from a differently named variable, and `base_url` to go through a gateway.
 
+grip checks for a credential before it shows the quiz or calls the model. With none, it
+stops at once and lists the ways out: set the key variable, switch to a coding agent
+installed on the machine (no key needed), or try `--provider fake` offline. The OpenAI
+provider does the same for `OPENAI_API_KEY`.
+
 `effort` maps to the API's `output_config.effort`. `medium` is a good balance between
 question quality and hook latency; raise it for `difficulty = "hard"`, lower it if the hook
 feels slow. It is omitted automatically for Haiku 4.5, which does not support it.
@@ -102,7 +107,9 @@ base_url = "https://api.openai.com/v1"   # default
 api_key_env = "OPENAI_API_KEY"           # default
 ```
 
-This provider is implemented with the standard library, so it adds no dependency.
+This provider is implemented with the standard library, so it adds no dependency. With a
+`base_url` set and no key in the environment, it sends no `Authorization` header, for
+self-hosted servers that take none.
 
 ## fake (offline)
 

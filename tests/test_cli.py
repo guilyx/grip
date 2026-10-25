@@ -150,6 +150,29 @@ def test_provider_error_blocks_unless_fail_open(
     assert result.exit_code == 0
 
 
+def test_missing_key_fails_before_the_quiz_starts(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    for name in list(os.environ):
+        if name.startswith("ANTHROPIC_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    factory = terminal(GOOD)
+    result = runner.invoke(cli, ["quiz", "--provider", "anthropic"])
+    assert result.exit_code == 2
+    output = " ".join(result.output.split())
+    assert "no credentials" in output and "--provider fake" in output
+    assert "Nothing was sent upstream" in output and "GRIP_SKIP" in output
+    assert factory.text == ""  # no intro, no spinner: the check ran before the quiz
+
+
 def test_quiz_range_and_unpushed(
     runner: CliRunner,
     in_repo: Path,
