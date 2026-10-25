@@ -206,6 +206,86 @@ def test_check_unpushed(
     assert runner.invoke(cli, ["check", "--unpushed"]).exit_code == 1
 
 
+def test_check_without_a_hook_checks_staged_changes(runner: CliRunner, in_repo: Path) -> None:
+    # Nothing staged; the unpushed root commit does not count without a pre-push hook.
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (staged changes)" in result.output
+
+
+def test_check_follows_the_installed_pre_push_hook(runner: CliRunner, in_repo: Path) -> None:
+    assert runner.invoke(cli, ["install"]).exit_code == 0
+    # Nothing staged, but the push would send an unquizzed commit: the hook would block.
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 1
+    assert "unpushed commits have not passed a grip quiz yet (1 file)." in result.output
+    assert runner.invoke(cli, ["ask", "--unpushed"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (unpushed commits)" in result.output
+    # An explicit flag still wins over the hook.
+    assert "grip: ok (staged changes)" in runner.invoke(cli, ["check", "--staged"]).output
+
+
+def test_check_with_both_hooks_checks_both_scopes(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    args = ["install", "--stage", "pre-commit", "--stage", "pre-push"]
+    assert runner.invoke(cli, args).exit_code == 0
+    assert runner.invoke(cli, ["ask", "--unpushed"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (staged changes and unpushed commits)" in result.output
+
+    stage_change("a.py", "x = 1\n")
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 1
+    assert "the staged changes have not passed" in result.output
+    assert "unpushed commits have not" not in result.output
+
+
+def test_check_range_names_the_range(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    stage_change("b.py", "y = 2\n")
+    run_git("commit", "-q", "-m", "ab")
+    result = runner.invoke(cli, ["check", "--range", "main~1..main"])
+    assert result.exit_code == 1
+    assert "the range main~1..main has not passed a grip quiz yet (2 files)." in result.output
+    assert "staged" not in result.output
+    assert runner.invoke(cli, ["ask", "--range", "main~1..main"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check", "--range", "main~1..main"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (main~1..main)" in result.output
+
+
+@pytest.mark.parametrize("command", ["quiz", "ask", "check", "whiteboard"])
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--branch", "--unpushed"],
+        ["--staged", "--unpushed"],
+        ["--range", "main~1..main", "--branch"],
+        ["--staged", "--range", "main~1..main"],
+    ],
+)
+def test_scope_flags_are_mutually_exclusive(
+    runner: CliRunner, in_repo: Path, command: str, flags: list[str]
+) -> None:
+    result = runner.invoke(cli, [command, *flags])
+    assert result.exit_code == 2
+    assert "cannot be used together" in result.output
+    for flag in (f for f in flags if f.startswith("--")):
+        assert flag in result.output
+
+
 @pytest.mark.parametrize(
     ("command", "gate", "expected"),
     [

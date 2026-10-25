@@ -41,6 +41,13 @@ All notable changes to this project are documented here. The format follows
   "grip: grip needs".
 - A pasted answer that ends with an empty line ends there, instead of waiting for one
   more Enter. Empty lines between pasted paragraphs are still kept.
+- `grip check` without a scope flag checks what the installed hooks quiz (the unpushed
+  commits for the default pre-push hook) instead of always the staged changes, which said
+  `ok` while the push would block. It says what it checked
+  (`grip: ok (unpushed commits)`), names a `--range` as typed instead of calling it "the
+  staged changes", and writes "1 file". Two scope flags at once (`--branch --unpushed`, `--range` with
+  `--staged`) are a usage error in `grip quiz`, `ask`, `check` and `whiteboard` instead of
+  the last one silently winning.
 
 ## [0.4.1] - 2026-10-21
 
