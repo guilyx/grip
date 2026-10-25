@@ -333,7 +333,12 @@ def cli() -> None:
 @click.option(
     "--branch", "mode", flag_value="branch", help="Quiz the branch since it left main: its PR."
 )
-@click.option("--range", "rev_range", default=None, help="Quiz an explicit BASE..HEAD range.")
+@click.option(
+    "--range",
+    "rev_range",
+    default=None,
+    help="Quiz an explicit BASE..HEAD range (BASE...HEAD: since the merge base).",
+)
 @quiz_options
 def quiz(
     mode: str,
@@ -363,13 +368,29 @@ def _branch_diff(git: Git, cfg: Config) -> Diff | None:
     )
 
 
+def _parse_range(rev_range: str) -> tuple[str, str, bool]:
+    """Split ``BASE..HEAD`` or ``BASE...HEAD`` into ``(base, head, three_dot)``.
+
+    Two dots diff ``BASE`` against ``HEAD``; three dots diff from their merge base, as git
+    does, which is what a pull request shows. A missing ``HEAD`` means ``HEAD``.
+    """
+    base, sep, rest = rev_range.strip().partition("..")
+    three_dot = rest.startswith(".")
+    head = rest[1:] if three_dot else rest
+    if not sep or not base or head.startswith(".") or ".." in head:
+        raise click.BadParameter(
+            f"expected BASE..HEAD or BASE...HEAD, got {rev_range!r}", param_hint="--range"
+        )
+    return base, head or "HEAD", three_dot
+
+
 def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Diff:
     """The diff for ``--staged`` (default), ``--unpushed``, ``--branch`` or ``--range``."""
     if rev_range:
-        base, sep, head = rev_range.partition("..")
-        if not sep or not base:
-            raise click.BadParameter("expected BASE..HEAD", param_hint="--range")
-        return git.range_diff(base, head or "HEAD", cfg.exclude, cfg.max_diff_bytes)
+        base, head, three_dot = _parse_range(rev_range)
+        if three_dot:
+            return git.merge_base_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
+        return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
     if mode == "unpushed":
         head_sha = git.run("rev-parse", "HEAD").strip()
         base_sha = git.unpushed_base(head_sha)
@@ -398,7 +419,12 @@ def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         click.option(
             "--branch", "mode", flag_value="branch", help="The branch since it left main."
         ),
-        click.option("--range", "rev_range", default=None, help="An explicit BASE..HEAD range."),
+        click.option(
+            "--range",
+            "rev_range",
+            default=None,
+            help="An explicit BASE..HEAD range (BASE...HEAD: since the merge base).",
+        ),
     ]
     for decorator in reversed(decorators):
         fn = decorator(fn)
