@@ -80,6 +80,14 @@ All notable changes to this project are documented here. The format follows
   asks new questions or that `anthropic` is the default provider, the README says the
   offline `fake` grader only checks answer length, and the Mitchell Hashimoto quote links
   to his post.
+- Whiteboard page: handing in with questions unanswered asks first ("2 unanswered will
+  score 0"); answers show a counter against the 4,000-character limit; the open question
+  lights up the box or arrow it is pinned to, and graded arrows take their colour; an
+  answered pin gets a tick instead of turning black; a score below the pass mark comes
+  with the command to run again and a Copy button. Interview mode says "Score interview"
+  and shows the ticks at full contrast after scoring. Exports show the questions without
+  an answer box. On a phone, a tap within 22px of a pin opens it, the question scrolls
+  into view, and the legend no longer scrolls away with the drawing.
 
 ### Fixed
 

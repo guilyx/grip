@@ -7,6 +7,7 @@ import dataclasses
 import functools
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -984,6 +985,7 @@ def whiteboard_cmd(
             passing_score=cfg.passing_score,
             description=diff.description,
             files=list(diff.files),
+            rerun=_whiteboard_command(mode, rev_range),
         ),
         embed_fonts=export_path is not None,  # an export is one file, with nothing to serve fonts
     )
@@ -1015,6 +1017,20 @@ def whiteboard_cmd(
         diff=diff,
     )
     _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
+
+
+def _whiteboard_command(mode: str | None, rev_range: str | None) -> str:
+    """The `grip whiteboard` command that draws a board for the same diff again.
+
+    ``mode`` is ``None`` when no scope flag was given, which means the staged changes.
+    """
+    if rev_range:
+        return f"grip whiteboard --range {shlex.quote(rev_range)}"
+    return "grip whiteboard" if mode in (None, "staged") else f"grip whiteboard --{mode}"
+
+
+_HOOK_RERUN = {Stage.PRE_COMMIT: "git commit", Stage.PRE_PUSH: "git push"}
+"""What to run again when the hook put up the board: the commit or push it guarded."""
 
 
 def _serve_board(
@@ -1063,6 +1079,7 @@ def _defend_board(
                 passing_score=cfg.passing_score,
                 description=diff.description,
                 files=list(diff.files),
+                rerun=_HOOK_RERUN.get(stage, "grip whiteboard"),
             )
         )
     pending = PendingQuiz(
