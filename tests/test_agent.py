@@ -157,10 +157,36 @@ def test_grade_fail(
     assert runner.invoke(cli, ["ask"]).exit_code == 0
     answers = in_repo / "answers.json"
     answers.write_text(json.dumps({"answers": BAD}))
-    result = runner.invoke(cli, ["grade", "--answers", str(answers), "--passing-score", "10"])
+    result = runner.invoke(cli, ["grade", "--answers", str(answers)])
     assert result.exit_code == 1, result.output
     assert _json(result)["status"] == "fail"
     assert not (in_repo / ".git" / "grip" / "passed.json").exists()
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+
+
+def test_grade_has_no_passing_score_override(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    assert runner.invoke(cli, ["ask"]).exit_code == 0
+    result = runner.invoke(cli, ["grade", "--answers", "-", "--passing-score", "0"], input="[]")
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+
+
+def test_grade_with_fake_does_not_count_for_a_real_provider(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    assert runner.invoke(cli, ["ask"]).exit_code == 0
+    (in_repo / ".grip.toml").write_text('provider = "anthropic"\n')
+    result = runner.invoke(
+        cli, ["grade", "--answers", "-", "--provider", "fake"], input=json.dumps(GOOD)
+    )
+    assert result.exit_code == 0, result.output
+    assert '"status": "pass"' in result.output
+    assert "does not count (graded by fake)" in " ".join(result.output.split())
     assert runner.invoke(cli, ["check"]).exit_code == 1
 
 

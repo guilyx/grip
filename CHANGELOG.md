@@ -76,6 +76,12 @@ All notable changes to this project are documented here. The format follows
   `grip grade --help` no longer lists `--fresh` and `--difficulty`, and grading uses the
   difficulty `grip ask` wrote the questions at; a retry that reuses cached questions no
   longer shows a "reading your diff" spinner.
+- A remembered pass can no longer be faked. `.git/grip/passed.json` now stores each pass's
+  score, pass mark, provider and model, and the hooks, `grip check` and the agent push
+  gate only accept it if the score reaches the current pass mark and, unless `fake` is
+  the configured provider, it was not graded by `fake`. `grip grade` no longer takes
+  `--passing-score`, and `grip status` says when a pass does not count and why. Passes
+  recorded by older versions are asked again once.
 
 ## [0.4.1] - 2026-10-21
 

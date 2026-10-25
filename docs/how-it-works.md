@@ -72,7 +72,8 @@ grip exits 0 without asking anything when:
 - a hook finds no interactive terminal and `require_tty` is false (the default);
   `grip quiz` typed by hand fails instead;
 - the diff is empty after exclusions, or every changed file is binary;
-- the exact same diff passed within `remember_passes_hours`.
+- the exact same diff passed within `remember_passes_hours`, at or above the current pass
+  mark (a pass graded by the `fake` provider counts only while `fake` is configured).
 
 Provider failures (no key, network down, model unavailable) **block** by default so a
 broken setup is noticed rather than silently bypassed. Set `fail_open = true` to prefer

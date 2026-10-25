@@ -270,10 +270,15 @@ The quiz in three non-interactive steps, for coding agents. `ask` prints the que
 JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
 remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
 `--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
-answer's JSON string are accepted and kept. `grade` takes `--passing-score`,
-`--provider`, `--model` and `--report`; the questions already exist, so it has no
-`--fresh` or `--difficulty`, and it grades at the difficulty `ask` wrote them at. See
-[Coding agents](agents.md). (`check` is also handy by hand, so `grip --help` lists it.)
+answer's JSON string are accepted and kept. `grade` takes `--provider`, `--model` and
+`--report`; the questions already exist, so it has no `--fresh` or `--difficulty`, and it
+grades at the difficulty `ask` wrote them at. See [Coding agents](agents.md). (`check` is
+also handy by hand, so `grip --help` lists it.)
+
+`grade` always uses the configured pass mark: it takes no `--passing-score`. A pass only
+counts for the hooks and `check` if its score reaches the current pass mark and, unless
+`fake` is the configured provider, it was not graded by `fake`. See
+[Remembering passes](internals.md#remembering-passes-and-getting-out-of-the-way).
 
 `ask` uses the staged changes when no selector is given. `check` without a selector checks
 what the installed hooks quiz: the unpushed commits for the pre-push hook (the default

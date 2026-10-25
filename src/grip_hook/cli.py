@@ -52,7 +52,7 @@ from grip_hook.errors import GitError, GripError, NoTerminalError, ProviderError
 from grip_hook.git import NO_COMMITS, Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect
-from grip_hook.memory import PassMemory, SkipState, local_time
+from grip_hook.memory import PassMemory, PassRecord, SkipState, local_time
 from grip_hook.models import Difficulty, QuestionSet, Report, Stage
 from grip_hook.platform import (
     DEFAULT_URL,
@@ -215,14 +215,8 @@ def _apply_options(
 
 
 def _grading_options() -> list[Callable[..., Any]]:
-    """Options that matter when answers are graded: the pass mark and who grades."""
+    """Who grades: the provider and model. The pass mark is not here: see quiz_options."""
     return [
-        click.option(
-            "--passing-score",
-            type=click.IntRange(0, MAX_SCORE),
-            default=None,
-            help=f"Minimum Grip Score out of {MAX_SCORE} to pass.",
-        ),
         click.option(
             "--provider",
             type=_provider_choice(),
@@ -244,13 +238,24 @@ def _report_option() -> Callable[..., Any]:
 
 
 def grade_options(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """Options for `grip grade`: the questions already exist, so no --fresh or --difficulty."""
+    """Options for `grip grade`: the questions already exist, so no --fresh or --difficulty.
+
+    No ``--passing-score`` either. ``grip grade`` is what a coding agent runs, so its pass
+    mark is always the configured one: a flag there would let the agent lower the bar for
+    the answers it relays.
+    """
     return _apply_options(fn, [*_grading_options(), _report_option()])
 
 
 def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
     """Options shared by every command that can run a quiz."""
     decorators = [
+        click.option(
+            "--passing-score",
+            type=click.IntRange(0, MAX_SCORE),
+            default=None,
+            help=f"Minimum Grip Score out of {MAX_SCORE} to pass.",
+        ),
         *_grading_options(),
         click.option(
             "--fresh",
@@ -311,7 +316,7 @@ def _run(
         return 0
 
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
-    if memory.has_passed(diff.digest):
+    if memory.has_passed(diff.digest, cfg):
         _skip("this exact diff already passed recently, skipping the quiz.")
         return 0
 
@@ -364,13 +369,27 @@ def _decide(
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report.model_dump_json(indent=2), "utf-8")
     if report.passed:
-        memory.record_pass(report.diff_digest)
+        _remember_pass(git, memory, report)
         return 0
     raise QuizFailed(
         f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
         f"{report.passing_score}. {retry_hint} `grip last` shows the feedback again "
         f"(report: {_repo_path(git, saved)})."
     )
+
+
+def _remember_pass(git: Git, memory: PassMemory, report: Report) -> None:
+    """Remember a pass, and say so when the repository's settings will not honour it.
+
+    A pass made with ``--passing-score`` below the repository's mark, or with the ``fake``
+    provider while a real one is configured, is remembered as it was, but the hooks and
+    ``grip check`` read the repository's settings and will ask again.
+    """
+    memory.record_pass(report)
+    record = memory.get(report.diff_digest)
+    repo = _config(git)
+    if record is not None and not record.counts_for(repo):
+        _skip(f"this pass {_not_counted(record, repo)}, so the hooks and `grip check` will ask.")
 
 
 def _browser_available() -> bool:
@@ -719,7 +738,7 @@ def ask_cmd(
         _emit({"status": "nothing-to-quiz", "message": "only binary files changed"})
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
-    if memory.has_passed(diff.digest):
+    if memory.has_passed(diff.digest, cfg):
         _emit({"status": "already-passed", "message": "this exact diff passed recently"})
         return
     pending = ask(diff, cfg, _provider(git, cfg), Stage.MANUAL)
@@ -737,7 +756,10 @@ def ask_cmd(
 )
 @grade_options
 def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) -> None:
-    """Grade answers to the questions from `grip ask` and remember a pass."""
+    """Grade answers to the questions from `grip ask` and remember a pass.
+
+    The pass mark is the configured one: unlike `grip quiz`, there is no --passing-score.
+    """
     git = Git()
     cfg = _config(git, **overrides)
     store = PendingStore(git.git_dir())
@@ -755,7 +777,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     store.clear()
     _emit(report_payload(report, saved))
     if report.passed:
-        memory.record_pass(report.diff_digest)
+        _remember_pass(git, memory, report)
         return
     sys.exit(QuizFailed.exit_code)
 
@@ -813,7 +835,7 @@ def whiteboard_cmd(
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     defending = not interview and export_path is None
-    if defending and memory.has_passed(diff.digest):
+    if defending and memory.has_passed(diff.digest, cfg):
         _skip("this exact diff already passed recently; nothing to defend.")
         return
     provider = _provider(git, cfg)
@@ -1016,7 +1038,7 @@ def _check(git: Git, cfg: Config, mode: str | None, rev_range: str | None) -> st
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty or diff.binary_only:  # the hook does not quiz these either
         return None
-    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
+    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest, cfg):
         return None
     if rev_range:
         subject = f"the range {rev_range} has"
@@ -1118,7 +1140,7 @@ def _nothing_pushed(git: Git, cfg: Config) -> str:
         return nothing
     if branch is None or branch.is_empty:
         return nothing
-    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(branch.digest):
+    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(branch.digest, cfg):
         return nothing
     upstream = git.run(
         "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
@@ -1587,13 +1609,23 @@ def _diff_state(git: Git, cfg: Config, mode: str) -> str:
     files = _files(diff)
     latest = memory.latest_for(diff.digest)
     score = f"{latest.score}/{MAX_SCORE} {_at(latest.created_at)}" if latest else ""
-    if memory.has_passed(diff.digest):
+    record = memory.get(diff.digest)
+    if record is not None and record.counts_for(cfg):
         return f"[green]passed[/green] {score}".rstrip() + ", remembered"
     if latest is None:
         return f"[yellow]not quizzed[/yellow] ({files})"
     if latest.passed:
-        return f"[yellow]passed {score}, no longer remembered[/yellow] ({files})"
+        return f"[yellow]passed {score}, {_not_counted(record, cfg)}[/yellow] ({files})"
     return f"[red]failed[/red] {score} ({files}); `grip last` shows why"
+
+
+def _not_counted(record: PassRecord | None, cfg: Config) -> str:
+    """Why a pass no longer lets the diff through: expired, too low, or graded by ``fake``."""
+    if record is None:
+        return "no longer remembered"
+    if record.score < cfg.passing_score:
+        return f"does not count (below the pass mark of {cfg.passing_score})"
+    return f"does not count (graded by {record.provider})"
 
 
 def _print_activity(git: Git, cfg: Config) -> None:
