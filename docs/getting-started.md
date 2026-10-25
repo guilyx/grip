@@ -118,6 +118,7 @@ To do it by hand, choose one of the two approaches.
 ## 4. Try it
 
 ```bash
+git add .grip.toml          # the quiz covers staged changes; stage something first
 grip quiz --provider fake   # offline dry run with a dummy grader
 grip quiz                   # quiz your staged changes for real
 grip status                 # what is installed, effective configuration
