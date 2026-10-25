@@ -100,13 +100,69 @@ class _Failure(click.ClickException):
 
 
 class _Group(click.Group):
-    """Click group that translates grip's exceptions into exit codes."""
+    """Click group that translates grip's exceptions into exit codes.
+
+    ``sections`` lists the help's command groups, ``(title, names)`` in order; commands in
+    none of them are listed last, under "Other commands". Hidden commands never show.
+    """
+
+    def __init__(
+        self, *args: Any, sections: tuple[tuple[str, tuple[str, ...]], ...] = (), **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.sections = sections
 
     def invoke(self, ctx: click.Context) -> Any:
         try:
             return super().invoke(ctx)
         except GripError as exc:
             raise _Failure(exc) from exc
+
+    def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        if not self.sections:
+            super().format_commands(ctx, formatter)
+            return
+        visible: dict[str, click.Command] = {}
+        for name in self.list_commands(ctx):
+            command = self.get_command(ctx, name)
+            if command is not None and not command.hidden:
+                visible[name] = command
+        if not visible:
+            return
+        width = max(len(name) for name in visible)
+        limit = formatter.width - 6 - width
+        placed: set[str] = set()
+        for title, names in (*self.sections, ("Other commands", tuple(visible))):
+            listed = [name for name in names if name in visible and name not in placed]
+            placed.update(listed)
+            if not listed:
+                continue
+            with formatter.section(title):
+                # Padded to one width so the help text lines up across sections.
+                formatter.write_dl(
+                    [(n.ljust(width), visible[n].get_short_help_str(limit)) for n in listed]
+                )
+
+
+_SECTIONS = (
+    ("Core commands", ("init", "quiz", "whiteboard", "status", "skip", "resume", "last")),
+    ("Setup and upkeep", ("install", "uninstall", "agents", "check", "config", "forget")),
+    ("More", ("study", "platform")),
+)
+
+_EXAMPLES = """\
+\b
+Examples:
+  grip init              set this repository up: .grip.toml, the hook, agent files
+  grip quiz              quiz the staged changes now
+  grip quiz --branch     quiz the whole branch since main: its pull request
+  grip whiteboard        draw the change and defend it in the browser
+  grip status            what is installed, what passed, what is paused
+  grip skip              let the next commit or push through without a quiz
+
+Commands for tools and agents (hook, agent-hook, statusline, ask, grade) are not listed:
+https://guilyx.github.io/grip/cli/#for-tools-and-agents
+"""
 
 
 def _truthy(value: str | None) -> bool:
@@ -316,7 +372,12 @@ def _pretty_path(path: Path) -> str:
         return str(path)
 
 
-@click.group(cls=_Group, context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    cls=_Group,
+    sections=_SECTIONS,
+    epilog=_EXAMPLES,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 @click.version_option(__version__, prog_name="grip")
 def cli() -> None:
     """Keep a grip on your code: a quiz before every commit or push."""
@@ -402,7 +463,7 @@ def _emit(payload: dict[str, Any]) -> None:
     click.echo(json.dumps(payload, indent=2))
 
 
-@cli.command(name="ask")
+@cli.command(name="ask", hidden=True)
 @_diff_options
 @quiz_options
 def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overrides: Any) -> None:
@@ -425,7 +486,7 @@ def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overri
     _emit(questions_payload(pending, cfg))
 
 
-@cli.command(name="grade")
+@cli.command(name="grade", hidden=True)
 @click.option(
     "--answers",
     "answers_path",
@@ -688,7 +749,7 @@ def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | Non
     return f"the {what} have not passed a grip quiz yet ({len(diff.files)} files)."
 
 
-@cli.command(name="agent-hook")
+@cli.command(name="agent-hook", hidden=True)
 @click.argument("agent", type=click.Choice(["claude-code"]))
 @click.option(
     "--gate",
@@ -728,7 +789,7 @@ def agent_hook_cmd(agent: str, gate: Gate) -> None:
     )
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.argument("stage", type=_stage_choice())
 @click.argument("hook_args", nargs=-1)
 @quiz_options
@@ -1282,7 +1343,7 @@ def _stdin_cwd() -> Path | None:
     return Path(cwd) if isinstance(cwd, str) and cwd else None
 
 
-@cli.command(name="statusline")
+@cli.command(name="statusline", hidden=True)
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
 def statusline_cmd(as_json: bool) -> None:
     """One short line for an editor or Claude Code status line.
@@ -1454,7 +1515,25 @@ def _platform_url() -> str:
     return os.environ.get(URL_ENV, "").strip() or (creds.url if creds else DEFAULT_URL)
 
 
-@cli.command(name="login")
+_PLATFORM_EXAMPLES = """\
+\b
+Examples:
+  grip platform login kag_…                  a token from your dashboard
+  grip platform problems --category ros2     what there is to solve
+  grip platform solve cmd-vel-safety-filter  set up ./cmd-vel-safety-filter
+  grip platform submit                       run the tests, take the quiz, report
+"""
+
+
+@cli.group(name="platform", epilog=_PLATFORM_EXAMPLES)
+def platform_group() -> None:
+    """Keep A Grip practice problems: log in, list, solve, submit a score.
+
+    Only scores reach the platform; the diff, the questions and your answers stay here.
+    """
+
+
+@platform_group.command(name="login")
 @click.argument("token")
 @click.option(
     "--url",
@@ -1462,7 +1541,7 @@ def _platform_url() -> str:
     help=f"Keep A Grip base URL. Defaults to ${URL_ENV} or {DEFAULT_URL}.",
 )
 def login_cmd(token: str, url: str | None) -> None:
-    """Store a Keep A Grip API token for `grip solve` and `grip submit`.
+    """Store a Keep A Grip API token for `grip platform solve` and `submit`.
 
     Create the token on your dashboard. It is kept under your data home, readable by you
     only, and is used for nothing but reporting scores.
@@ -1475,7 +1554,7 @@ def login_cmd(token: str, url: str | None) -> None:
     _out.print(f"[green]grip:[/green] logged in to {base} as {login or 'unknown'} ({path})")
 
 
-@cli.command(name="logout")
+@platform_group.command(name="logout")
 def logout_cmd() -> None:
     """Forget the stored Keep A Grip token."""
     if forget_credentials():
@@ -1484,7 +1563,7 @@ def logout_cmd() -> None:
         _out.print("[yellow]grip:[/yellow] no stored token.")
 
 
-@cli.command(name="whoami")
+@platform_group.command(name="whoami")
 def whoami_cmd() -> None:
     """Show which Keep A Grip account the stored token belongs to."""
     creds = load_credentials()
@@ -1493,10 +1572,10 @@ def whoami_cmd() -> None:
     _out.print(f"{who.get('github_login', 'unknown')} at {creds.url}")
 
 
-@cli.command(name="problems")
+@platform_group.command(name="problems")
 @click.option("--category", default=None, help="Only this category slug, e.g. ros2.")
 def problems_cmd(category: str | None) -> None:
-    """List Keep A Grip problems you can `grip solve`."""
+    """List Keep A Grip problems you can `grip platform solve`."""
     rows = Client(_platform_url()).problems(category)
     if not rows:
         _out.print("[yellow]grip:[/yellow] no problems found.")
@@ -1540,7 +1619,7 @@ def _init_solve_repo(root: Path, problem: Problem) -> Git:
     return git
 
 
-@cli.command(name="solve")
+@platform_group.command(name="solve")
 @click.argument("slug")
 @click.option(
     "--dir",
@@ -1570,7 +1649,7 @@ def solve_cmd(slug: str, target: Path | None) -> None:
     _out.print(f"[green]grip:[/green] {problem.title} ({problem.difficulty}) is in {root}")
     _out.print(f"  read   {root / 'PROBLEM.md'}")
     _out.print("  solve  with whatever you like, commit as you go")
-    _out.print("  then   grip submit")
+    _out.print("  then   grip platform submit")
 
 
 def _run_tests(root: Path, command: str) -> bool:
@@ -1582,7 +1661,7 @@ def _run_tests(root: Path, command: str) -> bool:
     return passed
 
 
-@cli.command(name="submit")
+@platform_group.command(name="submit")
 @click.option("--no-tests", is_flag=True, help="Skip the problem's test command.")
 @click.option("--dry-run", is_flag=True, help="Quiz, then print the payload instead of sending it.")
 @quiz_options
@@ -1593,7 +1672,9 @@ def submit_cmd(no_tests: bool, dry_run: bool, report_path: Path | None, **overri
     cfg = _config(git, **overrides)
     diff = git.worktree_diff(state.base, cfg.exclude, cfg.max_diff_bytes)
     if diff.is_empty:
-        raise PlatformError("nothing has changed since `grip solve` set this repository up.")
+        raise PlatformError(
+            "nothing has changed since `grip platform solve` set this repository up."
+        )
     diff = dataclasses.replace(
         diff, description=f"solution to {state.problem}", context=problem_context(state)
     )
@@ -1628,6 +1709,36 @@ def submit_cmd(no_tests: bool, dry_run: bool, report_path: Path | None, **overri
     _out.print(f"  {client.url}/problems/{state.problem}")
     if not result.passed:
         raise QuizFailed("recorded. Re-read what the assistant wrote and try again.")
+
+
+def _moved(command: click.Command, group: click.Group) -> click.Command:
+    """``command`` under its old top-level name: hidden, with a note that it moved."""
+    assert command.callback is not None
+    assert command.name is not None
+    callback = command.callback
+    new = f"grip {group.name} {command.name}"
+
+    def run(**kwargs: Any) -> Any:
+        _err.print(
+            f"[yellow]grip:[/yellow] `grip {command.name}` is now `{new}`; "
+            "the old name will be removed in a later release.",
+            soft_wrap=True,
+        )
+        return callback(**kwargs)
+
+    return click.Command(
+        command.name,
+        callback=run,
+        params=command.params,
+        help=command.help,
+        short_help=command.short_help,
+        context_settings=command.context_settings,
+        hidden=True,
+    )
+
+
+for _command in list(platform_group.commands.values()):
+    cli.add_command(_moved(_command, platform_group))
 
 
 def main(argv: list[str] | None = None) -> None:

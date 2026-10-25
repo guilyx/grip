@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `grip --help` lists the core commands first (init, quiz, whiteboard, status, skip,
+  resume, last), groups the rest, and ends with examples. The Keep A Grip commands moved
+  under `grip platform` (`grip platform login`, `solve`, `submit`, …); the old top-level
+  names still work and print a one-line note that they moved. `hook`, `agent-hook`,
+  `statusline`, `ask` and `grade` are no longer listed in the help but work as before.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

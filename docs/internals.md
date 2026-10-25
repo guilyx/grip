@@ -268,8 +268,8 @@ A retry then costs one grading call instead of two, and a whiteboard opens at on
 instead of being redrawn. Grading is never cached, because the answers are what changed.
 A board that failed validation is replaced by the corrected one, so a retry starts from a
 board that passed the checks. Entries expire after `cache_hours` (24 by default; 0 turns
-the cache off), and `--fresh` skips it for one run. `grip submit` never uses it: a score
-reported to Keep A Grip comes from questions written for that attempt.
+the cache off), and `--fresh` skips it for one run. `grip platform submit` never uses it: a
+score reported to Keep A Grip comes from questions written for that attempt.
 
 `grip skip` writes `{"once": true}` to `.git/grip/skip.json`, consumed by the next hook
 run; `grip skip --hours N` writes a deadline; `grip resume` clears both. Only hooks and

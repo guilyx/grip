@@ -322,3 +322,49 @@ def test_last_shows_the_graded_quiz(
     assert data["answers"] == GOOD and len(data["questions"]) == 5
     assert "summary" in data and "at" in data
     assert "rubric" not in json.dumps(data).lower()
+
+
+# -- command groups -----------------------------------------------------------------------
+
+PLUMBING = ("hook", "agent-hook", "statusline", "ask", "grade")
+PLATFORM = ("login", "logout", "whoami", "problems", "solve", "submit")
+
+
+def _listed(help_text: str) -> set[str]:
+    """The command names a help page lists, one per indented row."""
+    return {line.split()[0] for line in help_text.splitlines() if line.startswith("  ")}
+
+
+def test_top_level_help_shows_the_core_commands_first(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    text = result.output
+    core, rest = text.split("Setup and upkeep:")
+    assert "Core commands:" in core and "More:" in rest
+    assert {"init", "quiz", "whiteboard", "status", "skip"} <= _listed(core)
+    assert "platform" in _listed(rest)
+    assert "Examples:" in rest and "grip quiz --branch" in rest
+    assert not _listed(text) & {*PLUMBING, *PLATFORM}
+
+
+def test_platform_group_lists_its_commands(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["platform", "--help"])
+    assert result.exit_code == 0
+    assert set(PLATFORM) <= _listed(result.output)
+
+
+@pytest.mark.parametrize("name", PLUMBING + PLATFORM)
+def test_hidden_commands_still_run(runner: CliRunner, name: str) -> None:
+    result = runner.invoke(cli, [name, "--help"], prog_name="grip")
+    assert result.exit_code == 0, result.output
+    assert f"Usage: grip {name} [OPTIONS]" in result.output
+
+
+def test_old_platform_names_still_work_with_a_note(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["logout"])
+    assert result.exit_code == 0
+    assert "no stored token" in result.stdout
+    assert "`grip logout` is now `grip platform logout`" in result.stderr
+    assert len(result.stderr.strip().splitlines()) == 1
+    result = runner.invoke(cli, ["platform", "logout"])
+    assert result.exit_code == 0 and result.stderr == ""

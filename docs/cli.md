@@ -2,6 +2,11 @@
 
 `grip` and `git grip` are the same program.
 
+`grip --help` lists the everyday commands first (`init`, `quiz`, `whiteboard`, `status`,
+`skip`, `resume`, `last`), then setup and upkeep, then `study` and `platform`, with a few
+examples. The commands git hooks, editors and coding agents call are left out of that list
+but work as always: see [For tools and agents](#for-tools-and-agents).
+
 ## `grip quiz`
 
 Run the quiz now, without a hook.
@@ -51,42 +56,6 @@ It takes the same `--provider`, `--model`, `--difficulty`, `--passing-score` and
 options as `grip quiz`. The page is served on `127.0.0.1` behind a random token and waits up
 to twenty idle minutes. Exit codes: `0` defended, skipped or exported, `1` below the pass
 mark, `2` error (including Ctrl-C or the idle timeout, which record nothing).
-
-## `grip hook STAGE [ARGS...]`
-
-The entry point installed hooks and pre-commit call. `STAGE` is `pre-commit` or
-`pre-push`; extra arguments are whatever git passes to the hook. You rarely run this
-yourself, but it is handy for debugging:
-
-```bash
-printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" \
-  | grip hook pre-push origin
-```
-
-Accepts the same `--passing-score`, `--provider`, `--model`, `--difficulty` and
-`--report` flags as `grip quiz`.
-
-## `grip ask` / `grip grade` / `grip check`
-
-The quiz in three non-interactive steps, for coding agents. `ask` prints the questions as
-JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
-remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
-`--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
-answer's JSON string are accepted and kept. See [Coding agents](agents.md).
-
-```bash
-grip ask --unpushed
-grip grade --answers - <<'EOF'
-["answer 1", "answer 2", "answer 3", "answer 4", "answer 5"]
-EOF
-grip check --unpushed && git push
-```
-
-## `grip agent-hook claude-code [--gate push|commit|both]`
-
-Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git push`
-(and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
-[plugin](agents.md#claude-code-plugin).
 
 ## `grip init`
 
@@ -169,19 +138,6 @@ grip skip --hours 1           # a demo, a pairing session
 grip resume
 ```
 
-## `grip statusline`
-
-One short line for an editor or Claude Code status line: `grip 92/100 pass`, with
-`paused` appended while `grip skip` is in effect. Outside a repository or before any quiz
-it prints nothing and exits 0. It reads an optional JSON payload on stdin and uses its
-`cwd`, which is what Claude Code sends:
-
-```json
-{ "statusLine": { "type": "command", "command": "grip statusline" } }
-```
-
-`grip statusline --json` prints the score, pass mark, time and skip state for other tools.
-
 ## `grip config`
 
 Prints the effective configuration after merging files, environment and defaults.
@@ -216,19 +172,79 @@ label and points. It never contains the diff, file paths, repository names, ques
 text, rubrics, your answers, feedback or the verdict. `grip study status` prints both
 lists so you can check before sharing.
 
-## `grip login` / `grip solve SLUG` / `grip submit`
+## `grip platform`
 
-The [Keep A Grip](keepagrip.md) commands. `login TOKEN [--url URL]` verifies and stores an
-API token from your dashboard (`logout` forgets it, `whoami` shows the account).
-`problems [--category SLUG]` lists the catalogue. `solve SLUG [--dir PATH]` sets up a
-repository with `PROBLEM.md` and the problem's pass mark, and remembers the base commit.
-`submit [--no-tests] [--dry-run]` runs the problem's test command, quizzes you on everything
-since that base commit (uncommitted work included) and reports the score; `--dry-run` prints
-the payload instead of sending it.
+The [Keep A Grip](keepagrip.md) commands. `grip platform login TOKEN [--url URL]` verifies
+and stores an API token from your dashboard (`logout` forgets it, `whoami` shows the
+account). `problems [--category SLUG]` lists the catalogue. `solve SLUG [--dir PATH]` sets
+up a repository with `PROBLEM.md` and the problem's pass mark, and remembers the base
+commit. `submit [--no-tests] [--dry-run]` runs the problem's test command, quizzes you on
+everything since that base commit (uncommitted work included) and reports the score;
+`--dry-run` prints the payload instead of sending it.
 
 ```bash
-grip login kag_…
-grip solve cmd-vel-safety-filter
+grip platform login kag_…
+grip platform solve cmd-vel-safety-filter
 cd cmd-vel-safety-filter            # solve it, commit as you go
-grip submit --provider claude
+grip platform submit --provider claude-code
 ```
+
+The old top-level names (`grip login`, `grip logout`, `grip whoami`, `grip problems`,
+`grip solve`, `grip submit`) still work, print a one-line note on stderr that they moved,
+and will be removed in a later release.
+
+## For tools and agents
+
+These commands are what git hooks, editors and coding agents call. `grip --help` does not
+list them, to keep it short, but they are stable and `grip <command> --help` describes
+each one.
+
+### `grip hook STAGE [ARGS...]`
+
+The entry point installed hooks and pre-commit call. `STAGE` is `pre-commit` or
+`pre-push`; extra arguments are whatever git passes to the hook. You rarely run this
+yourself, but it is handy for debugging:
+
+```bash
+printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" \
+  | grip hook pre-push origin
+```
+
+Accepts the same `--passing-score`, `--provider`, `--model`, `--difficulty` and
+`--report` flags as `grip quiz`.
+
+### `grip ask` / `grip grade` / `grip check`
+
+The quiz in three non-interactive steps, for coding agents. `ask` prints the questions as
+JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
+remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
+`--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
+answer's JSON string are accepted and kept. See [Coding agents](agents.md). (`check` is
+also handy by hand, so `grip --help` lists it.)
+
+```bash
+grip ask --unpushed
+grip grade --answers - <<'EOF'
+["answer 1", "answer 2", "answer 3", "answer 4", "answer 5"]
+EOF
+grip check --unpushed && git push
+```
+
+### `grip agent-hook claude-code [--gate push|commit|both]`
+
+Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git push`
+(and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
+[plugin](agents.md#claude-code-plugin).
+
+### `grip statusline`
+
+One short line for an editor or Claude Code status line: `grip 92/100 pass`, with
+`paused` appended while `grip skip` is in effect. Outside a repository or before any quiz
+it prints nothing and exits 0. It reads an optional JSON payload on stdin and uses its
+`cwd`, which is what Claude Code sends:
+
+```json
+{ "statusLine": { "type": "command", "command": "grip statusline" } }
+```
+
+`grip statusline --json` prints the score, pass mark, time and skip state for other tools.
