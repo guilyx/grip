@@ -3,7 +3,7 @@
 A git hook that quizzes you about your own diff before you commit or push it.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"
 
 QUESTION_COUNT = 5
 """Number of questions asked in every quiz. Fixed by design."""

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
 Upgrading from 0.4: passes remembered by 0.4 are asked once more, because
 `passed.json` now records the score and grader of each pass. `grip grade` no longer
 takes `--passing-score`; the pass mark comes from the configuration. The Keep A Grip
@@ -407,7 +409,8 @@ The first public release.
 - The score table uses rounded borders, matching the panels.
 - The "blocked" message prints the report path relative to the working directory.
 
-[Unreleased]: https://github.com/guilyx/grip/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/guilyx/grip/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/guilyx/grip/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/guilyx/grip/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/guilyx/grip/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/guilyx/grip/compare/v0.2.2...v0.3.0
