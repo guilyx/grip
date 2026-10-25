@@ -53,15 +53,19 @@ and brevity are explicitly ignored in the grading prompt.
 
 ## What leaves your machine
 
-Only two things are sent to the provider: the diff (after exclusions and truncation) and
-your answers. No history, no other files, no telemetry. The diff is wrapped in `<diff>`
-delimiters and the model is told to treat anything inside as data, never as instructions.
+Only three things are sent to the provider: the diff (after exclusions and truncation),
+the messages of the commits being quizzed (when there are commits; up to 4 KB, and
+`include_commit_messages = false` leaves them out) and your answers. No other history, no
+other files, no telemetry. The diff and the messages are wrapped in `<diff>` and
+`<commits>` delimiters and the model is told to treat anything inside as data, never as
+instructions.
 
-Reports (`questions`, `answers`, `grades`, `score`) are written to
-`.git/grip/last-report.json`, or to the path given with `--report`, and appended to
-`.git/grip/history.jsonl`. Passed digests live in `.git/grip/passed.json`. The history
-feeds [`grip study export`](cli.md#grip-study-export-grip-study-status), which is the
-only thing that reads it and only runs when you ask.
+Reports (`questions`, `answers`, `grades`, `score`, and `calls`: the time and token count
+of each model request) are written to `.git/grip/last-report.json`, or to the path given
+with `--report`, and appended to `.git/grip/history.jsonl`. Passed digests live in
+`.git/grip/passed.json`. `grip status` reads the history for its averages, and it feeds
+[`grip study export`](cli.md#grip-study-export-grip-study-status), which only runs when
+you ask.
 
 ## When grip steps aside
 
@@ -69,9 +73,11 @@ grip exits 0 without asking anything when:
 
 - `GRIP_SKIP` is set to a truthy value, or git runs with `--no-verify`;
 - `CI` is set (hooks in CI have nobody to answer);
-- there is no interactive terminal and `require_tty` is false (the default);
-- the diff is empty after exclusions;
-- the exact same diff passed within `remember_passes_hours`.
+- a hook finds no interactive terminal and `require_tty` is false (the default);
+  `grip quiz` typed by hand fails instead;
+- the diff is empty after exclusions, or every changed file is binary;
+- the exact same diff passed within `remember_passes_hours`, at or above the current pass
+  mark (a pass graded by the `fake` provider counts only while `fake` is configured).
 
 Provider failures (no key, network down, model unavailable) **block** by default so a
 broken setup is noticed rather than silently bypassed. Set `fail_open = true` to prefer

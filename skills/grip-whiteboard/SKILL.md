@@ -32,6 +32,6 @@ Pass them to `grip whiteboard` unchanged.
 - Never open, fetch, or post to the whiteboard address yourself, and never write the
   developer's answers, in the browser or anywhere else. The score is only worth something
   if the answers are theirs.
-- Never read `.git/grip/` to find rubrics.
+- Never read or open files under `.git/grip/`.
 - If `grip whiteboard` says the model could not draw a valid board, suggest `/grip`
   instead; the terminal quiz works for every diff.

@@ -13,6 +13,8 @@ markup; this module also rejects labels with control characters and caps their l
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -407,10 +409,14 @@ def board_data(
     description: str,
     files: list[str],
 ) -> dict[str, Any]:
-    """What the page receives. Rubrics are included only in interview mode."""
+    """What the page receives. Rubrics are included only in interview mode.
+
+    ``digest`` names this exact board and mode, so the page can keep a draft of the answers
+    for it (in the tab's ``sessionStorage``) and never restore one written for another.
+    """
     placed = layout(board)
     edge_set = {board.edge_key(e) for e in board.edges}
-    return {
+    data: dict[str, Any] = {
         "mode": mode,
         "summary": board.summary,
         "description": description,
@@ -457,6 +463,9 @@ def board_data(
             for p in board.pins
         ],
     }
+    canonical = json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    data["digest"] = hashlib.sha256(canonical).hexdigest()[:16]
+    return data
 
 
 __all__ = [

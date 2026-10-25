@@ -238,14 +238,15 @@ def build_export(
     now = now or datetime.now(UTC)
     cutoff = None if since is None else now - since
     installation_id = registry.installation_id()
-    quizzes: list[QuizSummary] = []
+    # An appeal appends its quiz again with the new score: the last line for an id wins.
+    by_id: dict[str, QuizSummary] = {}
     for git_dir in registry.prune():
         for report in read_history(git_dir):
             summary = summarise(report, installation_id, git_dir)
             if cutoff is not None and summary.created_at < cutoff:
                 continue
-            quizzes.append(summary)
-    quizzes.sort(key=lambda q: q.created_at)
+            by_id[summary.id] = summary
+    quizzes = sorted(by_id.values(), key=lambda q: q.created_at)
     return Export(installation_id=installation_id, quizzes=quizzes, generated_at=now)
 
 
