@@ -45,7 +45,7 @@ terminal, and inside Claude Code, Codex, Gemini CLI and Cursor.</p>
 > did you use here and why?", or "where does this fail?" you should be able to answer
 > confidently.
 
-<p class="grip-quote__by" markdown>Mitchell Hashimoto, on the whiteboard defense.
+<p class="grip-quote__by" markdown>Mitchell Hashimoto, [on the whiteboard defense](https://x.com/mitchellh/status/2100249348345057389).
 We found it after building grip. [Why it is our bar](whiteboard-defense.md)</p>
 
 </div>
@@ -186,13 +186,15 @@ get per-question feedback on what to re-read.
 
 ## Bring your own model
 
-grip writes and grades the questions with whatever you already use. Nothing but the diff
-and your answers leaves the machine, and only to the provider you choose.
+grip writes and grades the questions with whatever you already use. Nothing but the diff,
+its commit messages and your answers leaves the machine, and only to the provider you
+choose. The default, `auto`, picks the first of Claude Code, Codex and Gemini CLI on
+`PATH`, else the Anthropic API.
 
 | You have | Set in `.grip.toml` | Key needed |
 | --- | --- | --- |
 | Claude Code, Codex or Gemini CLI | `provider = "claude-code"`, `"codex"` or `"gemini"` | no |
-| An Anthropic key | `provider = "anthropic"` (the default) | `ANTHROPIC_API_KEY` |
+| An Anthropic key | `provider = "anthropic"` | `ANTHROPIC_API_KEY` |
 | A local model | `provider = "ollama"` and a `model` | no |
 | Any OpenAI-compatible API | `provider = "openai"`, `base_url`, `model` | yes |
 

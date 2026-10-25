@@ -90,8 +90,9 @@ class QuestionGrade(BaseModel):
     )
     feedback: str = Field(
         description=(
-            "One or two sentences: what was right, what was missing or wrong. "
-            "Be concrete and refer to the code."
+            "One or two sentences: what was right and, when points were lost, where in "
+            "the code to look again and what kind of point is missing or wrong. Never "
+            "state the missing rubric point itself."
         )
     )
 
@@ -116,6 +117,48 @@ class GradeSheet(BaseModel):
         return min(sum(g.score for g in self.grades), MAX_SCORE)
 
 
+class ModelCall(BaseModel):
+    """One request to the model: what it was for, how long it took, what it used."""
+
+    kind: str
+    """``questions``, ``board``, ``grade`` or ``appeal``."""
+    seconds: float
+    """Wall time of the request, retries included."""
+    input_tokens: int | None = None
+    """Tokens the model read, when the provider reports it (the APIs do; most coding-agent
+    CLIs do not)."""
+    output_tokens: int | None = None
+    """Tokens the model wrote, when the provider reports it."""
+
+    @property
+    def tokens(self) -> int | None:
+        """Input plus output tokens, or ``None`` when either is unknown."""
+        if self.input_tokens is None or self.output_tokens is None:
+            return None
+        return self.input_tokens + self.output_tokens
+
+
+class Appeal(BaseModel):
+    """A developer's appeal against the grade of one question, and how it ended."""
+
+    question_index: int
+    """Zero-based index of the appealed question."""
+    justification: str
+    """Why the developer says their answer was right, as they wrote it."""
+    old_score: int
+    """Points before the appeal."""
+    new_score: int
+    """Points after it: never lower than ``old_score``."""
+    feedback: str
+    """What the second grading said about the appeal."""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def upheld(self) -> bool:
+        """Whether the appeal raised the score."""
+        return self.new_score > self.old_score
+
+
 class Report(BaseModel):
     """Everything about one quiz run, persisted as JSON for later inspection."""
 
@@ -133,8 +176,27 @@ class Report(BaseModel):
     answers: list[Answer]
     grades: list[QuestionGrade]
     verdict: str
+    calls: list[ModelCall] = Field(default_factory=list)
+    """The model requests behind this report, oldest first. Questions or a board reused
+    from the cache made none. Empty in reports from before grip measured them."""
+
+    appeals: list[Appeal] = Field(default_factory=list)
+    """``grip appeal`` re-grades, oldest first; at most one per question."""
 
     @property
     def max_score(self) -> int:
         """The maximum reachable score."""
         return MAX_SCORE
+
+    @property
+    def seconds(self) -> float | None:
+        """Time spent waiting for the model, or ``None`` when nothing was measured."""
+        return sum(c.seconds for c in self.calls) if self.calls else None
+
+    @property
+    def tokens(self) -> int | None:
+        """Tokens used by every request, or ``None`` when one of them did not say."""
+        counts = [c.tokens for c in self.calls]
+        if not counts or any(n is None for n in counts):
+            return None
+        return sum(n for n in counts if n is not None)

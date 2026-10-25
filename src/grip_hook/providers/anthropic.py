@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import TypeVar
 
 import anthropic
@@ -11,31 +12,43 @@ from pydantic import BaseModel
 from grip_hook.config import DEFAULT_MODEL, Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 from grip_hook.prompts import (
+    APPEAL_SYSTEM_PROMPT,
     BOARD_SYSTEM_PROMPT,
     GRADING_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    appeal_prompt,
     board_prompt,
     grading_prompt,
     question_prompt,
 )
+from grip_hook.providers.base import CallLog, missing_credentials, token_count
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
 
 _EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 _MAX_TOKENS = 16_000
-
-NO_CREDENTIALS = (
-    "the anthropic provider has no credentials. Set ANTHROPIC_API_KEY, or run "
-    "`ant auth login`, or use a coding agent you are already signed in to: "
-    'provider = "claude-code" (or "codex", "gemini") in .grip.toml. '
-    "`grip init` sets this up."
-)
+_KEY_ENV = "ANTHROPIC_API_KEY"
 
 
-class AnthropicProvider:
+def _has_credentials(client: anthropic.Anthropic) -> bool:
+    """Whether the client found anything to sign a request with. Offline: nothing is sent.
+
+    The SDK only complains when it sends the first request, after the spinner has run for
+    a while; checking what it resolved (a key, a token, an `ant auth login` profile, or an
+    auth header from ``ANTHROPIC_CUSTOM_HEADERS``) lets grip say so before that.
+    """
+    if client.api_key or client.auth_token or getattr(client, "credentials", None) is not None:
+        return True
+    return any(
+        name.lower() in {"authorization", "x-api-key"} and isinstance(value, str) and value
+        for name, value in client.default_headers.items()
+    )
+
+
+class AnthropicProvider(CallLog):
     """Ask Claude for questions and grades using structured outputs."""
 
     name = "anthropic"
@@ -43,7 +56,9 @@ class AnthropicProvider:
     def __init__(self, cfg: Config, client: anthropic.Anthropic | None = None) -> None:
         self.model = cfg.model or DEFAULT_MODEL
         self._effort = cfg.effort.strip().lower()
+        self._key_env = cfg.api_key_env or _KEY_ENV
         self._client = client or self._build_client(cfg)
+        self.model_calls = []
 
     @staticmethod
     def _build_client(cfg: Config) -> anthropic.Anthropic:
@@ -51,19 +66,21 @@ class AnthropicProvider:
         if cfg.api_key_env:
             key = os.environ.get(cfg.api_key_env)
             if not key:
-                raise ProviderError(
-                    f"api_key_env is set to {cfg.api_key_env!r} but that variable is empty"
-                )
+                raise ProviderError(missing_credentials("anthropic", cfg.api_key_env))
             kwargs["api_key"] = key
         if cfg.base_url:
             kwargs["base_url"] = cfg.base_url
         try:
-            return anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
+            client = anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
         except anthropic.AnthropicError as exc:
             raise ProviderError(
                 "could not create the Anthropic client. Set ANTHROPIC_API_KEY or run "
                 f"`ant auth login`. ({exc})"
             ) from exc
+        # A gateway at base_url may add its own credentials, so only the direct API is checked.
+        if not cfg.base_url and not _has_credentials(client):
+            raise ProviderError(missing_credentials("anthropic", _KEY_ENV))
+        return client
 
     def _output_config(self) -> dict[str, str] | None:
         # `effort` is accepted by Claude 4.5+ models; Haiku 4.5 and older reject it.
@@ -78,6 +95,7 @@ class AnthropicProvider:
         output_config = self._output_config()
         if output_config:
             kwargs["output_config"] = output_config
+        started = time.perf_counter()
         try:
             response = self._client.messages.parse(
                 model=self.model,
@@ -105,7 +123,7 @@ class AnthropicProvider:
             # The SDK only finds out at request time that it has no key, token or login.
             if "authentication" not in str(exc):
                 raise
-            raise ProviderError(NO_CREDENTIALS) from exc
+            raise ProviderError(missing_credentials("anthropic", self._key_env)) from exc
 
         if response.stop_reason == "refusal":
             detail = ""
@@ -117,6 +135,13 @@ class AnthropicProvider:
         parsed = response.parsed_output
         if parsed is None:
             raise ProviderError("the model returned no structured output")
+        usage = getattr(response, "usage", None)
+        self._log_call(
+            schema,
+            started,
+            token_count(getattr(usage, "input_tokens", None)),
+            token_count(getattr(usage, "output_tokens", None)),
+        )
         return parsed
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
@@ -140,6 +165,22 @@ class AnthropicProvider:
         return self._parse(
             GRADING_SYSTEM_PROMPT, grading_prompt(diff, questions, answers, difficulty), GradeSheet
         )
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Grade one answer again, given the developer's case against ``grade``."""
+        prompt = appeal_prompt(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
+        return self._parse(APPEAL_SYSTEM_PROMPT, prompt, QuestionGrade)
 
 
 __all__ = ["AnthropicProvider"]

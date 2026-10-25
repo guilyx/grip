@@ -6,9 +6,12 @@ written for it can be too: a retry then costs one grading call instead of two. G
 always runs; the answers are what changed.
 
 Entries live in ``<git dir>/grip/cache/`` as one JSON file each, named by a hash of what
-was asked: the kind (questions or board), the diff digest, the task context, the
-difficulty, the provider and the model. Change any of those and the model is asked again.
-Entries older than ``Config.cache_hours`` are ignored and pruned.
+was asked: the kind (questions or board), the diff digest, the task context, the commit
+messages, the difficulty, the provider and the model. Change any of those (reword a commit,
+say) and the model is asked again.
+Entries older than ``Config.cache_hours`` are ignored and pruned. With
+``Config.retry_questions = "new"``, a failed quiz deletes the entries for its diff, so the
+next try gets new questions rather than the ones just failed.
 """
 
 from __future__ import annotations
@@ -24,7 +27,16 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import (
+    Answer,
+    Difficulty,
+    GradeSheet,
+    ModelCall,
+    Question,
+    QuestionGrade,
+    QuestionSet,
+)
+from grip_hook.providers.base import calls_of
 
 if TYPE_CHECKING:
     from grip_hook.providers.base import Provider
@@ -45,7 +57,8 @@ class GenerationCache:
     def key(kind: Kind, diff: Diff, difficulty: Difficulty, provider: str, model: str) -> str:
         """The name of the entry for one request."""
         context = hashlib.sha256(diff.context.encode("utf-8")).hexdigest()
-        parts = (kind, diff.digest, context, difficulty.value, provider, model)
+        commits = hashlib.sha256(diff.commits.encode("utf-8")).hexdigest()
+        parts = (kind, diff.digest, context, commits, difficulty.value, provider, model)
         return hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()
 
     def load(
@@ -63,14 +76,39 @@ class GenerationCache:
             return None
         return value, written
 
-    def store(self, key: str, value: BaseModel, now: datetime | None = None) -> None:
-        """Write ``value`` under ``key`` and drop entries past their time."""
+    def store(
+        self, key: str, value: BaseModel, now: datetime | None = None, *, digest: str = ""
+    ) -> None:
+        """Write ``value`` under ``key`` and drop entries past their time.
+
+        ``digest`` is the diff the value was written for, so :meth:`forget` can find it.
+        """
         now = now or datetime.now(UTC)
         with contextlib.suppress(OSError):
             self.dir.mkdir(parents=True, exist_ok=True)
-            entry = {"created_at": now.isoformat(), "value": value.model_dump(mode="json")}
+            entry = {
+                "created_at": now.isoformat(),
+                "digest": digest,
+                "value": value.model_dump(mode="json"),
+            }
             (self.dir / f"{key}.json").write_text(json.dumps(entry), "utf-8")
             self.prune(now)
+
+    def forget(self, digest: str) -> int:
+        """Delete every question set and board written for the diff ``digest``.
+
+        Used after a failed quiz when ``retry_questions = "new"``: the next try on the same
+        diff asks the model again instead of repeating the questions just failed. Returns
+        how many entries were deleted.
+        """
+        count = 0
+        for path in self.dir.glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                entry = json.loads(path.read_text("utf-8"))
+                if isinstance(entry, dict) and entry.get("digest") == digest:
+                    path.unlink()
+                    count += 1
+        return count
 
     def prune(self, now: datetime | None = None) -> None:
         """Delete entries older than the time to live."""
@@ -105,6 +143,11 @@ class CachedProvider:
         self.name = inner.name
         self.model = inner.model
 
+    @property
+    def model_calls(self) -> list[ModelCall]:
+        """The requests the wrapped provider made; a cache hit is not one."""
+        return calls_of(self.inner)
+
     def _key(self, kind: Kind, diff: Diff, difficulty: Difficulty) -> str:
         return self.cache.key(kind, diff, difficulty, self.name, self.model)
 
@@ -117,13 +160,20 @@ class CachedProvider:
             self.on_hit(kind, written)
         return value
 
+    def cached_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet | None:
+        """The questions written for this diff before, or ``None``; never asks the model.
+
+        Lets the quiz skip its "reading your diff" spinner when nothing will be read.
+        """
+        return self._hit("questions", self._key("questions", diff, difficulty), QuestionSet)
+
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """The questions written for this diff before, else new ones (then remembered)."""
-        key = self._key("questions", diff, difficulty)
-        if (hit := self._hit("questions", key, QuestionSet)) is not None:
+        if (hit := self.cached_questions(diff, difficulty)) is not None:
             return hit
+        key = self._key("questions", diff, difficulty)
         questions = self.inner.generate_questions(diff, difficulty)
-        self.cache.store(key, questions)
+        self.cache.store(key, questions, digest=diff.digest)
         return questions
 
     def generate_board(
@@ -140,7 +190,7 @@ class CachedProvider:
         if not problems and (hit := self._hit("board", key, Board)) is not None:
             return hit
         board = self.inner.generate_board(diff, difficulty, problems)
-        self.cache.store(key, board)
+        self.cache.store(key, board, digest=diff.digest)
         return board
 
     def grade(
@@ -152,6 +202,21 @@ class CachedProvider:
     ) -> GradeSheet:
         """Always graded fresh: the answers are what changed."""
         return self.inner.grade(diff, questions, answers, difficulty)
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Always graded fresh, like :meth:`grade`."""
+        return self.inner.appeal(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
 
 
 __all__ = ["CachedProvider", "GenerationCache"]

@@ -16,10 +16,10 @@ description: Could you defend this change at a whiteboard? What grip asks, why, 
 > For PoCs, demos, experiments, whatever: I don't care. [...] But if you're shipping
 > customer-facing work, you can't be shipping things you don't understand at a high level.
 >
-> Mitchell Hashimoto
+> Mitchell Hashimoto, [on X](https://x.com/mitchellh/status/2100249348345057389)
 
-We came across this post after grip was built. It names the bar grip was made for better
-than we had. Mitchell is not involved with grip; the words are his, the tool is ours.
+We came across [this post](https://x.com/mitchellh/status/2100249348345057389) after grip
+was built. It names the bar grip was made for better than we had. Mitchell is not involved with grip; the words are his, the tool is ours.
 
 ## The bar
 
