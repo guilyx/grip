@@ -295,6 +295,17 @@ def test_hostile_labels_cannot_escape_the_data_block(board: Board) -> None:
     assert page.count("<script") == 2  # the data block and grip's own script, nothing else
 
 
+def test_the_page_has_a_heading_a_skip_link_and_a_small_live_region(board: Board) -> None:
+    page = render_page(_data(board))
+    assert re.search(r'<h1 class="sr-only" id="title">', page)
+    assert '<a class="skip" id="skip" href="#panel">' in page
+    # Only the status line is live: the panel would re-read every question on each click.
+    assert re.findall(r'<[^>]*(?:aria-live|role="(?:status|alert)")[^>]*>', page) == [
+        '<p class="sr-only" id="status" role="status">'
+    ]
+    assert ":focus-visible .ring" in page
+
+
 def test_csp_allows_exactly_the_inline_style_and_script(board: Board) -> None:
     page = render_page(_data(board))
     csp = content_security_policy(page)

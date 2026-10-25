@@ -27,7 +27,11 @@
 body { margin: 0; padding: 14px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
   background: var(--page); color: var(--ink); font: 15px/1.5 var(--text); }
 button { font: inherit; color: inherit; cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2.5px solid var(--accent-ink); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: 16px; top: -60px; z-index: 10; padding: 8px 14px; border-radius: 999px;
+  background: var(--ink); color: var(--board); font-weight: 600; text-decoration: none; }
+.skip:focus { top: 10px; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 14px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand b { font: 800 22px/1 var(--display); letter-spacing: -0.03em; }
@@ -45,30 +49,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .legend i.ext { border-style: dashed; }
 .legend i.zone { background: var(--zone); border-color: var(--zone-line); border-style: dashed; }
 .legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
+.legend .keys { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+@media (pointer: coarse) { .legend .keys { display: none; } }
 svg text { font-family: var(--text); fill: var(--ink); }
 .arrowhead { fill: var(--muted); }
-.n rect { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
-.n.ext rect { stroke-dasharray: 6 4; }
-.n.ctx rect { fill: transparent; }
+.n rect.box { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
+.n.ext rect.box { stroke-dasharray: 6 4; }
+.n.ctx rect.box { fill: transparent; }
 .n .label { font: 700 14.5px var(--mono); }
 .n .role { font-size: 12px; fill: var(--muted); }
 .n .tag { font: 700 9.5px var(--mono); letter-spacing: .12em; fill: var(--muted); }
 .n .lid { stroke: var(--line); stroke-width: 1.5; }
+/* Boxes and pins draw their own focus ring, a step outside their edge: an outline on an SVG
+   group is drawn differently by every browser, and not at all by some. */
 .n, .p { cursor: pointer; outline: none; }
-.n:hover rect, .n:focus-visible rect { stroke: var(--accent); }
-.n.sel rect { stroke: var(--accent); stroke-width: 2.5; }
+.n .ring, .p .ring { fill: none; stroke: none; }
+.n:focus-visible .ring, .p:focus-visible .ring { stroke: var(--accent-ink); stroke-width: 2.5; }
+.n:hover rect.box, .n:focus-visible rect.box { stroke: var(--accent); }
+.n.sel rect.box { stroke: var(--accent); stroke-width: 2.5; }
 .e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
 .e.trust path { stroke: var(--zone-line); }
 .e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
 .zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
 .zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
-.p circle { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
+.p circle.dot { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
 .p text { font: 700 13px var(--mono); fill: var(--on-accent); text-anchor: middle; dominant-baseline: central; }
-.p.sel circle { stroke: var(--ink); }
-.p.done circle { fill: var(--ink); } .p.done text { fill: var(--board); }
-.p.pass circle { fill: var(--pass); } .p.warn circle { fill: var(--warn); } .p.fail circle { fill: var(--fail); }
+.p.sel circle.dot { stroke: var(--ink); }
+.p.done circle.dot { fill: var(--ink); } .p.done text { fill: var(--board); }
+.p.pass circle.dot { fill: var(--pass); } .p.warn circle.dot { fill: var(--warn); } .p.fail circle.dot { fill: var(--fail); }
 .p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
-.n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
+.n.pass rect.box { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect.box { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect.box { stroke: var(--fail); stroke-width: 2.5; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
 .panel h2 { font: 800 21px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
 .panel p { margin: 0; }
@@ -83,13 +93,13 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .num.pass { background: var(--pass); color: var(--board); } .num.warn { background: var(--warn); color: var(--board); } .num.fail { background: var(--fail); color: var(--board); }
 .item .q { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .item .s { font: 700 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.question { font: 600 17px/1.4 var(--text); overflow-wrap: anywhere; }
+.panel h2.question { font: 600 17px/1.4 var(--text); letter-spacing: normal; overflow-wrap: anywhere; }
 textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
   background: var(--board); color: var(--ink); font: 15px/1.5 var(--text); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 14px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .rubric { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: var(--page); list-style: none; }
 .rubric label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
 .rubric input { margin-top: 3px; accent-color: var(--accent); }
@@ -102,17 +112,19 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 .score .track { stroke: var(--line); } .score .arc.pass { stroke: var(--pass); } .score .arc.fail { stroke: var(--fail); }
 .score .big { font: 800 30px var(--display); fill: var(--ink); text-anchor: middle; }
 .score .unit { font: 500 11px var(--mono); fill: var(--muted); text-anchor: middle; }
-.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
+.panel h2.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
 .verdict.pass { color: var(--pass); } .verdict.fail { color: var(--fail); }
 .note { font-size: 12.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
 .nodeinfo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
 .nodeinfo dt { color: var(--muted); }
 .nodeinfo dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: no-preference) { .p circle, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
+@media (prefers-reduced-motion: no-preference) { .p circle.dot, .n rect.box, .num { transition: fill .25s, stroke .25s, background .25s; } }
 </style>
 </head>
 <body>
+<a class="skip" id="skip" href="#panel">Skip to the questions</a>
 <header class="bar">
+  <h1 class="sr-only" id="title">grip whiteboard</h1>
   <div class="brand">
     <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15.4" fill="#201e1c"/><path d="M48 32 A16 16 0 1 1 43.31 20.69" fill="none" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/><path d="M48 32 H34" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/></svg>
     <b>grip</b><span>whiteboard</span>
@@ -128,9 +140,11 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
       <span><i class="ext"></i>outside the diff</span>
       <span><i class="zone"></i>untrusted input</span>
       <span><i class="pin"></i>question pinned here</span>
+      <span class="keys" aria-hidden="true">1–5 questions · ←→ pins · Esc back</span>
     </div>
   </section>
-  <aside class="panel" id="panel" aria-live="polite"></aside>
+  <aside class="panel" id="panel" tabindex="-1" aria-label="Questions"></aside>
+  <p class="sr-only" id="status" role="status"></p>
 </main>
 <script type="application/json" id="board-data">__BOARD_DATA__</script>
 <script>
@@ -160,8 +174,12 @@ function el(tag, attrs = {}, ...kids) {
   for (const kid of kids.flat()) if (kid != null) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   return node;
 }
-const activate = (fn) => ({ click: fn, keydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(ev); } } });
+const activate = (fn, keys = {}) => ({ click: fn, keydown: (ev) => {
+  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(ev); }
+  else if (keys[ev.key]) { ev.preventDefault(); ev.stopPropagation(); keys[ev.key](); }
+} });
 
+const KIND_TEXT = (n) => n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
 const centre = (n) => ({ x: n.x + W / 2, y: n.y + H / 2 });
 function exitPoint(n, toward) {
   const c = centre(n), dx = toward.x - c.x, dy = toward.y - c.y;
@@ -187,6 +205,11 @@ function pinAnchor(pin) {
 }
 function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
 function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }
+function pinState(i) {
+  if (state.result) return `scored ${state.result.grades[i].score} of ${PPQ}`;
+  if (MODE === "export") return "";
+  return answered(i) ? (MODE === "interview" ? "points ticked" : "answered") : "not answered";
+}
 function pinTarget(p) {
   if (byId[p.on]) return byId[p.on].label;
   const e = edgeById[p.on];
@@ -231,7 +254,7 @@ const SPOTS = [0.5, 0.36, 0.64, 0.24, 0.76, 0.14, 0.86];
 function placeLabels(svg, labels) {
   const box = (b, pad = 3) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
   const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
-  const taken = [...svg.querySelectorAll(".n rect")].map((r) => box(r.getBBox(), 1));
+  const taken = [...svg.querySelectorAll(".n rect.box")].map((r) => box(r.getBBox(), 1));
   for (const p of DATA.pins) { const at = pinAnchor(p); taken.push(box({ x: at.x - 15, y: at.y - 15, width: 30, height: 30 }, 1)); }
   // Straight arrows first: sliding along a slanted one moves its label off the others' rows.
   const slant = (t) => Math.abs(t.fit.g.t.y - t.fit.g.s.y);
@@ -284,9 +307,12 @@ function drawBoard() {
     let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "");
     if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
     const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
-    const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`, on: activate(() => select({ node: n.id })) },
+    const asked = pins.length ? `, ${pins.length} question${pins.length === 1 ? "" : "s"}` : "";
+    const g = el("g", { class: cls, tabindex: 0, role: "button", "data-key": `node-${n.id}`, "aria-current": state.sel && state.sel.node === n.id ? "true" : null,
+      "aria-label": `${n.label}: ${n.role}. ${KIND_TEXT(n)}${asked}`, on: activate(() => select({ node: n.id })) },
       el("title", { text: `${n.label}: ${n.role}` }),
-      el("rect", { x: n.x, y: n.y, width: W, height: H, rx: 12 }),
+      el("rect", { class: "ring", x: n.x - 5, y: n.y - 5, width: W + 10, height: H + 10, rx: 16 }),
+      el("rect", { class: "box", x: n.x, y: n.y, width: W, height: H, rx: 12 }),
       el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
       el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
       el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
@@ -300,9 +326,15 @@ function drawBoard() {
     const at = pinAnchor(p);
     let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");
     if (per) cls += " " + band(per[i].score); else if (answered(i)) cls += " done";
-    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `Question ${i + 1}, ${p.kind}`,
-      on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); }) },
-      el("circle", { cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
+    const said = pinState(i);
+    // Arrow keys step through the pins in question order, wrapping at either end.
+    const step = (d) => () => focusKey(`pin-${(i + d + DATA.pins.length) % DATA.pins.length}`);
+    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "data-key": `pin-${i}`, "aria-current": state.sel && state.sel.pin === i ? "true" : null,
+      "aria-label": `Question ${i + 1}, ${p.kind}${said ? ", " + said : ""}`,
+      on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); },
+        { ArrowRight: step(1), ArrowDown: step(1), ArrowLeft: step(-1), ArrowUp: step(-1), Home: () => focusKey("pin-0"), End: () => focusKey(`pin-${DATA.pins.length - 1}`) }) },
+      el("circle", { class: "ring", cx: at.x, cy: at.y, r: 20 }),
+      el("circle", { class: "dot", cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
   });
 }
 
@@ -314,7 +346,7 @@ function pinList(indexes) {
   return el("ol", { class: "list" }, indexes.map((i) => {
     const p = DATA.pins[i];
     const status = state.result ? `${state.result.grades[i].score}/${PPQ}` : answered(i) ? "ready" : "";
-    return el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
+    return el("li", {}, el("button", { type: "button", class: "item", "data-key": `item-${i}`, "aria-keyshortcuts": String(i + 1), on: { click: () => select({ pin: i }) } },
       el("span", { class: numClass(i), text: String(i + 1) }),
       el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.question })),
       el("span", { class: "s", text: status })));
@@ -331,7 +363,8 @@ function overview() {
         el("circle", { class: "arc " + (r.passed ? "pass" : "fail"), cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9, "stroke-linecap": "round",
           pathLength: 100, "stroke-dasharray": `${r.score} 100`, transform: "rotate(-90 50 50)" }),
         el("text", { class: "big", x: 50, y: 56, text: String(r.score) }), el("text", { class: "unit", x: 50, y: 72, text: "/100" })),
-      el("div", {}, el("div", { class: "verdict " + (r.passed ? "pass" : "fail"), text: r.passed ? "PASS" : "NOT YET" }),
+      el("div", {}, el("h2", { class: "verdict " + (r.passed ? "pass" : "fail"), tabindex: -1, "data-key": "result" },
+          el("span", { class: "sr-only", text: `${scoreLine(r)}: ` }), r.passed ? "PASS" : "NOT YET"),
         el("p", { class: "small", text: r.verdict }))));
     parts.push(el("p", { class: "small", text: r.recorded
       ? (r.passed ? "The pass is remembered for this diff, so the push hook lets it through. You can close this tab." : `Below the pass mark of ${r.passing_score}. Open the coloured pins for feedback, re-read the diff, and run grip whiteboard again.`)
@@ -346,8 +379,9 @@ function overview() {
   if (!state.result && MODE !== "export") {
     const done = DATA.pins.filter((_, i) => answered(i)).length;
     parts.push(el("div", { class: "row" },
-      el("button", { type: "button", class: "btn primary", id: "hand-in", disabled: state.busy || done === 0,
-        text: state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`, on: { click: handIn } })));
+      // While grading the button stays focusable (aria-disabled, not disabled), so focus is not lost.
+      el("button", { type: "button", class: "btn primary", id: "hand-in", "data-key": "hand-in", disabled: !state.busy && done === 0,
+        "aria-disabled": state.busy ? "true" : null, text: state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`, on: { click: handIn } })));
   }
   const notes = {
     defend: "Answer in your own words; a sentence or two is enough. The rubrics stay with grip on this machine and never reach this page.",
@@ -361,17 +395,18 @@ function overview() {
 function pinView(i) {
   const p = DATA.pins[i];
   const parts = [el("div", { class: "row" },
-    el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }),
+    el("button", { type: "button", class: "btn", "data-key": "back", "aria-keyshortcuts": "Escape", text: "← All questions", on: { click: () => select(null) } }),
     el("span", { class: "small", text: `${i + 1} of ${DATA.pins.length} · on ${pinTarget(p)}` }))];
-  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }), el("p", { class: "question", text: p.question })));
+  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }),
+    el("h2", { class: "question", id: `question-${i}`, tabindex: -1, "data-key": `question-${i}`, text: p.question })));
   const locked = state.busy || !!state.result;
   if (MODE === "interview") {
     parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, el("label", { for: `tick-${i}-${k}` },
-      el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: locked,
+      el("input", { type: "checkbox", id: `tick-${i}-${k}`, "data-key": `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: locked,
         on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
       el("span", { text: point }))))));
   } else {
-    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", placeholder: "A sentence or two, in your own words.", disabled: locked,
+    const ta = el("textarea", { id: `answer-${i}`, "data-key": `answer-${i}`, "aria-labelledby": `question-${i}`, placeholder: "A sentence or two, in your own words.", disabled: locked,
       maxlength: 4000, on: { input: (ev) => { state.answers[i] = ev.target.value; drawBoard(); } } });
     ta.value = state.answers[i];
     parts.push(ta);
@@ -382,24 +417,36 @@ function pinView(i) {
   }
   const last = i === DATA.pins.length - 1;
   parts.push(el("div", { class: "row" },
-    el("button", { type: "button", class: "btn", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
-    el("button", { type: "button", class: "btn primary", text: last ? "Review all" : "Next", on: { click: () => select(last ? null : { pin: i + 1 }) } })));
+    el("button", { type: "button", class: "btn", "data-key": "previous", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
+    el("button", { type: "button", class: "btn primary", "data-key": "next", text: last ? "Review all" : "Next", on: { click: () => select(last ? null : { pin: i + 1 }) } })));
   return parts;
 }
 
 function nodeView(id) {
   const n = byId[id];
   const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === id).map(([, i]) => i);
-  const kind = n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
-  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }))];
-  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: kind }), el("h2", { text: n.label }),
+  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", "data-key": "back", "aria-keyshortcuts": "Escape", text: "← All questions", on: { click: () => select(null) } }))];
+  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: KIND_TEXT(n) }), el("h2", { tabindex: -1, "data-key": "node-heading", text: n.label }),
     el("dl", {}, el("dt", { text: "Role" }), el("dd", { text: n.role }), el("dt", { text: "Files" }), el("dd", { text: n.files.length ? n.files.join(", ") : "none in the diff" }))));
   parts.push(pins.length ? pinList(pins) : el("p", { class: "small", text: "No question is pinned here. It is on the board so the questions around it make sense." }));
   return parts;
 }
 
+function scoreLine(r) {
+  return MODE === "interview" ? `Interview score ${r.score} out of 100` : `Grip Score ${r.score} out of 100, ${r.passed ? "passed" : "below the pass mark of " + r.passing_score}`;
+}
+// Screen readers hear only this short line: what grading is doing and the score. The panel
+// itself is not a live region, so moving between questions does not re-read all of it.
+function announce(text) {
+  const status = document.getElementById("status");
+  status.textContent = "";
+  setTimeout(() => { status.textContent = text; }, 60);
+}
+
 async function handIn() {
+  if (state.busy) return;
   state.busy = true; state.error = null; state.sel = null; render();
+  announce("Grading your answers…");
   const body = MODE === "interview" ? { ticks: state.ticks } : { answers: state.answers };
   try {
     const res = await fetch("answers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -409,18 +456,53 @@ async function handIn() {
   } catch (err) {
     state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
   } finally {
-    state.busy = false; render();
+    state.busy = false;
+    render(state.result ? "result" : "hand-in");
+    announce(state.result ? `${scoreLine(state.result)}.` : state.error);
   }
 }
-function select(sel) {
-  state.sel = sel; render();
-  if (sel && sel.pin != null) { const box = document.getElementById(`answer-${sel.pin}`); if (box) box.focus({ preventScroll: true }); }
+
+// Every render rebuilds the board and the panel, so focus is put back by name: each
+// focusable part carries a data-key, and the one that had focus gets it again.
+function focusKey(key) {
+  const target = key && document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+  if (!target || target.disabled) return false;
+  target.focus({ preventScroll: true });
+  return true;
 }
-function render() {
+function select(sel) {
+  const prev = state.sel;
+  state.sel = sel;
+  let next = null;
+  if (sel && sel.pin != null) next = [`answer-${sel.pin}`, `tick-${sel.pin}-0`, `question-${sel.pin}`];
+  else if (sel && sel.node) next = ["node-heading"];
+  else if (prev && prev.pin != null) next = [`item-${prev.pin}`];  // back where you left the list
+  else if (prev && prev.node) next = [`node-${prev.node}`];
+  render(next);
+}
+function render(focusOn) {
+  const had = document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-key]");
   drawBoard();
   const panel = document.getElementById("panel");
   panel.replaceChildren(...(state.sel && state.sel.pin != null ? pinView(state.sel.pin) : state.sel && state.sel.node ? nodeView(state.sel.node) : overview()));
+  const keys = [...[focusOn || []].flat(), had && had.dataset.key];
+  for (const key of keys) if (focusKey(key)) break;
 }
+
+// Keys: 1 to 5 open a question, Esc goes back to the list. Number keys are left alone
+// while typing an answer; Esc is not, since the answer is kept.
+document.addEventListener("keydown", (ev) => {
+  if (ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  if (ev.key === "Escape" && state.sel) { ev.preventDefault(); select(null); return; }
+  if (ev.target.closest && ev.target.closest("textarea, input, select")) return;
+  const n = /^[1-9]$/.test(ev.key) ? Number(ev.key) : 0;
+  if (n && n <= DATA.pins.length) { ev.preventDefault(); select({ pin: n - 1 }); }
+});
+document.getElementById("skip").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  focusKey(state.sel && state.sel.pin != null ? `question-${state.sel.pin}` : "item-0") || document.getElementById("panel").focus();
+});
+document.getElementById("title").textContent = `grip whiteboard: ${DATA.description}`;
 document.getElementById("meta").textContent = `${DATA.description} · ${DATA.files.length} file${DATA.files.length === 1 ? "" : "s"} · pass mark ${DATA.passing_score}`;
 document.getElementById("mode-chip").textContent = { defend: "Defend", interview: "Interview", export: "Shared" }[MODE];
 render();
