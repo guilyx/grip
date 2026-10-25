@@ -7,14 +7,21 @@ Precedence, highest first:
 3. ``.grip.toml`` at the repository root.
 4. ``[tool.grip]`` in ``pyproject.toml`` at the repository root.
 5. Built-in defaults.
+
+``[[paths]]`` rules (``paths`` in :class:`Config`) come from the files only. They adjust
+the pass mark and difficulty for the files a diff touches, after everything above is
+resolved; see :meth:`Config.for_files`.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tomllib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +78,92 @@ def auto_provider() -> str:
 
 
 HOOK_MODES = ("quiz", "whiteboard")
+RETRY_QUESTIONS = ("same", "new")
+
+_DIFFICULTY_RANK = {d: i for i, d in enumerate(Difficulty)}
+"""``easy`` < ``normal`` < ``hard``: the order in which the enum is declared."""
+
+
+@lru_cache(maxsize=256)
+def _glob_regex(pattern: str) -> re.Pattern[str]:
+    """Compile a path glob the way ``exclude`` reads one.
+
+    ``*`` and ``?`` stay inside one path segment, ``**`` crosses segments, and a pattern
+    without ``/`` matches at any depth. A leading ``/`` anchors at the repository root
+    and a trailing ``/`` is the same as no slash.
+    """
+    pattern = pattern.strip().rstrip("/")
+    if "/" not in pattern:
+        pattern = f"**/{pattern}"
+    pattern = pattern.lstrip("/")
+    out: list[str] = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        elif pattern[i] == "[" and (end := pattern.find("]", i + 2)) != -1:
+            body = pattern[i + 1 : end]
+            if body.startswith("!"):
+                body = "^" + body[1:]
+            out.append(f"[{body.replace(chr(92), chr(92) * 2)}]")
+            i = end + 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("".join(out))
+
+
+def path_matches(pattern: str, path: str) -> bool:
+    """Whether ``path`` or a directory above it matches ``pattern``.
+
+    ``path`` is ``/``-separated and relative to the repository root. Matching the
+    directories too is what lets ``services/api`` cover every file under it.
+    """
+    regex = _glob_regex(pattern)
+    parts = path.split("/")
+    return any(regex.fullmatch("/".join(parts[:n])) for n in range(len(parts), 0, -1))
+
+
+@dataclass(frozen=True, slots=True)
+class PathRule:
+    """One ``[[paths]]`` table: a different bar for the files that match it."""
+
+    match: tuple[str, ...]
+    """Globs, read like ``exclude``. A file matches when any of them does."""
+
+    passing_score: int | None = None
+    """Pass mark for diffs that touch a matching file. ``None`` keeps the repository's."""
+
+    difficulty: Difficulty | None = None
+    """Difficulty for diffs that touch a matching file. ``None`` keeps the repository's."""
+
+    skip: bool = False
+    """Matching files need no quiz; a diff made only of them is not quizzed at all."""
+
+    def matches(self, path: str) -> bool:
+        """Whether ``path`` matches any of this rule's globs."""
+        return any(path_matches(pattern, path) for pattern in self.match)
+
+    def describe(self) -> str:
+        """``services/api/** (passing_score 90, hard)`` style text for display."""
+        settings = []
+        if self.passing_score is not None:
+            settings.append(f"passing_score {self.passing_score}")
+        if self.difficulty is not None:
+            settings.append(self.difficulty.value)
+        if self.skip:
+            settings.append("skip")
+        return f"{', '.join(self.match)} ({', '.join(settings) or 'no change'})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +203,14 @@ class Config:
     """Send the messages of the commits being quizzed (push, ``--unpushed``, ``--branch``,
     ``--range``) to the model with the diff, as data, so it can ask and grade "why"."""
 
+    skip_paths: tuple[str, ...] = ()
+    """Path globs (``docs/**``, ``*.md``) with nothing to quiz about: a diff that touches
+    only these paths is skipped. Unlike ``exclude``, a diff that also touches other files
+    is quizzed whole."""
+
+    min_changed_lines: int = 0
+    """Skip diffs that add and remove fewer lines than this in total. ``0`` disables."""
+
     remember_passes_hours: float = 24.0
     """How long a passed diff stays valid without re-quizzing. ``0`` disables."""
 
@@ -117,6 +218,12 @@ class Config:
     """How long the questions and boards written for a diff are reused when the same diff
     is quizzed again, so a retry after a failed quiz costs one grading call. ``0`` asks
     the model every time; ``--fresh`` does so once."""
+
+    retry_questions: str = "same"
+    """What a retry after a failed quiz asks: ``same`` reuses the questions (or board)
+    written for the diff, within ``cache_hours``; ``new`` forgets them on a failure, so
+    the next try on the same diff gets new ones from the model. Either way the grading
+    feedback says where to look, not what the rubric expected."""
 
     hook_mode: str = "quiz"
     """What the git hook asks for: ``quiz`` (questions in the terminal) or ``whiteboard``
@@ -132,12 +239,55 @@ class Config:
     timeout: float = 120.0
     """Per-request timeout in seconds for provider calls."""
 
+    paths: tuple[PathRule, ...] = ()
+    """``[[paths]]`` rules: a pass mark, difficulty or skip for part of the repository."""
+
+    def skips(self, files: Iterable[str]) -> bool:
+        """Whether every one of ``files`` matches a ``skip = true`` rule (and there is one)."""
+        files = list(files)
+        skipping = [r for r in self.paths if r.skip]
+        return bool(files and skipping) and all(any(r.matches(f) for r in skipping) for f in files)
+
+    def for_files(self, files: Iterable[str]) -> Config:
+        """This configuration with the ``[[paths]]`` rules for ``files`` applied.
+
+        Each file gets the strictest pass mark and the hardest difficulty of the rules it
+        matches, or the repository's own when no matching rule sets one; files matched by a
+        ``skip`` rule do not count. The diff then takes the strictest over its files, so a
+        rule that lowers the bar for ``docs/`` never lowers it for code in the same diff.
+        """
+        if not self.paths:
+            return self
+        scores: list[int] = []
+        levels: list[Difficulty] = []
+        for path in files:
+            matched = [r for r in self.paths if r.matches(path)]
+            if any(r.skip for r in matched):
+                continue
+            rule_scores = [r.passing_score for r in matched if r.passing_score is not None]
+            rule_levels = [r.difficulty for r in matched if r.difficulty is not None]
+            scores.append(max(rule_scores) if rule_scores else self.passing_score)
+            levels.append(
+                max(rule_levels, key=_DIFFICULTY_RANK.__getitem__)
+                if rule_levels
+                else self.difficulty
+            )
+        if not scores:
+            return self
+        return replace(
+            self,
+            passing_score=max(scores),
+            difficulty=max(levels, key=_DIFFICULTY_RANK.__getitem__),
+        )
+
     def validate(self) -> Config:
         """Raise :class:`ConfigError` for out-of-range values and return ``self``."""
         if not 0 <= self.passing_score <= 100:
             raise ConfigError(f"passing_score must be between 0 and 100, got {self.passing_score}")
         if self.max_diff_bytes <= 0:
             raise ConfigError("max_diff_bytes must be positive")
+        if self.min_changed_lines < 0:
+            raise ConfigError("min_changed_lines must be zero or positive")
         if self.remember_passes_hours < 0:
             raise ConfigError("remember_passes_hours must be zero or positive")
         if self.cache_hours < 0:
@@ -149,6 +299,17 @@ class Config:
         if self.hook_mode not in HOOK_MODES:
             allowed = ", ".join(HOOK_MODES)
             raise ConfigError(f"hook_mode must be one of {allowed}, got {self.hook_mode!r}")
+        for rule in self.paths:
+            if rule.passing_score is not None and not 0 <= rule.passing_score <= 100:
+                raise ConfigError(
+                    f"passing_score in [[paths]] {', '.join(rule.match)} must be between "
+                    f"0 and 100, got {rule.passing_score}"
+                )
+        if self.retry_questions not in RETRY_QUESTIONS:
+            allowed = ", ".join(RETRY_QUESTIONS)
+            raise ConfigError(
+                f"retry_questions must be one of {allowed}, got {self.retry_questions!r}"
+            )
         return self
 
     @property
@@ -159,6 +320,45 @@ class Config:
 
 
 _FIELD_NAMES = {f.name for f in fields(Config)}
+_FILE_ONLY = {"paths"}
+"""Options that only make sense as TOML tables, never as one environment variable."""
+_PATH_RULE_KEYS = {"match", "passing_score", "difficulty", "skip"}
+
+
+def _parse_path_rule(raw: Any, index: int) -> PathRule:
+    """One ``[[paths]]`` table, checked key by key."""
+    where = f"[[paths]] #{index + 1}"
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{where} must be a table with a `match` glob")
+    keys = {str(k).replace("-", "_") for k in raw}
+    if unknown := sorted(keys - _PATH_RULE_KEYS):
+        raise ConfigError(f"unknown option {unknown[0]!r} in {where}")
+    values = {str(k).replace("-", "_"): v for k, v in raw.items()}
+    match = values.get("match")
+    if isinstance(match, str):
+        match = [match]
+    if (
+        not isinstance(match, list)
+        or not match
+        or not all(isinstance(m, str) and m.strip() for m in match)
+    ):
+        raise ConfigError(f"{where} needs `match`: a glob or a list of globs")
+    skip = values.get("skip", False)
+    if not isinstance(skip, bool):
+        raise ConfigError(f"skip in {where} must be true or false, got {skip!r}")
+    rule = PathRule(match=tuple(m.strip() for m in match), skip=skip)
+    if "passing_score" in values:
+        rule = replace(rule, passing_score=_coerce("passing_score", values["passing_score"]))
+    if "difficulty" in values:
+        rule = replace(rule, difficulty=_coerce("difficulty", values["difficulty"]))
+    return rule
+
+
+def _parse_paths(value: Any) -> tuple[PathRule, ...]:
+    """The ``[[paths]]`` array of tables."""
+    if not isinstance(value, list):
+        raise ConfigError("paths must be an array of tables: [[paths]]")
+    return tuple(_parse_path_rule(raw, i) for i, raw in enumerate(value))
 
 
 def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per field type
@@ -169,13 +369,13 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
         except ValueError as exc:
             allowed = ", ".join(d.value for d in Difficulty)
             raise ConfigError(f"difficulty must be one of {allowed}, got {value!r}") from exc
-    if name == "exclude":
+    if name in {"exclude", "skip_paths"}:
         if isinstance(value, str):
             return tuple(p.strip() for p in value.split(",") if p.strip())
         if isinstance(value, list | tuple):
             return tuple(str(p) for p in value)
-        raise ConfigError("exclude must be a list of globs")
-    if name in {"passing_score", "max_diff_bytes"}:
+        raise ConfigError(f"{name} must be a list of globs")
+    if name in {"passing_score", "max_diff_bytes", "min_changed_lines"}:
         try:
             return int(value)
         except (TypeError, ValueError) as exc:
@@ -185,7 +385,7 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             return float(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"{name} must be a number, got {value!r}") from exc
-    if name == "hook_mode":
+    if name in {"hook_mode", "retry_questions"}:
         return str(value).strip().lower()
     if name in {"require_tty", "fail_open", "include_commit_messages"}:
         if isinstance(value, bool):
@@ -200,7 +400,7 @@ def _apply(cfg: Config, raw: dict[str, Any], source: str) -> Config:
         name = key.replace("-", "_")
         if name not in _FIELD_NAMES:
             raise ConfigError(f"unknown option {key!r} in {source}")
-        updates[name] = _coerce(name, value)
+        updates[name] = _parse_paths(value) if name == "paths" else _coerce(name, value)
     return replace(cfg, **updates) if updates else cfg
 
 
@@ -210,6 +410,80 @@ def _read_toml(path: Path) -> dict[str, Any]:
             return tomllib.load(fh)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"could not parse {path}: {exc}") from exc
+
+
+DEFAULT_SOURCE = "default"
+_FLAGS = {"cache_hours": "--fresh"}
+"""Options whose command-line flag is not ``--`` plus the dashed option name."""
+
+
+@dataclass(frozen=True, slots=True)
+class Resolved:
+    """The effective :class:`Config`, and where each of its values came from."""
+
+    config: Config
+    sources: dict[str, str]
+    """Option name to the layer that set it last: ``default``, ``pyproject.toml``,
+    ``.grip.toml``, ``env GRIP_<NAME>`` or ``flag --<name>``."""
+    files: tuple[Path, ...]
+    """The configuration files that were read, lowest precedence first."""
+
+
+def resolve_config(
+    root: Path | None,
+    *,
+    env: dict[str, str] | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> Resolved:
+    """Build the effective :class:`Config` for a repository and record each value's source.
+
+    Args:
+        root: Repository root (where ``.grip.toml`` / ``pyproject.toml`` live), or ``None``.
+        env: Environment mapping. Defaults to :data:`os.environ`.
+        overrides: Values from command-line flags. ``None`` entries are ignored.
+    """
+    cfg = Config()
+    sources = dict.fromkeys(_FIELD_NAMES, DEFAULT_SOURCE)
+    files: list[Path] = []
+
+    def layer(raw: dict[str, Any], where: str, label: Callable[[str], str]) -> None:
+        nonlocal cfg
+        cfg = _apply(cfg, raw, where)
+        for key in raw:
+            sources[key.replace("-", "_")] = label(key)
+
+    if root is not None:
+        pyproject = root / "pyproject.toml"
+        if pyproject.is_file():
+            tool = _read_toml(pyproject).get("tool", {})
+            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
+                files.append(pyproject)
+                layer(tool["grip"], str(pyproject), lambda _: "pyproject.toml")
+        grip_toml = root / ".grip.toml"
+        if grip_toml.is_file():
+            files.append(grip_toml)
+            layer(_read_toml(grip_toml), str(grip_toml), lambda _: ".grip.toml")
+
+    environ = os.environ if env is None else env
+    env_keys = {
+        key[len(ENV_PREFIX) :].lower(): key
+        for key in environ
+        if key.startswith(ENV_PREFIX)
+        and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES - _FILE_ONLY
+    }
+    layer(
+        {name: environ[key] for name, key in env_keys.items()},
+        "environment",
+        lambda name: f"env {env_keys[name]}",
+    )
+
+    if overrides:
+        layer(
+            {k: v for k, v in overrides.items() if v is not None},
+            "command line",
+            lambda name: f"flag {_FLAGS.get(name, '--' + name.replace('_', '-'))}",
+        )
+    return Resolved(cfg.validate(), sources, tuple(files))
 
 
 def load_config(
@@ -225,28 +499,7 @@ def load_config(
         env: Environment mapping. Defaults to :data:`os.environ`.
         overrides: Values from command-line flags. ``None`` entries are ignored.
     """
-    cfg = Config()
-    if root is not None:
-        pyproject = root / "pyproject.toml"
-        if pyproject.is_file():
-            tool = _read_toml(pyproject).get("tool", {})
-            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
-                cfg = _apply(cfg, tool["grip"], str(pyproject))
-        grip_toml = root / ".grip.toml"
-        if grip_toml.is_file():
-            cfg = _apply(cfg, _read_toml(grip_toml), str(grip_toml))
-
-    environ = os.environ if env is None else env
-    env_raw = {
-        key[len(ENV_PREFIX) :].lower(): value
-        for key, value in environ.items()
-        if key.startswith(ENV_PREFIX) and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES
-    }
-    cfg = _apply(cfg, env_raw, "environment")
-
-    if overrides:
-        cfg = _apply(cfg, {k: v for k, v in overrides.items() if v is not None}, "command line")
-    return cfg.validate()
+    return resolve_config(root, env=env, overrides=overrides).config
 
 
 TEMPLATE = """\
@@ -267,6 +520,9 @@ provider = "{provider}"
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
 # include_commit_messages = true  # the model also reads the messages of the pushed commits
+# skip_paths = []              # e.g. ["docs/**", "*.md"]: a diff touching only these is skipped
+# min_changed_lines = 0        # skip diffs smaller than this many added + removed lines
+# retry_questions = "same"     # same | new (after a failed quiz, ask new questions)
 # fail_open = false            # let the commit through when the provider is down
 """
 
@@ -290,7 +546,9 @@ def describe(cfg: Config) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     for f in fields(cfg):
         value = getattr(cfg, f.name)
-        if isinstance(value, tuple):
+        if f.name == "paths":
+            text = "; ".join(rule.describe() for rule in cfg.paths) or "(none)"
+        elif isinstance(value, tuple):
             text = ", ".join(value) if value else "(none)"
         elif isinstance(value, Difficulty):
             text = value.value
@@ -308,11 +566,17 @@ __all__ = [
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
+    "DEFAULT_SOURCE",
     "HOOK_MODES",
+    "RETRY_QUESTIONS",
     "TEMPLATE",
     "Config",
+    "PathRule",
+    "Resolved",
     "auto_provider",
     "describe",
     "load_config",
+    "path_matches",
     "render_template",
+    "resolve_config",
 ]

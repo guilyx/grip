@@ -174,3 +174,23 @@ def test_ask_keeps_the_messages_for_grade(
     answers.write_text('["' + GOOD[0] + '"]')
     runner.invoke(cli, ["grade", "--answers", str(answers)])
     assert ("grade", pending.commits) in recording[-1].seen
+
+
+def test_three_dot_range_sends_the_messages_since_the_fork(
+    in_repo: Path,
+    run_git: Callable[..., str],
+    recording: list[Recording],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trunk = run_git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    run_git("checkout", "-q", "-b", "feature")
+    _commit(in_repo, run_git, "a.py", "Add a", "So that b can import it.")
+    run_git("checkout", "-q", trunk)
+    _commit(in_repo, run_git, "c.py", "Trunk moved on")
+    run_git("checkout", "-q", "feature")
+    monkeypatch.setattr(cli_module, "open_terminal", FakeTerminalFactory(GOOD))
+    result = CliRunner().invoke(cli, ["quiz", "--range", f"{trunk}...HEAD"])
+    assert result.exit_code == 0, result.output
+    seen = recording[-1].seen
+    assert all("So that b can import it." in commits for _, commits in seen)
+    assert not any("Trunk moved on" in commits for _, commits in seen)

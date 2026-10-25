@@ -46,13 +46,13 @@ It is a reasonable change with real trade-offs, which is exactly what grip asks 
 ## Set up
 
 grip was installed with `pipx install grip-hook` and the repository set up with
-`grip init`. It found Claude Code on the machine and picked it as the model; these are the
-settings in the `.grip.toml` it wrote that matter here:
+`grip init`. It wrote `provider = "auto"`, which picks Claude Code on this machine; these
+are the settings in the `.grip.toml` it wrote that matter here:
 
 ```toml title=".grip.toml"
 passing_score = 70
 difficulty = "normal"
-provider = "claude-code"
+provider = "auto"
 ```
 
 `grip init` also installed the pre-push hook at `.git/hooks/pre-push`. Both were committed
@@ -77,13 +77,13 @@ model:
 ```console
 ~/notes-api main ❯ git push
 
-╭────────────────────────────────────── grip ──────────────────────────────────────╮
-│ 5 questions about your b05e4728c893..e3c589438444 (pre-push). Pass mark: 70/100. │
-│                                                                                  │
-│ api/auth.py                                                                      │
-│ api/ratelimit.py                                                                 │
-│ tests/test_ratelimit.py                                                          │
-╰──────────────────────────── keep a grip on your code ────────────────────────────╯
+╭───────────────────────────────────── grip ──────────────────────────────────────╮
+│ 5 questions about your 1 commit on main → origin (pre-push). Pass mark: 70/100. │
+│                                                                                 │
+│ api/auth.py                                                                     │
+│ api/ratelimit.py                                                                │
+│ tests/test_ratelimit.py                                                         │
+╰─────────────────────────── keep a grip on your code ────────────────────────────╯
 
 Adds an in-process token-bucket RateLimiter and applies it to login, keyed by client IP at 5
 attempts/minute. Over-limit requests get a 429 with a Retry-After header. Unit tests cover
@@ -268,7 +268,7 @@ Everything grip keeps is inside the repository's `.git` directory, never committ
 .git/grip/
 ├── last-report.json   the latest graded quiz: questions, rubrics, answers, grades
 ├── history.jsonl      one line per graded quiz (here: the 1/100, then the 80/100)
-└── passed.json        fingerprints of passed diffs, with the time they passed
+└── passed.json        fingerprints of passed diffs: when, the score, the pass mark, the grader
 ```
 
 The diff, its commit messages and the answers went to the model (Claude Code, here). Nothing

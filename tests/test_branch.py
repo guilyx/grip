@@ -137,3 +137,58 @@ def test_status_shows_the_branch(
     assert runner.invoke(cli, ["quiz", "--branch"]).exit_code == 0
     result = runner.invoke(cli, ["status"])
     assert "passed 100/100 at " in result.output
+
+
+def _said(result: object) -> str:
+    return " ".join(str(getattr(result, "output", "")).split())
+
+
+def _ignore(repo: Path, name: str) -> None:
+    """Hide ``name`` from ``git status`` without a tracked .gitignore."""
+    info = repo / ".git" / "info"
+    info.mkdir(exist_ok=True)
+    (info / "exclude").write_text(f"{name}\n")
+
+
+def test_nothing_staged_points_at_the_commits(
+    runner: CliRunner, feature: Path, run_git: Callable[..., str]
+) -> None:
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0, result.output
+    assert _said(result) == (
+        "grip: nothing to quiz: nothing staged. 1 untracked file: `git add` it first; "
+        "2 unpushed commits: try `grip quiz --unpushed` or `--branch`."
+    )
+    # Pushed without the hook, and .grip.toml out of the way: only the branch is left.
+    run_git("push", "-q", "--no-verify", "-u", "origin", "feat")
+    _ignore(feature, ".grip.toml")
+    assert _said(runner.invoke(cli, ["quiz"])) == (
+        "grip: nothing to quiz: nothing staged, but 2 commits since origin/main: "
+        "try `grip quiz --branch`."
+    )
+    assert _said(runner.invoke(cli, ["quiz", "--unpushed"])) == (
+        "grip: nothing to quiz: no unpushed commits, but 2 commits since origin/main: "
+        "try `grip quiz --branch`."
+    )
+    (feature / "a.py").write_text("x = 2\n")
+    run_git("add", "a.py")
+    assert _said(runner.invoke(cli, ["whiteboard", "--unpushed", "--no-open"])) == (
+        "grip: nothing to draw: no unpushed commits. 1 staged file: try `grip whiteboard`; "
+        "2 commits since origin/main: try `grip whiteboard --branch`."
+    )
+
+
+def test_nothing_anywhere(runner: CliRunner, feature: Path, run_git: Callable[..., str]) -> None:
+    run_git("checkout", "-q", "main")
+    _ignore(feature, ".grip.toml")
+    assert _said(runner.invoke(cli, ["quiz"])) == (
+        "grip: nothing to quiz: nothing staged; the working tree is clean and every commit "
+        "is pushed."
+    )
+    assert _said(runner.invoke(cli, ["quiz", "--branch"])) == (
+        "grip: nothing to quiz: no changes on this branch since origin/main; the working "
+        "tree is clean and every commit is pushed."
+    )
+    assert _said(runner.invoke(cli, ["quiz", "--range", "HEAD..HEAD"])) == (
+        "grip: nothing to quiz: no changes in HEAD..HEAD."
+    )

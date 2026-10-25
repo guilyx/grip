@@ -8,10 +8,115 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `retry_questions` option: `same` (the default) keeps reusing a diff's questions and
+  board on a retry; `new` forgets them when a quiz, a whiteboard defense or `grip grade`
+  fails, so the next try asks new ones. Grading feedback now says where to look again
+  and what kind of point is missing, instead of naming the rubric point, so a failed
+  quiz can no longer be passed by pasting its feedback back.
+- `[[paths]]` tables in `.grip.toml` (or `[[tool.grip.paths]]` in `pyproject.toml`) set
+  a `passing_score`, a `difficulty` or `skip = true` for the files that match their
+  `match` globs. A diff takes the strictest pass mark and the hardest difficulty of the
+  files it touches, and a diff made only of skipped files is not quizzed.
+- A GitHub Action (`uses: guilyx/grip@...`): on each pull request it writes five
+  questions about the diff since the merge base and posts them as one comment, updated on
+  every push, for the author or a reviewer to answer in review. Nothing is graded in CI.
+  `export-board: true` also uploads the whiteboard as a workflow artifact and links it.
+- Diffs with nothing to explain are skipped, with the reason printed: only renames or mode
+  changes, only whitespace (a re-indent still counts), only paths in the new `skip_paths`
+  option (e.g. `["docs/**", "*.md"]`), or fewer added and removed lines than the new
+  `min_changed_lines` option (off by default). `grip check`, the agent push gate and
+  `grip status` agree with the hook; `grip quiz --force` quizzes such a diff anyway.
 - The model reads the messages of the commits being quizzed (pushes, `--unpushed`,
   `--branch`, `--range`), up to 4 KB, as delimited data next to the diff, so questions can
   ask why and grading can weigh what the developer said they meant. Rewording a commit gets
   new questions. `include_commit_messages = false` sends the diff alone.
+
+### Changed
+
+- An empty diff in `grip quiz`, `grip whiteboard` and `grip ask` says what there is
+  instead and what to run, e.g. "nothing staged. 3 untracked files and 1 modified file:
+  `git add` them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`".
+  `grip ask` adds the same as data in a `hint` field. The "Try it" line at the end of
+  `grip init` suggests a command that has something to quiz in that repository.
+- `grip init` writes `provider = "auto"` instead of this machine's coding agent, so the
+  committed `.grip.toml` works for teammates without that tool. It prints what `auto`
+  means on this machine, lists `auto` first in its menu, and writes a concrete provider
+  only when you pick one. It now also asks for the difficulty (default `normal`) and says
+  "wrote AGENTS.md for any coding agent that reads it" instead of "for AGENTS.md
+  readers". `--provider auto` is accepted on every command.
+- A missing API key for the `anthropic` or `openai` provider is reported before the
+  quiz starts, instead of after the "reading your diff" spinner. The message lists the
+  fixes: set the key variable (`api_key_env`, `ANTHROPIC_API_KEY` by default), use a
+  coding agent installed on the machine, or try `--provider fake`. The `openai` provider
+  no longer asks for a key when `base_url` points at a server of your own.
+- The quiz header names what is being quizzed in words: `3 commits on feat/x → origin`
+  for a push, `main..HEAD` as typed for `--range`, `2 unpushed commits on main` for
+  `--unpushed`, and `everything since the first commit` instead of the empty tree's hash
+  for a first push. When the diff is over `max_diff_bytes` it also says how much the model
+  saw: `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
+- `grip --help` lists the core commands first (init, quiz, whiteboard, status, skip,
+  resume, last), groups the rest, and ends with examples. The Keep A Grip commands moved
+  under `grip platform` (`grip platform login`, `solve`, `submit`, …); the old top-level
+  names still work and print a one-line note that they moved. `hook`, `agent-hook`,
+  `statusline`, `ask` and `grade` are no longer listed in the help but work as before.
+- `grip config` shows where each value comes from (`default`, `pyproject.toml`,
+  `.grip.toml`, `env GRIP_…` or a flag) and which configuration files it read, and takes
+  `--provider`, `--model`, `--passing-score` and `--difficulty` to preview a run with
+  those flags. `grip status` shows a short summary instead of the full table: provider,
+  pass mark, difficulty and hook mode.
+- Docs: new pages on cost and privacy per provider, rolling grip out to a team, removing
+  it, and a glossary. The FAQ, honest numbers and home page no longer say that every run
+  asks new questions or that `anthropic` is the default provider, the README says the
+  offline `fake` grader only checks answer length, and the Mitchell Hashimoto quote links
+  to his post.
+
+### Fixed
+
+- `--range main...HEAD` (three dots) no longer fails with `bad revision '.HEAD'`. It diffs
+  from the merge base, as git does, in `grip quiz`, `ask`, `check` and `whiteboard`.
+  `main..` and `main...` run up to `HEAD`, and a malformed range is rejected with the
+  expected form.
+- Git failures are one plain line instead of git's command line and stderr: "not inside a
+  git repository (run grip from your project)", "this repository has no commits yet",
+  "unknown revision 'nope'". `GRIP_DEBUG=1` also prints the full git command and output.
+  `grip status` works in a repository with no commits yet.
+- `grip quiz` without an interactive terminal (`grip quiz </dev/null`, a script) exits 2
+  and points to `grip ask` / `grip grade` or `grip whiteboard`, instead of skipping with
+  exit 0. Hooks still skip unless `require_tty` is set, and the notice no longer reads
+  "grip: grip needs".
+- A pasted answer that ends with an empty line ends there, instead of waiting for one
+  more Enter. Empty lines between pasted paragraphs are still kept.
+- `grip check` without a scope flag checks what the installed hooks quiz (the unpushed
+  commits for the default pre-push hook) instead of always the staged changes, which said
+  `ok` while the push would block. It says what it checked
+  (`grip: ok (unpushed commits)`), names a `--range` as typed instead of calling it "the
+  staged changes", and writes "1 file". Two scope flags at once (`--branch --unpushed`, `--range` with
+  `--staged`) are a usage error in `grip quiz`, `ask`, `check` and `whiteboard` instead of
+  the last one silently winning.
+- The installed hook runs grip by the absolute path of the grip that ran `grip install`,
+  then falls back to `PATH`, so a push from an IDE or GUI client whose `PATH` lacks grip is
+  quizzed instead of skipped with "grip: not installed". When that path is gone, the hook
+  says so and suggests `grip install` again, and `grip status` shows `grip missing`.
+  Re-running `grip install --append` refreshes the appended block.
+- CLI paper cuts: Ctrl-C exits 130 with `grip: stopped, nothing recorded.` instead of
+  `Aborted!` and exit 1; `grip forget` says `no remembered passes` when there were none;
+  pause times are shown in local time with the time zone instead of UTC; a change where
+  every file is binary is skipped instead of quizzed; `grip status`, `install` and
+  `uninstall` show hook paths relative to the repository root (`.git/hooks/pre-push`);
+  `grip grade --help` no longer lists `--fresh` and `--difficulty`, and grading uses the
+  difficulty `grip ask` wrote the questions at; a retry that reuses cached questions no
+  longer shows a "reading your diff" spinner.
+- A remembered pass can no longer be faked. `.git/grip/passed.json` now stores each pass's
+  score, pass mark, provider and model, and the hooks, `grip check` and the agent push
+  gate only accept it if the score reaches the current pass mark and, unless `fake` is
+  the configured provider, it was not graded by `fake`. `grip grade` no longer takes
+  `--passing-score`, and `grip status` says when a pass does not count and why. Passes
+  recorded by older versions are asked again once.
+- The Claude Code push gate honours `GRIP_SKIP=1 git push` typed in the command, as its
+  message promised; before, it only read its own environment and denied the push anyway.
+  The `/grip` skill no longer tells the agent where the rubrics are stored, every skill
+  and the agent rules say not to read `.git/grip/`, and the docs say plainly that the
+  rubrics are on disk there and that an agent with file access could read them.
 
 ## [0.4.1] - 2026-10-21
 

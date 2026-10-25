@@ -8,8 +8,9 @@ pick, not on the transport.
 
 With no `provider` set anywhere, grip uses `auto`: the first of Claude Code, Codex and
 Gemini CLI it finds on `PATH`, and the Anthropic API when there is none. `grip status`
-and `grip install` say which one that is. `grip init` asks, and writes your choice to
-`.grip.toml`; `provider = "auto"` there lets each teammate use the agent they have.
+and `grip install` say which one that is. `grip init` writes `provider = "auto"` to
+`.grip.toml` so each teammate uses the agent they have, unless you pick a provider in its
+menu. `--provider auto` works on the command line too.
 
 ## Coding agents you already have
 
@@ -74,6 +75,11 @@ Credentials are resolved the way the SDK does: `ANTHROPIC_API_KEY`, then
 `ANTHROPIC_AUTH_TOKEN`, then a profile created by `ant auth login`. Set `api_key_env` to
 read the key from a differently named variable, and `base_url` to go through a gateway.
 
+grip checks for a credential before it shows the quiz or calls the model. With none, it
+stops at once and lists the ways out: set the key variable, switch to a coding agent
+installed on the machine (no key needed), or try `--provider fake` offline. The OpenAI
+provider does the same for `OPENAI_API_KEY`.
+
 `effort` maps to the API's `output_config.effort`. `medium` is a good balance between
 question quality and hook latency; raise it for `difficulty = "hard"`, lower it if the hook
 feels slow. It is omitted automatically for Haiku 4.5, which does not support it.
@@ -102,7 +108,9 @@ base_url = "https://api.openai.com/v1"   # default
 api_key_env = "OPENAI_API_KEY"           # default
 ```
 
-This provider is implemented with the standard library, so it adds no dependency.
+This provider is implemented with the standard library, so it adds no dependency. With a
+`base_url` set and no key in the environment, it sends no `Authorization` header, for
+self-hosted servers that take none.
 
 ## fake (offline)
 
@@ -122,6 +130,6 @@ Two environment variables shape it:
 
 ## Writing your own
 
-Implement the `Provider` protocol (two methods) and register a factory in
-`grip_hook.providers.REGISTRY`. See the [API reference](reference/providers.md) and
+Implement the `Provider` protocol (`generate_questions`, `generate_board` and `grade`)
+and register a factory in `grip_hook.providers.REGISTRY`. See the [API reference](reference/providers.md) and
 `tests/test_providers.py` for the testing pattern.

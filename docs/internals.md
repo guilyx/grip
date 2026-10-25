@@ -60,20 +60,33 @@ agent relaying them.
 ```sh
 #!/bin/sh
 # managed-by: grip-hook
+grip_bin='/home/you/.local/bin/grip'
+if [ -x "$grip_bin" ]; then
+  exec "$grip_bin" hook pre-push "$@"
+fi
 if command -v grip >/dev/null 2>&1; then
   exec grip hook pre-push "$@"
 fi
 if command -v python3 >/dev/null 2>&1 && python3 -c "import grip_hook" >/dev/null 2>&1; then
   exec python3 -m grip_hook hook pre-push "$@"
 fi
-echo "grip: not installed (pipx install grip-hook), skipping quiz" >&2
+echo "grip: not installed (pipx install grip-hook), skipping the quiz." >&2
 exit 0
 ```
 
+`grip_bin` is the absolute path of the grip that ran `grip install` (or of its Python,
+run as `python -m grip_hook`, when grip was started that way). It comes first because IDEs
+and GUI git clients often run hooks with a `PATH` that does not have grip on it; `PATH` and
+`python3` are the fallbacks. Paths are single-quoted and written with forward slashes,
+which git-bash on Windows reads as well. When that path is gone (a deleted virtualenv, a
+moved install) and no fallback works, the hook says so, suggests running `grip install`
+again, and lets the push through; `grip status` flags such a hook as `grip missing`.
+
 The marker line is how `grip install` and `grip uninstall` recognise their own file and
 leave anyone else's alone. With `--append`, grip adds a guarded block to an existing hook
-instead of replacing it. When grip is not installed on a machine, the hook says so and
-lets the push through: a teammate without grip is never locked out of the repository.
+instead of replacing it; running `grip install --append` again rewrites that block with
+the current path. When grip is not installed on a machine, the hook says so and lets the
+push through: a teammate without grip is never locked out of the repository.
 
 Under the [pre-commit framework](getting-started.md#3-wire-it-into-git), pre-commit calls
 `grip hook` itself and passes the pushed range in `PRE_COMMIT_FROM_REF` and
@@ -96,11 +109,13 @@ checks, in this order, and stops at the first that applies:
 3. **A pause from `grip skip`** is pending: consume it and skip. `grip skip` stores a
    one-off skip, `grip skip --hours N` a deadline; both live in `.git/grip/skip.json`.
 4. Load the configuration and **collect the diff** (next section).
-5. **The diff is empty** after exclusions: skip.
-6. **This exact diff passed recently**: skip, with
+5. **The diff is empty** after exclusions, or **only binary files changed**
+   (`git diff --numstat` counts every file as `-`): skip.
+6. **This exact diff passed recently**, and that pass still counts (see below): skip, with
    `this exact diff already passed recently, skipping the quiz.`
 7. **No interactive terminal** can be found: skip, unless `require_tty = true`, which
-   turns this into a failure.
+   turns this into a failure. A `grip quiz` typed by hand always fails here (exit 2),
+   since skipping would look like a pass.
 8. Run the quiz. If the provider fails (no key, network down, malformed reply) the push is
    **blocked** with the error and the two ways around it, unless `fail_open = true`.
 
@@ -145,11 +160,15 @@ The patch is then shaped for a model:
 - **Format.** `--find-renames`, three lines of context, and only added, copied, deleted,
   modified, renamed or type-changed files.
 - **Size.** A patch over `max_diff_bytes` (200 kB by default) is cut, and the model is
-  told it was cut and to ask only about what it can see.
+  told it was cut and to ask only about what it can see. The terminal quiz says so too:
+  `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
 
-The result is a `Diff`: a description (`staged changes`, `b05e4728c893..e3c589438444`),
-the `--stat` summary, the patch, the file list, and a **digest**: the SHA-256 of the patch
-text. The digest is how grip recognises "this exact diff" later.
+The result is a `Diff`: a description for people (`staged changes`,
+`3 commits on feat/x → origin`, `main..HEAD` as typed, and for a push that starts at the
+first commit, `everything since the first commit` rather than the empty tree's hash),
+the `--stat` summary, the patch, the file list, the size before any cut, and a
+**digest**: the SHA-256 of the patch text alone. The digest is how grip recognises "this
+exact diff" later, so a friendlier description never makes it forget a pass.
 
 ## Talking to the model
 
@@ -176,7 +195,7 @@ The `difficulty` setting adds one paragraph:
 **The user message** carries the change:
 
 ```text
-Scope: b05e4728c893..e3c589438444
+Scope: 1 commit on main → origin
 
 Summary:
  api/auth.py             | 13 +++++++++++++
@@ -249,7 +268,10 @@ question, its rubric and your answer, under these rules:
 - proportional partial credit for partial answers;
 - 0 for empty, "I don't know", off-topic or confidently wrong answers;
 - spelling, grammar and brevity are ignored: you are typing in a terminal;
-- one or two sentences of concrete feedback per answer, naming what was missing.
+- one or two sentences of feedback per answer: what was right and, when points were lost,
+  where in the change to look again and what *kind* of point is missing ("think about
+  what happens when two requests race"), never the missing rubric point itself. Feedback
+  that names the answer would let a retry pass by pasting it back.
 
 All five answers are graded in one call, so the grader sees them side by side. The Grip
 Score is the sum of the five grades, capped at 100; a score at or above `passing_score`
@@ -263,10 +285,24 @@ same points would be expected.
 
 ## Remembering passes, and getting out of the way
 
-`.git/grip/passed.json` maps diff digests to the time they passed. On every check, entries
-older than `remember_passes_hours` (24 by default; 0 turns remembering off) are dropped.
-A pass is recorded only when a quiz, a whiteboard defense or an agent-driven quiz scores
-at or above the pass mark.
+`.git/grip/passed.json` maps diff digests to the pass: when it happened, the score, the
+pass mark it was graded against, and the provider and model that graded it. On every
+check, entries older than `remember_passes_hours` (24 by default; 0 turns remembering off)
+are dropped. A pass is recorded only when a quiz, a whiteboard defense or an agent-driven
+quiz scores at or above the pass mark.
+
+A remembered pass is checked again against the settings in force when it is read, by the
+hooks, `grip check`, the agent push gate and `grip status`:
+
+- the score must reach the **current** pass mark. `grip quiz --passing-score 0` can pass
+  blank answers, but that pass does not open a hook that expects 70. `grip grade`, the
+  command a coding agent runs, has no `--passing-score` at all;
+- a pass graded by the `fake` provider counts only while `fake` is the configured
+  provider. It is there for demos and tests, and scores by answer length.
+
+`grip status` says when a remembered pass does not count, and why. Entries written by
+grip 0.4.1 and older hold only a time, so they cannot be checked and do not count: those
+diffs are asked once more.
 
 Because the key is the digest of the patch, a pass carries across ways of asking. Defend
 the unpushed commits at the whiteboard and the next `git push` of the same commits skips
@@ -284,8 +320,16 @@ A retry then costs one grading call instead of two, and a whiteboard opens at on
 instead of being redrawn. Grading is never cached, because the answers are what changed.
 A board that failed validation is replaced by the corrected one, so a retry starts from a
 board that passed the checks. Entries expire after `cache_hours` (24 by default; 0 turns
-the cache off), and `--fresh` skips it for one run. `grip submit` never uses it: a score
-reported to Keep A Grip comes from questions written for that attempt.
+the cache off), and `--fresh` skips it for one run. `grip platform submit` never uses it: a
+score reported to Keep A Grip comes from questions written for that attempt.
+
+Reusing the questions means the second attempt is on questions whose feedback the
+developer has just read. The feedback is written not to give the answers away (see
+[Rubrics and grading](#rubrics-and-grading)), and `retry_questions` decides the rest.
+`same`, the default, keeps the cache's saving. `new` deletes every entry stored for the
+diff when a quiz, a whiteboard defense or a `grip grade` fails, so the next try writes
+new questions (or draws a new board) at the cost of one more model call. Each entry
+records the digest of its diff for this.
 
 `grip skip` writes `{"once": true}` to `.git/grip/skip.json`, consumed by the next hook
 run; `grip skip --hours N` writes a deadline; `grip resume` clears both. Only hooks and
@@ -298,7 +342,8 @@ receives the ref list there, and the pre-commit framework captures output. `term
 uses standard input and output when both are interactive. Otherwise it opens the
 controlling terminal directly: `/dev/tty`, or `CONIN$` and `CONOUT$` on Windows. That is
 why the quiz works inside `git push` and under pre-commit. When neither exists (an IDE
-running git headlessly, a script), grip skips, or fails when `require_tty = true`.
+running git headlessly, a script), the hook skips, or fails when `require_tty = true`;
+`grip quiz` fails.
 
 ## Coding agents
 
@@ -316,7 +361,10 @@ The [`/grip` skill](agents.md) tells the agent never to answer, hint or open the
 the developer. The Claude Code plugin adds a guard that does not depend on the agent
 following instructions. `grip agent-hook claude-code` runs as a `PreToolUse` hook,
 recognises `git push` (including `git -C dir push` and pushes chained with `&&` or `;`),
-and returns a `deny` decision until `grip check` passes.
+and returns a `deny` decision until `grip check` passes. It steps aside, as the git hook
+would, when `GRIP_SKIP` reaches git: every gated command in the line carries a
+`GRIP_SKIP=1` prefix (also after `env`) or follows an `export GRIP_SKIP=1`. The line is
+split with shell quoting rules; one that does not parse is gated as usual.
 
 ## The whiteboard
 
@@ -409,7 +457,7 @@ with no rubrics and no grading, for sharing a board.
 | Your answers | Sent to the provider for grading | Yes, to the same provider |
 | The latest report: questions, rubrics, answers, grades | `.git/grip/last-report.json` | No |
 | Every graded quiz | `.git/grip/history.jsonl` | No |
-| Passed digests | `.git/grip/passed.json` | No |
+| Passed digests, with score, pass mark and grader | `.git/grip/passed.json` | No |
 | A quiz waiting for an agent | `.git/grip/pending.json` | No |
 | Skips and pauses | `.git/grip/skip.json` | No |
 | Questions and boards kept for a retry | `.git/grip/cache/` | No |
