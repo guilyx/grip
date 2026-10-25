@@ -14,6 +14,17 @@ All notable changes to this project are documented here. The format follows
   `grip ask` adds the same as data in a `hint` field. The "Try it" line at the end of
   `grip init` suggests a command that has something to quiz in that repository.
 
+### Fixed
+
+- `--range main...HEAD` (three dots) no longer fails with `bad revision '.HEAD'`. It diffs
+  from the merge base, as git does, in `grip quiz`, `ask`, `check` and `whiteboard`.
+  `main..` and `main...` run up to `HEAD`, and a malformed range is rejected with the
+  expected form.
+- Git failures are one plain line instead of git's command line and stderr: "not inside a
+  git repository (run grip from your project)", "this repository has no commits yet",
+  "unknown revision 'nope'". `GRIP_DEBUG=1` also prints the full git command and output.
+  `grip status` works in a repository with no commits yet.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
