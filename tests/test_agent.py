@@ -55,7 +55,18 @@ def _hook_payload(command: str, cwd: Path) -> str:
 def test_ask_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["ask"])
     assert result.exit_code == 0, result.output
-    assert _json(result)["status"] == "nothing-to-quiz"
+    payload = _json(result)
+    assert payload["status"] == "nothing-to-quiz"
+    assert "`git add` it first" in str(payload["message"])
+    # .grip.toml is untracked and the one commit is on no remote.
+    assert payload["hint"] == {
+        "staged_files": 0,
+        "modified_files": 0,
+        "untracked_files": 1,
+        "unpushed_commits": 1,
+        "branch_commits": 0,
+        "try": ["git add", "grip ask --unpushed"],
+    }
     assert not (in_repo / ".git" / "grip" / "pending.json").exists()
 
 

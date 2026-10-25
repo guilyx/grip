@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,30 @@ def test_init_writes_everything(in_repo: Path) -> None:
     assert (in_repo / ".git" / "hooks" / "pre-push").exists()
     assert not (in_repo / ".git" / "hooks" / "pre-commit").exists()
     assert (in_repo / "AGENTS.md").exists()
-    assert "grip quiz --provider fake" in result.output
+    # Nothing is staged and the files init wrote are untracked: a bare quiz would be empty.
+    assert (
+        "Try it: stage a change with `git add` (the files above will do), then grip quiz "
+        "--provider fake." in " ".join(result.output.split())
+    )
+
+
+def test_init_suggests_a_quiz_that_finds_something(
+    in_repo: Path, run_git: Callable[..., str]
+) -> None:
+    (in_repo / "README.md").write_text("# staged\n")
+    run_git("add", "README.md")
+    result = CliRunner().invoke(cli, ["init", "--yes", "--provider", "fake"])
+    assert "Try it: grip quiz --provider fake." in " ".join(result.output.split())
+    run_git("commit", "-q", "-m", "readme")
+    run_git("checkout", "-q", "-b", "feat")
+    run_git("commit", "-q", "--allow-empty", "-m", "empty")
+    result = CliRunner().invoke(cli, ["init", "--yes"])
+    assert "Try it: grip quiz --branch --provider fake." in " ".join(result.output.split())
+    (in_repo / ".git" / "info").mkdir(exist_ok=True)
+    (in_repo / ".git" / "info" / "exclude").write_text(".grip.toml\nAGENTS.md\n")
+    run_git("checkout", "-q", "main")
+    result = CliRunner().invoke(cli, ["init", "--yes", "--no-agents"])
+    assert "Try it: grip quiz --unpushed --provider fake." in " ".join(result.output.split())
 
 
 def test_init_keeps_existing_toml_unless_forced(in_repo: Path) -> None:
