@@ -273,3 +273,20 @@ def test_a_remembered_pass_must_clear_the_bar_of_its_files(
     assert result.exit_code == 1, result.output  # the hook would ask again, so check does
     status = " ".join(runner.invoke(cli, ["status"]).output.split())
     assert "does not count (below the pass mark of 90)" in status
+
+
+def test_force_does_not_override_a_skip_rule(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("docs/intro.md", "# intro\n")
+
+    def boom() -> None:
+        raise AssertionError("terminal should not be opened")
+
+    monkeypatch.setattr(cli_module, "open_terminal", boom)
+    result = runner.invoke(cli, ["quiz", "--force"])  # --force is for skip_paths and the like
+    assert result.exit_code == 0, result.output
+    assert "[[paths]] rule with skip = true" in " ".join(result.output.split())

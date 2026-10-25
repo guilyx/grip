@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
   questions about the diff since the merge base and posts them as one comment, updated on
   every push, for the author or a reviewer to answer in review. Nothing is graded in CI.
   `export-board: true` also uploads the whiteboard as a workflow artifact and links it.
+- Diffs with nothing to explain are skipped, with the reason printed: only renames or mode
+  changes, only whitespace (a re-indent still counts), only paths in the new `skip_paths`
+  option (e.g. `["docs/**", "*.md"]`), or fewer added and removed lines than the new
+  `min_changed_lines` option (off by default). `grip check`, the agent push gate and
+  `grip status` agree with the hook; `grip quiz --force` quizzes such a diff anyway.
 
 ### Changed
 

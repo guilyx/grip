@@ -50,7 +50,7 @@ from grip_hook.config import (
     resolve_config,
 )
 from grip_hook.errors import GitError, GripError, NoTerminalError, ProviderError, QuizFailed
-from grip_hook.git import NO_COMMITS, Diff, Git, PushedRef
+from grip_hook.git import NO_COMMITS, Diff, Git, PushedRef, matches_path
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory, PassRecord, SkipState, local_time
@@ -304,6 +304,49 @@ def _provider(git: Git, cfg: Config) -> Provider:
     return CachedProvider(provider, GenerationCache(git.git_dir(), cfg.cache_hours), reused)
 
 
+def _trivial(diff: Diff, cfg: Config) -> str | None:
+    """Why ``diff`` has nothing to explain, or ``None`` when it deserves a quiz.
+
+    A diff that only touches ``skip_paths``, only renames files or changes their mode, only
+    changes whitespace (a re-indent is not whitespace), or changes fewer lines than
+    ``min_changed_lines``. A binary file, or a diff git did not measure, always counts.
+    """
+    if cfg.skip_paths and diff.files and all(matches_path(f, cfg.skip_paths) for f in diff.files):
+        return f"it only touches skip_paths ({', '.join(cfg.skip_paths)})"
+    stats = diff.stats
+    if stats is None or stats.binary:
+        return None
+    if stats.changed == 0:
+        return "it changes no lines (only renames, mode changes or empty files)"
+    if stats.significant == 0:
+        return "it only changes whitespace"
+    if stats.changed < cfg.min_changed_lines:
+        lines = f"{stats.changed} changed line{'' if stats.changed == 1 else 's'}"
+        return f"{lines}, under min_changed_lines = {cfg.min_changed_lines}"
+    return None
+
+
+def _nothing_to_quiz(diff: Diff, cfg: Config, stage: Stage, *, force: bool) -> str | None:
+    """What to print when ``diff`` is not quizzed at all, or ``None`` to quiz it.
+
+    ``force`` overrides :func:`_trivial` only: an empty or binary-only diff has nothing to
+    ask about, and a ``[[paths]]`` ``skip = true`` rule is the repository's own decision.
+    """
+    if diff.is_empty:
+        return "nothing to quiz, no changes found."
+    if diff.binary_only:
+        return BINARY_ONLY
+    if cfg.skips(diff.files):
+        return f"nothing to quiz, {escape(PATHS_SKIPPED)}."
+    reason = None if force else _trivial(diff, cfg)
+    if reason is None:
+        return None
+    reason = escape(reason)  # skip_paths globs such as test_[ab].py are not markup
+    if stage is Stage.MANUAL:
+        return f"nothing to explain: {reason}. `grip quiz --force` quizzes it anyway."
+    return f"nothing to explain: {reason}, skipping the quiz."
+
+
 def _after_failure(git: Git, cfg: Config, digest: str) -> str:
     """Forget the questions just failed when ``retry_questions = "new"``; what to tell.
 
@@ -323,15 +366,15 @@ def _run(
     cfg: Config,
     stage: Stage,
     report_path: Path | None,
+    *,
+    force: bool = False,
 ) -> int:
-    """Shared driver for ``quiz`` and ``hook``. Returns the process exit code."""
-    if diff.is_empty or diff.binary_only or cfg.skips(diff.files):
-        if diff.binary_only:
-            _skip(BINARY_ONLY)
-        elif diff.is_empty:
-            _skip("nothing to quiz, no changes found.")
-        else:
-            _skip(f"nothing to quiz, {escape(PATHS_SKIPPED)}.")
+    """Shared driver for ``quiz`` and ``hook``. Returns the process exit code.
+
+    ``force`` quizzes a diff that :func:`_trivial` would skip.
+    """
+    if skipped := _nothing_to_quiz(diff, cfg, stage, force=force):
+        _skip(skipped)
         return 0
     cfg = cfg.for_files(diff.files)
 
@@ -563,10 +606,16 @@ def _diff_options(
 
 @cli.command()
 @_diff_options()
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Quiz a diff with nothing to explain (renames, whitespace, skip_paths) anyway.",
+)
 @quiz_options
 def quiz(
     mode: str | None,
     rev_range: str | None,
+    force: bool,
     report_path: Path | None,
     **overrides: Any,
 ) -> None:
@@ -577,7 +626,7 @@ def quiz(
     if diff.is_empty:
         _skip(f"nothing to quiz: {_nothing_found(git, cfg, mode, rev_range, 'quiz')[0]}")
         return
-    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
+    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path, force=force))
 
 
 def _branch_diff(git: Git, cfg: Config) -> Diff | None:
@@ -1079,7 +1128,8 @@ def _scope_name(mode: str | None, rev_range: str | None) -> str:
 def _check(git: Git, cfg: Config, mode: str | None, rev_range: str | None) -> str | None:
     """``None`` when the diff may go through, otherwise why it may not."""
     diff = _select_diff(git, cfg, mode, rev_range)
-    if diff.is_empty or diff.binary_only or cfg.skips(diff.files):  # nor does the hook
+    # The hook does not quiz any of these either.
+    if diff.is_empty or diff.binary_only or cfg.skips(diff.files) or _trivial(diff, cfg):
         return None
     cfg = cfg.for_files(diff.files)  # the pass mark the hook would ask for
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest, cfg):
@@ -1647,15 +1697,25 @@ def _at(when: datetime, now: datetime | None = None) -> str:
     return f"at {local:%H:%M}" if local.date() == today else f"on {local:%Y-%m-%d %H:%M}"
 
 
+def _not_quizzed(diff: Diff, cfg: Config) -> str | None:
+    """How `grip status` names a diff the hooks would not quiz, or ``None``."""
+    if diff.is_empty:
+        return "nothing"
+    if cfg.skips(diff.files):
+        return f"skipped by {escape('[[paths]]')} ({_files(diff)})"
+    if reason := _trivial(diff, cfg):
+        return f"nothing to explain ({escape(reason)})"
+    return None
+
+
 def _diff_state(git: Git, cfg: Config, mode: str) -> str:
     """Whether the staged, unpushed or branch diff passed: ``passed 98 at 17:52``."""
     try:
         diff = _select_diff(git, cfg, mode, None)
     except GripError as exc:
         return f"[yellow]could not check[/yellow] ({escape(str(exc))})"
-    if diff.is_empty or cfg.skips(diff.files):
-        skipped = f"skipped by {escape('[[paths]]')} ({_files(diff)})"
-        return f"[dim]{'nothing' if diff.is_empty else skipped}[/dim]"
+    if skipped := _not_quizzed(diff, cfg):
+        return f"[dim]{skipped}[/dim]"
     cfg = cfg.for_files(diff.files)
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     files = _files(diff)
