@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `grip config` shows where each value comes from (`default`, `pyproject.toml`,
+  `.grip.toml`, `env GRIP_…` or a flag) and which configuration files it read, and takes
+  `--provider`, `--model`, `--passing-score` and `--difficulty` to preview a run with
+  those flags. `grip status` shows a short summary instead of the full table: provider,
+  pass mark, difficulty and hook mode.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

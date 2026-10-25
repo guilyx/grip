@@ -254,7 +254,9 @@ def test_install_status_uninstall(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
     assert "installed" in result.output
-    assert "passing_score" in result.output
+    assert "pass mark" in result.output and "70/100" in result.output
+    assert "passing_score" not in result.output  # the full table is `grip config`'s
+    assert "grip config" in result.output
 
     result = runner.invoke(cli, ["config"])
     assert result.exit_code == 0 and "fake" in result.output
@@ -265,6 +267,34 @@ def test_install_status_uninstall(runner: CliRunner, in_repo: Path) -> None:
     assert not (in_repo / ".git" / "hooks" / "pre-commit").exists()
     result = runner.invoke(cli, ["uninstall"])
     assert "nothing to remove" in result.output
+
+
+def _row(output: str, option: str) -> str:
+    """The table row for ``option``, its cells joined by single spaces."""
+    for line in output.splitlines():
+        words = line.replace("│", " ").replace("|", " ").split()
+        if words and words[0] == option:
+            return " ".join(words)
+    raise AssertionError(f"no row for {option} in:\n{output}")
+
+
+def test_config_shows_where_each_value_came_from(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for key in [k for k in os.environ if k.startswith("GRIP_") and k != "GRIP_DATA_HOME"]:
+        monkeypatch.delenv(key)
+    monkeypatch.setenv("GRIP_TIMEOUT", "30")
+    result = runner.invoke(cli, ["config", "--difficulty", "hard"])
+    assert result.exit_code == 0, result.output
+    assert _row(result.output, "provider") == "provider fake .grip.toml"
+    assert _row(result.output, "timeout") == "timeout 30.0 env GRIP_TIMEOUT"
+    assert _row(result.output, "difficulty") == "difficulty hard flag --difficulty"
+    assert _row(result.output, "passing_score") == "passing_score 70 default"
+    assert "config files" in result.output and ".grip.toml" in result.output
+
+    (in_repo / ".grip.toml").unlink()
+    result = runner.invoke(cli, ["config"])
+    assert "no config file" in result.output and "[tool.grip]" in result.output
 
 
 def test_install_foreign_hook_error(runner: CliRunner, in_repo: Path) -> None:

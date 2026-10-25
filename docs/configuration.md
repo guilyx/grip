@@ -7,7 +7,11 @@ grip reads configuration from four places. Higher in the list wins.
 3. `.grip.toml` at the repository root.
 4. `[tool.grip]` in `pyproject.toml` at the repository root.
 
-`grip config` prints the effective result.
+`grip config` prints the effective result: every option, its value and where that value
+came from (`default`, `pyproject.toml`, `.grip.toml`, `env GRIP_TIMEOUT`,
+`flag --difficulty`), then the configuration files it read. It takes `--provider`,
+`--model`, `--passing-score` and `--difficulty` to show what a run with those flags would
+use. `grip status` shows only the provider, pass mark, difficulty and hook mode.
 
 ## Options
 

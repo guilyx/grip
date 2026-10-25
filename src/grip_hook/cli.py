@@ -38,11 +38,13 @@ from grip_hook.config import (
     AGENT_PROVIDERS,
     AUTO_PROVIDER,
     DEFAULT_PASSING_SCORE,
+    DEFAULT_SOURCE,
     Config,
     auto_provider,
     describe,
     load_config,
     render_template,
+    resolve_config,
 )
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
 from grip_hook.git import Diff, Git, PushedRef
@@ -1122,7 +1124,7 @@ def uninstall_cmd(stages: tuple[str, ...]) -> None:
 
 @cli.command(name="status")
 def status_cmd() -> None:
-    """Show which hooks are installed and the effective configuration."""
+    """Show which hooks are installed, what passed, and a summary of the configuration."""
     git = Git()
     table = Table(title="hooks", show_header=True, header_style="bold")
     table.add_column("stage")
@@ -1146,7 +1148,7 @@ def status_cmd() -> None:
         )
     cfg = _config(git)
     _print_activity(git, cfg)
-    _print_config(cfg)
+    _print_config_summary(cfg)
 
 
 def _ago(when: datetime, now: datetime | None = None) -> str:
@@ -1214,19 +1216,65 @@ def _print_activity(git: Git, cfg: Config) -> None:
     _out.print(table)
 
 
-@cli.command(name="config")
-def config_cmd() -> None:
-    """Print the effective configuration."""
-    _print_config(_config(Git()))
-
-
-def _print_config(cfg: Config) -> None:
-    table = Table(title="config", show_header=True, header_style="bold")
-    table.add_column("option")
-    table.add_column("value")
-    for name, value in describe(cfg):
-        table.add_row(name, value)
+def _print_config_summary(cfg: Config) -> None:
+    """The options that decide what a quiz is like; `grip config` has the rest."""
+    values = dict(describe(cfg))
+    table = Table(title="config", show_header=False, box=None, pad_edge=False)
+    table.add_column(style="bold")
+    table.add_column()
+    table.add_row("provider", escape(values["provider"]))
+    table.add_row("pass mark", f"{cfg.passing_score}/{MAX_SCORE}")
+    table.add_row("difficulty", cfg.difficulty.value)
+    table.add_row("hook mode", cfg.hook_mode)
     _out.print(table)
+    _out.print("[dim]Run `grip config` for every option and where each value comes from.[/dim]")
+
+
+@cli.command(name="config")
+@click.option(
+    "--provider",
+    type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+    default=None,
+    help="Show the configuration as a run with this --provider would see it.",
+)
+@click.option("--model", default=None, help="Likewise for --model.")
+@click.option(
+    "--passing-score",
+    type=click.IntRange(0, MAX_SCORE),
+    default=None,
+    help="Likewise for --passing-score.",
+)
+@click.option(
+    "--difficulty",
+    type=click.Choice([d.value for d in Difficulty], case_sensitive=False),
+    default=None,
+    help="Likewise for --difficulty.",
+)
+def config_cmd(**overrides: Any) -> None:
+    """Print every option, its effective value and where it came from.
+
+    Each value comes from the highest of: a command-line flag, a GRIP_* environment
+    variable, .grip.toml, [tool.grip] in pyproject.toml, the built-in default. The
+    flags here show what a `grip quiz` with the same flags would use.
+    """
+    git = Git()
+    resolved = resolve_config(git.root(), overrides=overrides)
+    table = Table(title="config", show_header=True, header_style="bold")
+    table.add_column("option", no_wrap=True)
+    table.add_column("value")
+    table.add_column("source", no_wrap=True)
+    for name, value in describe(resolved.config):
+        source = resolved.sources[name]
+        shown = f"[dim]{source}[/dim]" if source == DEFAULT_SOURCE else escape(source)
+        table.add_row(name, escape(value), shown)
+    _out.print(table)
+    if resolved.files:
+        _out.print("config files, lowest precedence first:")
+        for path in resolved.files:
+            _out.print(f"  {escape(_pretty_path(path))}")
+    else:
+        tool = escape("[tool.grip]")
+        _out.print(f"[dim]no config file: no .grip.toml or {tool} in pyproject.toml.[/dim]")
 
 
 @cli.command(name="skip")

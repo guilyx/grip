@@ -143,9 +143,10 @@ with a marker line so `uninstall` never touches a hook it does not own.
 ## `grip status`
 
 Shows which stages have grip installed, whether a foreign hook is in the way, the last
-quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
-configuration, and for each of the staged changes, the unpushed commits and the branch
-against the default branch, where it stands:
+quiz (score, pass or fail, how long ago), whether hooks are paused, a short configuration
+summary (provider, pass mark, difficulty, hook mode; `grip config` has the rest), and for
+each of the staged changes, the unpushed commits and the branch against the default
+branch, where it stands:
 
 ```text
 staged changes          nothing
@@ -184,7 +185,18 @@ it prints nothing and exits 0. It reads an optional JSON payload on stdin and us
 
 ## `grip config`
 
-Prints the effective configuration after merging files, environment and defaults.
+Prints every option with its effective value and where the value came from: `default`,
+`pyproject.toml`, `.grip.toml`, an environment variable (`env GRIP_TIMEOUT`) or a flag
+(`flag --difficulty`). Below the table it lists the configuration files it read, lowest
+precedence first. See [Configuration](configuration.md) for the order.
+
+```bash
+grip config                          # what a hook run here would use
+grip config --provider fake          # the same, as `grip quiz --provider fake` would see it
+```
+
+It takes `--provider`, `--model`, `--passing-score` and `--difficulty`, the flags most often
+passed to `grip quiz`.
 
 ## `grip last`
 
