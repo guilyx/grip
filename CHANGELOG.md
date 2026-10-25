@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `--range main...HEAD` (three dots) no longer fails with `bad revision '.HEAD'`. It diffs
+  from the merge base, as git does, in `grip quiz`, `ask`, `check` and `whiteboard`.
+  `main..` and `main...` run up to `HEAD`, and a malformed range is rejected with the
+  expected form.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

@@ -293,6 +293,29 @@ class Git:
         description = description or f"{_short(base)}..{_short(head)}"
         return self._collect(description, [base, head], exclude, max_bytes)
 
+    def merge_base_diff(
+        self,
+        base: str,
+        head: str,
+        exclude: tuple[str, ...] = (),
+        max_bytes: int = 200_000,
+    ) -> Diff:
+        """Changes on ``head`` since it forked from ``base``: what git means by ``base...head``.
+
+        Raises :class:`GitError` when a revision is unknown or the two share no history.
+        """
+        for rev in (base, head):
+            if not self.rev_exists(rev):
+                raise GitError(f"unknown revision '{rev}'")
+        fork = self.run("merge-base", base, head, check=False).strip()
+        if not fork:
+            raise GitError(
+                f"{base} and {head} share no history, so {base}...{head} has no merge base; "
+                f"use {base}..{head}"
+            )
+        description = f"{_short(base)}...{_short(head)}"
+        return self.range_diff(fork, head, exclude, max_bytes, description=description)
+
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
     ) -> Diff:

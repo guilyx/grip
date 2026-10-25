@@ -167,6 +167,39 @@ def test_range_description_keeps_branch_names(
     )
 
 
+def _fork(run_git: Callable[..., str], stage_change: Callable[[str, str], None]) -> None:
+    """A ``feat`` branch with ``f.txt`` and, after it forked, ``m.txt`` on main."""
+    run_git("checkout", "-q", "-b", "feat")
+    stage_change("f.txt", "f\n")
+    run_git("commit", "-q", "-m", "f")
+    run_git("checkout", "-q", "main")
+    stage_change("m.txt", "m\n")
+    run_git("commit", "-q", "-m", "m")
+
+
+def test_merge_base_diff_leaves_out_what_main_did_since(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    _fork(run_git, stage_change)
+    diff = git.merge_base_diff("main", "feat")
+    assert diff.files == ("f.txt",)
+    assert diff.description == "main...feat"
+    # Two dots compare the tips, so main's newer file shows up as deleted.
+    assert set(git.range_diff("main", "feat").files) == {"f.txt", "m.txt"}
+
+
+def test_merge_base_diff_errors(
+    git: Git, run_git: Callable[..., str], stage_change: Callable[[str, str], None]
+) -> None:
+    with pytest.raises(GitError, match="unknown revision 'nope'"):
+        git.merge_base_diff("nope", "HEAD")
+    run_git("checkout", "-q", "--orphan", "lonely")
+    stage_change("l.txt", "l\n")
+    run_git("commit", "-q", "-m", "l")
+    with pytest.raises(GitError, match="share no history"):
+        git.merge_base_diff("main", "lonely")
+
+
 def test_live_check_falls_back_when_the_remote_is_unreachable(
     git: Git, run_git: Callable[..., str]
 ) -> None:
