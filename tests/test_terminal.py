@@ -39,18 +39,29 @@ def test_has_terminal_is_bool() -> None:
 
 
 class _Pasting(StreamTerminal):
-    """A terminal that says a line is waiting while ``waiting`` lines remain."""
+    """A terminal fed in bursts: the lines of one burst arrive together, like a paste.
 
-    def __init__(self, text: str, waiting: list[bool]) -> None:
-        super().__init__(Console(file=io.StringIO()), io.StringIO(text))
-        self.waiting = waiting
+    A line is pending while the current burst has lines left. Reading past the burst
+    waits for the next one, as when the developer types or presses Enter.
+    """
+
+    def __init__(self, *bursts: list[str]) -> None:
+        super().__init__(Console(file=io.StringIO()), io.StringIO())
+        self.bursts = [list(burst) for burst in bursts]
+
+    def read_line(self, prompt: str = "") -> str:
+        while self.bursts and not self.bursts[0]:
+            self.bursts.pop(0)
+        if not self.bursts:
+            raise EOFError
+        return self.bursts[0].pop(0)
 
     def pending(self) -> bool:
-        return self.waiting.pop(0) if self.waiting else False
+        return bool(self.bursts and self.bursts[0])
 
 
 def test_a_typed_line_is_one_answer() -> None:
-    term = _Pasting("typed\nnext\n", [False])
+    term = _Pasting(["typed"], ["next"])
     assert read_answer(term, "> ") == "typed"
     assert read_answer(term, "> ") == "next"
 
@@ -58,13 +69,36 @@ def test_a_typed_line_is_one_answer() -> None:
 def test_a_paste_keeps_its_lines_and_ends_at_an_empty_line() -> None:
     # Pasted: "a", "", "b" arrive at once; "c" was left mid-line and needed Enter;
     # the empty line ends the answer, and the next line answers the next question.
-    term = _Pasting("a\n\nb\nc\n\nnext\n", [True, True, False])
+    term = _Pasting(["a", "", "b"], ["c"], [""], ["next"])
     assert read_answer(term, "> ") == "a\n\nb\nc"
     assert read_answer(term, "> ") == "next"
 
 
 def test_a_paste_at_the_end_of_input() -> None:
-    assert read_answer(_Pasting("a\nb\n", [True, False]), "> ") == "a\nb"
+    assert read_answer(_Pasting(["a", "b"]), "> ") == "a\nb"
+
+
+@pytest.mark.parametrize(
+    ("paste", "answer"),
+    [
+        (["line1", "line2", ""], "line1\nline2"),
+        (["a", "", "b", ""], "a\n\nb"),
+        (["a", "", ""], "a"),
+        (["one line", ""], "one line"),
+    ],
+)
+def test_a_paste_ending_in_an_empty_line_ends_the_answer(paste: list[str], answer: str) -> None:
+    # Nothing more is waiting after the paste's own empty line, so no extra Enter is needed:
+    # the next line typed answers the next question.
+    term = _Pasting(paste, ["next"])
+    assert read_answer(term, "> ") == answer
+    assert read_answer(term, "> ") == "next"
+
+
+def test_a_paste_cut_mid_line_runs_on_to_the_next_empty_line() -> None:
+    term = _Pasting(["a", "b"], ["c"], ["d"], [""], ["next"])
+    assert read_answer(term, "> ") == "a\nb\nc\nd"
+    assert read_answer(term, "> ") == "next"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the console cannot be polled")

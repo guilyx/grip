@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import re
 import threading
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, ClassVar
@@ -21,7 +23,9 @@ from grip_hook.git import Diff
 from grip_hook.models import Difficulty
 from grip_hook.providers.fake import FakeProvider, load_script
 from grip_hook.whiteboard import (
+    LABEL_CHARS,
     MARGIN,
+    NODE_W,
     Board,
     BoardError,
     Edge,
@@ -29,14 +33,19 @@ from grip_hook.whiteboard import (
     Pin,
     PinKind,
     board_data,
+    box_width,
     check_board,
     generate_board,
+    label_lines,
     layout,
 )
 from grip_hook.whiteboard_server import (
+    FONTS,
+    HEARTBEAT_PATH,
     MAX_BODY,
     WhiteboardServer,
     content_security_policy,
+    font,
     render_page,
 )
 
@@ -260,6 +269,55 @@ def test_replies_do_not_push_columns_and_a_feeder_sits_beside_its_target() -> No
     assert y["users"] < y["limiter"]
 
 
+@pytest.mark.parametrize(
+    ("label", "chars", "lines"),
+    [
+        ("handle()", 21, ["handle()"]),
+        ("route() and every real endpoint", 21, ["route() and every", "real endpoint"]),
+        (
+            "handle_incoming_request_with_limits()",
+            21,
+            ["handle_incoming_", "request_with_limits()"],
+        ),
+        (
+            "TokenBucketRateLimiter._allow_or_wait()",
+            23,
+            ["TokenBucketRateLimiter.", "_allow_or_wait()"],
+        ),
+        ("x" * 40, 21, ["x" * 21, "x" * 19]),
+        ("a" * 15 + " " + "b" * 30, 21, ["a" * 15 + " " + "b" * 5, "b" * 20 + "…"]),
+    ],
+)
+def test_labels_wrap_onto_two_lines_at_a_break(label: str, chars: int, lines: list[str]) -> None:
+    assert label_lines(label, chars) == lines
+    assert all(len(line) <= chars for line in lines)
+
+
+def _long_labels(board: Board) -> Board:
+    long = _mutate(board)
+    long.nodes[3].label = "TokenBucketRateLimiter._allow_or_wait()"  # allow, a column of its own
+    long.nodes[1].role = "entry point for every request on every public route"
+    return long
+
+
+def test_boxes_are_sized_to_their_text(board: Board) -> None:
+    placed = layout(_long_labels(board))
+    assert placed.widths["allow"] == box_width(23) > NODE_W  # its column widened to fit
+    assert placed.widths["route"] == placed.widths["allow"]  # the same column
+    assert placed.widths["handle"] == NODE_W == box_width(LABEL_CHARS)
+    assert placed.heights["allow"] > placed.heights["clock"]  # two lines of label
+    assert placed.heights["handle"] > placed.heights["clock"]  # two lines of role
+    x = {i: p[0] for i, p in placed.positions.items()}
+    assert x["buckets"] - x["allow"] == placed.widths["allow"] + (x["allow"] - x["handle"]) - NODE_W
+    assert placed.width == x["buckets"] + NODE_W + MARGIN
+
+
+def test_boxes_in_a_row_share_a_middle_line(board: Board) -> None:
+    placed = layout(_long_labels(board))
+    middle = {i: p[1] + placed.heights[i] / 2 for i, p in placed.positions.items()}
+    assert abs(middle["handle"] - middle["route"]) <= 0.5  # so the arrow between them is level
+
+
 # -- what the page receives ------------------------------------------------------------
 
 
@@ -288,13 +346,14 @@ def test_the_page_knows_how_to_bring_the_board_back(board: Board) -> None:
     ("mode", "rev_range", "command"),
     [
         ("staged", None, "grip whiteboard"),
+        (None, None, "grip whiteboard"),  # no scope flag: the staged changes
         ("branch", None, "grip whiteboard --branch"),
         ("unpushed", None, "grip whiteboard --unpushed"),
         ("staged", "main..feat/x", "grip whiteboard --range main..feat/x"),
         ("staged", "a b", "grip whiteboard --range 'a b'"),
     ],
 )
-def test_whiteboard_command(mode: str, rev_range: str | None, command: str) -> None:
+def test_whiteboard_command(mode: str | None, rev_range: str | None, command: str) -> None:
     from grip_hook.cli import _whiteboard_command  # noqa: PLC0415
 
     assert _whiteboard_command(mode, rev_range) == command
@@ -309,10 +368,29 @@ def test_the_page_caps_answers_where_grip_does(board: Board) -> None:
     assert '"Score interview"' in page
 
 
+def test_nodes_carry_their_box_and_lines(board: Board) -> None:
+    nodes = {n["id"]: n for n in _data(_long_labels(board))["nodes"]}
+    assert nodes["allow"]["lines"] == ["TokenBucketRateLimiter.", "_allow_or_wait()"]
+    assert nodes["allow"]["w"] == box_width(23)
+    assert nodes["handle"]["role_lines"] == 2
+    assert nodes["clock"]["lines"] == ["time.monotonic()"]
+    assert nodes["clock"]["role_lines"] == 1
+
+
 def test_opposite_edges_are_drawn_side_by_side(board: Board) -> None:
     offsets = {e["id"]: e["offset"] for e in _data(board)["edges"]}
     assert offsets["client->handle"] == -offsets["handle->client"] != 0
     assert offsets["handle->allow"] == 0
+
+
+def test_the_digest_names_one_board_in_one_mode(board: Board) -> None:
+    digest = _data(board)["digest"]
+    assert re.fullmatch(r"[0-9a-f]{16}", digest)
+    assert _data(board)["digest"] == digest
+    assert _data(board, "interview")["digest"] != digest
+    changed = _mutate(board)
+    changed.pins[0].question = "Why not a sliding log?"
+    assert _data(changed)["digest"] != digest
 
 
 def test_hostile_labels_cannot_escape_the_data_block(board: Board) -> None:
@@ -328,6 +406,19 @@ def test_hostile_labels_cannot_escape_the_data_block(board: Board) -> None:
     assert page.count("<script") == 2  # the data block and grip's own script, nothing else
 
 
+def test_the_page_has_a_heading_a_skip_link_and_a_small_live_region(board: Board) -> None:
+    page = render_page(_data(board))
+    assert re.search(r'<h1 class="sr-only" id="title">', page)
+    assert '<a class="skip" id="skip" href="#panel">' in page
+    # Only the status line is live: the panel would re-read every question on each click.
+    assert re.findall(r'<[^>]*(?:aria-live|role="(?:status|alert)")[^>]*>', page) == [
+        '<p class="sr-only" id="status" role="status">'
+    ]
+    # ...and the script adds none: copy notices and "grip stopped" go through announce().
+    assert '"aria-live"' not in page and '"alert"' not in page
+    assert ":focus-visible .ring" in page
+
+
 def test_csp_allows_exactly_the_inline_style_and_script(board: Board) -> None:
     page = render_page(_data(board))
     csp = content_security_policy(page)
@@ -335,7 +426,25 @@ def test_csp_allows_exactly_the_inline_style_and_script(board: Board) -> None:
     assert "unsafe-inline" not in csp
     assert csp.count("'sha256-") == 2
     assert "connect-src 'self'" in csp
+    assert "font-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+
+
+def test_fonts_are_bundled_with_their_licenses() -> None:
+    folder = ROOT / "src" / "grip_hook" / "fonts"
+    for name in FONTS:
+        assert font(name)[:4] == b"wOF2"
+    for family in ("Archivo", "InstrumentSans", "JetBrainsMono"):
+        assert "SIL OPEN FONT LICENSE" in (folder / f"{family}-OFL.txt").read_text("utf-8")
+    assert sum(len(font(name)) for name in FONTS) < 150_000  # subset, not whole families
+
+
+def test_a_standalone_page_carries_its_fonts(board: Board) -> None:
+    served = render_page(_data(board))
+    assert all(f'url("fonts/{name}")' in served for name in FONTS)
+    standalone = render_page(_data(board, "export"), embed_fonts=True)
+    assert 'url("fonts/' not in standalone
+    assert standalone.count('url("data:font/woff2;base64,') == len(FONTS)
 
 
 # -- the server ------------------------------------------------------------------------
@@ -406,6 +515,20 @@ def test_server_serves_the_page_only_behind_the_token(
     assert running.request("GET", f"/{running.server.token}x/")[0] == 404
 
 
+def test_server_serves_the_bundled_fonts_and_nothing_else(
+    served: tuple[_Running, list[dict[str, Any]]],
+) -> None:
+    running, _ = served
+    token = running.server.token
+    status, body, response = running.request("GET", f"/{token}/fonts/{FONTS[0]}")
+    assert status == 200
+    assert body == font(FONTS[0])
+    assert response.getheader("Content-Type") == "font/woff2"
+    assert running.request("GET", f"/fonts/{FONTS[0]}")[0] == 404  # behind the token
+    assert running.request("GET", f"/{token}/fonts/Archivo-OFL.txt")[0] == 404
+    assert running.request("GET", f"/{token}/fonts/../whiteboard.html")[0] == 404
+
+
 def test_server_rejects_other_hosts_and_origins(
     served: tuple[_Running, list[dict[str, Any]]],
 ) -> None:
@@ -452,6 +575,53 @@ def test_server_lets_the_page_retry_after_a_provider_error_then_grades_once(
 def test_server_stops_when_idle(board: Board) -> None:
     server = WhiteboardServer(render_page(_data(board)), lambda p: p, idle_seconds=0.2)
     assert server.serve() is None
+
+
+def test_heartbeat_is_behind_the_token_and_the_host(
+    served: tuple[_Running, list[dict[str, Any]]],
+) -> None:
+    running, seen = served
+    token = running.server.token
+    status, body, _ = running.request("GET", f"/{token}/{HEARTBEAT_PATH}")
+    assert (status, body) == (204, b"")
+    assert running.request("GET", f"/{HEARTBEAT_PATH}")[0] == 404
+    assert running.request("GET", f"/{token}x/{HEARTBEAT_PATH}")[0] == 404
+    evil_host = {"Host": f"evil.example:{running.server.port}"}
+    assert running.request("GET", f"/{token}/{HEARTBEAT_PATH}", headers=evil_host)[0] == 403
+    assert seen == []
+    assert running.thread.is_alive()
+
+
+def _keep_pinging(running: _Running, path: str, seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and running.thread.is_alive():
+        running.request("GET", path)
+        time.sleep(0.1)
+
+
+def test_heartbeats_keep_an_idle_server_running(board: Board) -> None:
+    running = _Running(WhiteboardServer(render_page(_data(board)), lambda p: p, idle_seconds=1))
+    _keep_pinging(running, f"/{running.server.token}/{HEARTBEAT_PATH}", 2.5)
+    assert running.thread.is_alive()  # 2.5 s without an answer, but the page is open
+    running.thread.join(timeout=5)  # the pings stop, as when the tab closes
+    assert not running.thread.is_alive()
+    assert running.outcome is None
+
+
+def test_requests_without_the_token_do_not_keep_it_running(board: Board) -> None:
+    running = _Running(WhiteboardServer(render_page(_data(board)), lambda p: p, idle_seconds=1))
+    with contextlib.suppress(OSError):  # the server stopped between two pings, as it should
+        _keep_pinging(running, f"/{HEARTBEAT_PATH}", 4)
+    running.thread.join(timeout=5)
+    assert not running.thread.is_alive()
+    assert running.outcome is None
+
+
+def test_the_page_pings_and_keeps_a_draft(board: Board) -> None:
+    page = render_page(_data(board))
+    assert f'fetch("{HEARTBEAT_PATH}"' in page
+    assert "sessionStorage" in page
+    assert "grip stopped: your answers are below, copy them" in page
 
 
 # -- the command -----------------------------------------------------------------------
@@ -523,6 +693,22 @@ def test_whiteboard_fail_exits_one_and_records_no_pass(
     assert CliRunner().invoke(cli, ["check"]).exit_code == 1
 
 
+@pytest.mark.parametrize(("retry", "redrawn"), [("same", False), ("new", True)])
+def test_whiteboard_retry_after_a_failure(
+    in_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_git: Callable[..., str],
+    retry: str,
+    redrawn: bool,
+) -> None:
+    monkeypatch.setenv("GRIP_RETRY_QUESTIONS", retry)
+    run_git("add", "api/handlers.py")
+    assert _run(monkeypatch, {"answers": [""] * 5}).exit_code == 1
+    again = _run(monkeypatch, {"answers": [""] * 5})
+    assert again.exit_code == 1
+    assert ("same diff as" not in again.stderr) is redrawn
+
+
 def test_whiteboard_interview_scores_ticks_and_records_nothing(
     in_repo: Path, monkeypatch: pytest.MonkeyPatch, run_git: Callable[..., str]
 ) -> None:
@@ -545,6 +731,7 @@ def test_whiteboard_export_writes_a_page_without_rubrics(
     page = out.read_text("utf-8")  # not the platform default: cp1252 cannot decode it
     assert '"mode": "export"' in page
     assert "Every new key starts with a full bucket" not in page
+    assert 'url("data:font/woff2;base64,' in page  # one file: the fonts travel with it
 
 
 def test_whiteboard_with_nothing_staged(in_repo: Path) -> None:

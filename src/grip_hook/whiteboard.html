@@ -6,11 +6,16 @@
 <meta name="referrer" content="no-referrer">
 <title>grip whiteboard</title>
 <style>
+/* Fonts bundled with grip (SIL Open Font License), subset to Latin. An export carries them
+   inline; if they are missing, the system fonts below stand in. */
+@font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 800; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 400 800; font-display: swap; }
 :root {
   --page: #f1ece8; --board: #fdfbf7; --dot: #ded8d4; --ink: #201e1c; --muted: #655f5b;
   --line: #c8c1bc; --node: #ffffff; --panel: #fdfbf7; --accent: #ff8644; --accent-ink: #9f3d00;
   --on-accent: #201e1c; --pass: #008f5f; --pass-soft: #bdffd6; --warn: #706000; --warn-soft: #ffecb3;
-  --fail: #a62168; --fail-soft: #ffe4f0; --zone: #fff3f8; --zone-line: #c83683;
+  --fail: #a62168; --fail-soft: #ffe4f0; --zone: #fff3f8; --zone-line: #c83683; --changed: #fff1e6;
   --display: "Archivo", "Arial Black", "Helvetica Neue", system-ui, sans-serif;
   --text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -20,14 +25,18 @@
   --page: #140f0c; --board: #201e1c; --dot: #332f2d; --ink: #f9f6f4; --muted: #b3aba6;
   --line: #4c4643; --node: #332f2d; --panel: #201e1c; --accent: #ff8644; --accent-ink: #ffac80;
   --on-accent: #140f0c; --pass: #6ddda2; --pass-soft: #003b26; --warn: #e1c046; --warn-soft: #383100;
-  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; color-scheme: dark;
+  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; --changed: #3d2b20; color-scheme: dark;
 } }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; padding: 14px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
   background: var(--page); color: var(--ink); font: 15px/1.5 var(--text); }
 button { font: inherit; color: inherit; cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2.5px solid var(--accent-ink); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: 16px; top: -60px; z-index: 10; padding: 8px 14px; border-radius: 999px;
+  background: var(--ink); color: var(--board); font-weight: 600; text-decoration: none; }
+.skip:focus { top: 10px; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 14px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand b { font: 800 22px/1 var(--display); letter-spacing: -0.03em; }
@@ -37,34 +46,56 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: 999px; padding: 4px 10px; color: var(--muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-.board { border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
-  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / 20px 20px, var(--board); }
-.scroller { overflow-x: auto; }  /* the drawing scrolls sideways on a phone; the legend stays put */
-.board svg { display: block; width: 100%; min-width: 620px; height: auto; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 16px 12px; font-size: 12.5px; color: var(--muted); }
+.board { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--board); }
+/* The board is drawn at full size or larger and moves inside this window: drag or scroll to
+   pan, Ctrl + scroll or pinch to zoom. On a wide screen it takes the height of the window. */
+.viewport { --z: 1; flex: 1 1 auto; min-height: 0; display: flex; overflow: auto; cursor: grab; touch-action: pan-x pan-y;
+  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / calc(20px * var(--z)) calc(20px * var(--z)), var(--board);
+  background-attachment: local; }
+.viewport.panning { cursor: grabbing; }
+.board svg { display: block; flex: none; margin: auto; user-select: none; -webkit-user-select: none; }
+@media (min-width: 901px) { .board { position: sticky; top: 14px; height: calc(100vh - 76px); height: calc(100dvh - 76px); min-height: 360px; } }
+@media (max-width: 900px) { .viewport { max-height: 62vh; } }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--muted); }
+.tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.tools .how { margin-right: 6px; font-size: 12px; }
+@media (pointer: coarse) { .tools .how { display: none; } }
+.tool { min-width: 32px; height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  font: 700 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+.tool:hover { border-color: var(--accent); }
 .legend i { display: inline-block; width: 18px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--line); }
+.legend i.chg { background: var(--changed); }
 .legend i.ext { border-style: dashed; }
 .legend i.zone { background: var(--zone); border-color: var(--zone-line); border-style: dashed; }
 .legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
+.legend .keys { font-family: var(--mono); font-size: 11.5px; }
+@media (pointer: coarse) { .legend .keys { display: none; } }
 svg text { font-family: var(--text); fill: var(--ink); }
 .arrowhead { fill: var(--muted); }
 .arrowhead.accent { fill: var(--accent); } .arrowhead.pass { fill: var(--pass); } .arrowhead.warn { fill: var(--warn); } .arrowhead.fail { fill: var(--fail); }
-.n rect { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
-.n.ext rect { stroke-dasharray: 6 4; }
-.n.ctx rect { fill: transparent; }
-.n .label { font: 700 14.5px var(--mono); }
+.n rect.box { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
+.n.ext rect.box { stroke-dasharray: 6 4; }
+.n.ctx rect.box { fill: transparent; }
+.n.chg rect.box { fill: var(--changed); }
+.n .label { font: 700 13px var(--mono); }
 .n .role { font-size: 12px; fill: var(--muted); }
 .n .tag { font: 700 9.5px var(--mono); letter-spacing: .12em; fill: var(--muted); }
 .n .lid { stroke: var(--line); stroke-width: 1.5; }
+/* Boxes and pins draw their own focus ring, a step outside their edge: an outline on an SVG
+   group is drawn differently by every browser, and not at all by some. */
 .n, .p { cursor: pointer; outline: none; }
-.n:hover rect, .n:focus-visible rect { stroke: var(--accent); }
-.n.sel rect { stroke: var(--accent); stroke-width: 2.5; }
+.n .ring, .p .ring { fill: none; stroke: none; }
+.n:focus-visible .ring, .p:focus-visible .ring { stroke: var(--accent-ink); stroke-width: 2.5; }
+.n:hover rect.box, .n:focus-visible rect.box { stroke: var(--accent); }
+.n.sel rect.box { stroke: var(--accent); stroke-width: 2.5; }
 .e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
 .e.trust path { stroke: var(--zone-line); }
 .e.pass path { stroke: var(--pass); stroke-width: 2.5; } .e.warn path { stroke: var(--warn); stroke-width: 2.5; } .e.fail path { stroke: var(--fail); stroke-width: 2.5; }
 /* What the open question is pinned to: thicker, and in the accent colour until graded. */
 .e.hl path { stroke-width: 3; } .e.hl:not(.pass):not(.warn):not(.fail) path { stroke: var(--accent); }
-.e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
+.e text { font-size: 12px; fill: var(--muted); }
+.e rect.bg { fill: var(--board); fill-opacity: .94; }
 .zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
 .zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
 .p circle.dot { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
@@ -76,8 +107,13 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .p .check path { fill: none; stroke: var(--board); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .p.pass circle.dot { fill: var(--pass); } .p.warn circle.dot { fill: var(--warn); } .p.fail circle.dot { fill: var(--fail); }
 .p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
-.n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
-.n.hl rect { stroke-width: 3.5; } .n.hl:not(.pass):not(.warn):not(.fail) rect { stroke: var(--accent); }
+.n.pass rect.box { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect.box { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect.box { stroke: var(--fail); stroke-width: 2.5; }
+.n.hl rect.box { stroke-width: 3.5; } .n.hl:not(.pass):not(.warn):not(.fail) rect.box { stroke: var(--accent); }
+.side { display: grid; gap: 14px; min-width: 0; }
+.stopped { display: grid; gap: 10px; padding: 16px 18px; border: 1.5px solid var(--fail); border-radius: 18px; background: var(--fail-soft); }
+.stopped p { margin: 0; }
+.stopped .title { font: 700 16px/1.35 var(--text); }
+.stopped textarea { min-height: 150px; font: 13px/1.5 var(--mono); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
 .panel h2 { font: 800 21px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
 .panel p { margin: 0; }
@@ -91,13 +127,13 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .num.pass { background: var(--pass); color: var(--board); } .num.warn { background: var(--warn); color: var(--board); } .num.fail { background: var(--fail); color: var(--board); }
 .item .q { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .item .s { font: 700 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.question { font: 600 17px/1.4 var(--text); overflow-wrap: anywhere; }
+.panel h2.question { font: 600 17px/1.4 var(--text); letter-spacing: normal; overflow-wrap: anywhere; }
 textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
   background: var(--board); color: var(--ink); font: 15px/1.5 var(--text); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 14px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .rubric { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: var(--page); list-style: none; }
 .rubric label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
 .rubric input { margin-top: 3px; accent-color: var(--accent); }
@@ -121,17 +157,19 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 .score .track { stroke: var(--line); } .score .arc.pass { stroke: var(--pass); } .score .arc.fail { stroke: var(--fail); }
 .score .big { font: 800 30px var(--display); fill: var(--ink); text-anchor: middle; }
 .score .unit { font: 500 11px var(--mono); fill: var(--muted); text-anchor: middle; }
-.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
+.panel h2.verdict { font: 700 13px var(--mono); letter-spacing: .12em; }
 .verdict.pass { color: var(--pass); } .verdict.fail { color: var(--fail); }
 .note { font-size: 12.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
 .nodeinfo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
 .nodeinfo dt { color: var(--muted); }
 .nodeinfo dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: no-preference) { .p circle.dot, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
+@media (prefers-reduced-motion: no-preference) { .p circle.dot, .n rect.box, .num { transition: fill .25s, stroke .25s, background .25s; } }
 </style>
 </head>
 <body>
+<a class="skip" id="skip" href="#panel">Skip to the questions</a>
 <header class="bar">
+  <h1 class="sr-only" id="title">grip whiteboard</h1>
   <div class="brand">
     <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15.4" fill="#201e1c"/><path d="M48 32 A16 16 0 1 1 43.31 20.69" fill="none" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/><path d="M48 32 H34" stroke="#ff8644" stroke-width="7" stroke-linecap="round"/></svg>
     <b>grip</b><span>whiteboard</span>
@@ -141,15 +179,37 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 </header>
 <main class="layout">
   <section class="board" aria-label="The change as a whiteboard">
-    <div class="scroller"><svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg></div>
+    <div class="viewport" id="viewport">
+      <svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg>
+    </div>
     <div class="legend">
-      <span><i></i>changed in this diff</span>
+      <span><i class="chg"></i>changed in this diff</span>
       <span><i class="ext"></i>outside the diff</span>
       <span><i class="zone"></i>untrusted input</span>
       <span><i class="pin"></i>question pinned here</span>
+      <span class="keys" aria-hidden="true">1–5 questions · ←→ pins · Esc back</span>
+      <div class="tools" role="group" aria-label="Zoom">
+        <span class="how">drag to move · Ctrl + scroll to zoom</span>
+        <button type="button" class="tool" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+        <button type="button" class="tool" id="zoom-level" aria-label="Zoom to 100%" title="Zoom to 100%">100%</button>
+        <button type="button" class="tool" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+        <button type="button" class="tool" id="zoom-fit" title="Show the whole board">Fit</button>
+      </div>
     </div>
   </section>
-  <aside class="panel" id="panel" aria-live="polite"></aside>
+  <div class="side">
+    <section class="stopped" id="stopped" aria-labelledby="stopped-title" hidden>
+      <p class="title" id="stopped-title"></p>
+      <p class="small">This page can no longer hand in. Keep them somewhere before closing the tab, then run grip whiteboard again.</p>
+      <textarea id="stopped-text" readonly aria-label="Your answers, to copy"></textarea>
+      <div class="row">
+        <button type="button" class="btn primary" id="copy-answers">Copy answers</button>
+        <span class="small" id="copy-status"></span>
+      </div>
+    </section>
+    <aside class="panel" id="panel" tabindex="-1" aria-label="Questions"></aside>
+  </div>
+  <p class="sr-only" id="status" role="status"></p>
 </main>
 <script type="application/json" id="board-data">__BOARD_DATA__</script>
 <script>
@@ -157,17 +217,36 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 // Everything in DATA came from a language model reading the developer's diff. It is
 // untrusted: it is only ever placed with textContent or as attribute values, never as markup.
 const DATA = JSON.parse(document.getElementById("board-data").textContent);
-const MODE = DATA.mode, PPQ = DATA.points_per_question, W = DATA.node.width, H = DATA.node.height;
+const MODE = DATA.mode, PPQ = DATA.points_per_question;
 const NS = "http://www.w3.org/2000/svg";
 const MAX_ANSWER = 4000;  // grip refuses longer answers
 const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "tspan", "title", "circle", "defs", "marker"]);
 const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
 const edgeById = Object.fromEntries(DATA.edges.map((e) => [e.id, e]));
 const state = {
-  sel: null, busy: false, error: null, result: null, confirming: false,
+  sel: null, busy: false, error: null, result: null, stopped: false, confirming: false,
   answers: DATA.pins.map(() => ""),
   ticks: DATA.pins.map((p) => (p.rubric || []).map(() => false)),
 };
+
+// A draft of the answers lives in this tab's sessionStorage under this board's digest, so a
+// reload keeps it and no other board picks it up. It is dropped once grip has graded.
+// Storage can be off (private windows, policies): then there is simply no draft.
+const DRAFT_KEY = `grip-whiteboard:${MODE}:${DATA.digest}`;
+function loadDraft() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
+    if (!Array.isArray(saved) || saved.length !== DATA.pins.length) return;
+    if (MODE === "interview") state.ticks = state.ticks.map((row, i) => row.map((_, k) => Array.isArray(saved[i]) && saved[i][k] === true));
+    else state.answers = saved.map((a) => (typeof a === "string" ? a.slice(0, 4000) : ""));
+  } catch { /* no storage, or not a draft we wrote */ }
+}
+function saveDraft() {
+  try {
+    if (state.result) sessionStorage.removeItem(DRAFT_KEY);
+    else if (MODE !== "export") sessionStorage.setItem(DRAFT_KEY, JSON.stringify(MODE === "interview" ? state.ticks : state.answers));
+  } catch { /* no storage: the answers stay in this page only */ }
+}
 
 function el(tag, attrs = {}, ...kids) {
   const node = SVG_TAGS.has(tag) ? document.createElementNS(NS, tag) : document.createElement(tag);
@@ -180,41 +259,75 @@ function el(tag, attrs = {}, ...kids) {
   for (const kid of kids.flat()) if (kid != null) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   return node;
 }
-const activate = (fn) => ({ click: fn, keydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(ev); } } });
+const activate = (fn, keys = {}) => ({ click: fn, keydown: (ev) => {
+  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(ev); }
+  else if (keys[ev.key]) { ev.preventDefault(); ev.stopPropagation(); keys[ev.key](); }
+} });
 
-const centre = (n) => ({ x: n.x + W / 2, y: n.y + H / 2 });
+const KIND_TEXT = (n) => n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
+const centre = (n) => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 });
 function exitPoint(n, toward) {
   const c = centre(n), dx = toward.x - c.x, dy = toward.y - c.y;
-  const t = Math.min(dx ? (W / 2 + 6) / Math.abs(dx) : Infinity, dy ? (H / 2 + 6) / Math.abs(dy) : Infinity);
+  const t = Math.min(dx ? (n.w / 2 + 6) / Math.abs(dx) : Infinity, dy ? (n.h / 2 + 6) / Math.abs(dy) : Infinity);
   return { x: c.x + dx * t, y: c.y + dy * t };
 }
+// An arrow is a quadratic curve from s to t through control point c: straight when c is on
+// the line, bowed otherwise. along(g, u) is the point a fraction u of the way.
+function along(g, u) {
+  const v = 1 - u;
+  return { x: v * v * g.s.x + 2 * v * u * g.c.x + u * u * g.t.x, y: v * v * g.s.y + 2 * v * u * g.c.y + u * u * g.t.y };
+}
+// An arrow goes straight from box to box unless that runs through another box; then it bows
+// out, further each try, to the first curve that clears every box (or the one that crosses
+// least), and never off the board. The routes depend only on the layout, so they are kept.
+const BOWS = [0, 44, -44, 88, -88, 136, -136, 190, -190];
+const ROUTES = {};
 function edgeGeometry(e) {
-  const a = centre(byId[e.source]), b = centre(byId[e.target]);
+  if (ROUTES[e.id]) return ROUTES[e.id];
+  const A = byId[e.source], B = byId[e.target], a = centre(A), b = centre(B);
   const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
   const sx = horizontal ? 0 : e.offset, sy = horizontal ? e.offset : 0;
-  const p = exitPoint(byId[e.source], b), q = exitPoint(byId[e.target], a);
-  const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
-  return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const others = DATA.nodes.filter((n) => n !== A && n !== B);
+  const blocked = (q) => others.some((n) => q.x > n.x - 8 && q.x < n.x + n.w + 8 && q.y > n.y - 8 && q.y < n.y + n.h + 8);
+  let best = null, least = Infinity;
+  for (const bow of BOWS) {
+    const apex = { x: (a.x + b.x) / 2 + nx * bow, y: (a.y + b.y) / 2 + ny * bow };
+    const p = exitPoint(A, apex), q = exitPoint(B, apex);
+    const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
+    const g = { s, t, c: { x: 2 * (apex.x + sx) - (s.x + t.x) / 2, y: 2 * (apex.y + sy) - (s.y + t.y) / 2 }, horizontal };
+    let hits = apex.y < 12 || apex.y > DATA.size.height - 12 || apex.x < 12 || apex.x > DATA.size.width - 12 ? 1000 : 0;
+    for (let u = 0.04; u < 1; u += 0.04) if (blocked(along(g, u))) hits++;
+    if (hits < least) { best = g; least = hits; }
+    if (!hits) break;
+  }
+  best.mid = along(best, 0.5);
+  return (ROUTES[e.id] = best);
 }
 // Pins sharing a box line up leftwards along its top edge; pins sharing an arrow spread
 // out along it from the middle. Each one stays visible and clickable.
 function pinAnchor(pin) {
   const same = DATA.pins.filter((p) => p.on === pin.on), k = same.indexOf(pin);
-  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
-  const g = edgeGeometry(edgeById[pin.on]);
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + n.w - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
   const at = 0.5 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.22;
-  return { x: g.s.x + (g.t.x - g.s.x) * at, y: g.s.y + (g.t.y - g.s.y) * at };  // on the wire
+  return along(edgeGeometry(edgeById[pin.on]), at);  // on the wire
 }
 function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
 function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }
+function pinState(i) {
+  if (state.result) return `scored ${state.result.grades[i].score} of ${PPQ}`;
+  if (MODE === "export") return "";
+  return answered(i) ? (MODE === "interview" ? "points ticked" : "answered") : "not answered";
+}
 function pinTarget(p) {
   if (byId[p.on]) return byId[p.on].label;
   const e = edgeById[p.on];
   return `${byId[e.source].label} → ${byId[e.target].label}`;
 }
 
-// Text is fitted once it is on screen, where it can be measured: a long label or role in a
-// box ends in an ellipsis (the full text is in its tooltip and the side panel), and a long
+// Text is fitted once it is on screen, where it can be measured. grip has already broken a
+// box's label into lines and left room for its role on one or two; a line that still does
+// not fit ends in an ellipsis (the full text is in its tooltip and the side panel). A long
 // edge label wraps onto a second line, growing away from its arrow.
 function ellipsize(t, width) {
   const full = t.textContent;
@@ -227,10 +340,10 @@ function ellipsize(t, width) {
   }
   t.textContent = full.slice(0, lo).trimEnd() + "…";
 }
-function wrapLabel(t, width) {
+function wrapLabel(t, width, dy = 14) {
   if (t.getComputedTextLength() <= width) return 0;
   const words = t.textContent.split(" ");
-  const first = el("tspan", {}), second = el("tspan", { dy: 14 });
+  const x = t.getAttribute("x"), first = el("tspan", { x }), second = el("tspan", { x, dy });
   t.replaceChildren(first, second);
   let k = 1;
   while (k < words.length) {
@@ -244,39 +357,47 @@ function wrapLabel(t, width) {
   ellipsize(second, width);
   return 1;
 }
-// Each label goes at the middle of its arrow unless that covers a box, a pin or a label
-// already placed; then it slides along the arrow to the first spot that is clear, or the
-// one that covers least.
+// Each label goes at the middle of its arrow, on its usual side, unless that covers a box,
+// a pin or a label already placed; then it tries the other side, then slides along the arrow,
+// to the first spot that is clear, or the one that covers least. Each sits on a patch of
+// board, so an arrow passing under it does not cross out its words.
 const SPOTS = [0.5, 0.36, 0.64, 0.24, 0.76, 0.14, 0.86];
 function placeLabels(svg, labels) {
-  const box = (b, pad = 3) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
+  const box = (b, pad = 4) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
   const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
-  const taken = [...svg.querySelectorAll(".n rect")].map((r) => box(r.getBBox(), 1));
+  const taken = [...svg.querySelectorAll(".n rect.box")].map((r) => box(r.getBBox(), 1));
   for (const p of DATA.pins) { const at = pinAnchor(p); taken.push(box({ x: at.x - 15, y: at.y - 15, width: 30, height: 30 }, 1)); }
+  const patches = el("g", { class: "e" });
+  svg.insertBefore(patches, labels);
   // Straight arrows first: sliding along a slanted one moves its label off the others' rows.
   const slant = (t) => Math.abs(t.fit.g.t.y - t.fit.g.s.y);
   for (const t of [...labels.children].sort((a, b) => slant(a) - slant(b))) {
     const f = t.fit, lines = wrapLabel(t, f.width);
-    const put = (at) => {
-      const x = f.g.s.x + (f.g.t.x - f.g.s.x) * at + f.dx;
-      const y = f.g.s.y + (f.g.t.y - f.g.s.y) * at + f.dy + 14 * f.grow * lines;
+    // A label pushed off its arrow moves away from it, a line at a time.
+    const put = (at, side, away = 0) => {
+      const pt = along(f.g, at);
+      const x = pt.x + side.dx + side.ax * away, y = pt.y + side.dy + side.ay * away + 14 * side.grow * lines;
+      t.setAttribute("text-anchor", side.anchor);
       t.setAttribute("x", x); t.setAttribute("y", y);
       for (const span of t.children) span.setAttribute("x", x);
       return box(t.getBBox());
     };
-    let best = SPOTS[0], least = Infinity;
-    for (const at of SPOTS) {
-      const b = put(at), covered = taken.reduce((sum, o) => sum + overlap(b, o), 0);
-      if (covered < least) { best = at; least = covered; }
-      if (!covered) break;
+    let best = [SPOTS[0], f.sides[0], 0], least = Infinity;
+    search: for (const away of [0, 1, 2]) for (const at of SPOTS) for (const side of f.sides) {
+      const b = put(at, side, away), covered = taken.reduce((sum, o) => sum + overlap(b, o), 0);
+      if (covered < least) { best = [at, side, away]; least = covered; }
+      if (!covered) break search;
     }
-    taken.push(put(best));
+    taken.push(put(...best));
+    const b = t.getBBox();
+    patches.append(el("rect", { class: "bg", x: b.x - 4, y: b.y - 1, width: b.width + 8, height: b.height + 2, rx: 4 }));
   }
 }
 
 function drawBoard() {
   const svg = document.getElementById("board");
   svg.setAttribute("viewBox", `0 0 ${DATA.size.width} ${DATA.size.height}`);
+  svg.setAttribute("width", DATA.size.width * view.z); svg.setAttribute("height", DATA.size.height * view.z);
   // One arrowhead per colour an arrow can take: plain, highlighted, and the three grades.
   svg.replaceChildren(el("defs", {}, ["", "accent", "pass", "warn", "fail"].map((c) =>
     el("marker", { id: "arrow" + (c && "-" + c), viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
@@ -291,11 +412,16 @@ function drawBoard() {
   for (const e of DATA.edges) {
     const g = edgeGeometry(e);
     const below = e.offset > 0, room = DATA.pins.some((p) => p.on === e.id) ? 13 : 0;
-    const label = el("text", { "text-anchor": g.horizontal ? "middle" : "start", text: e.label });
+    const label = el("text", { text: e.label });
+    // Where the label may go: above or below a level arrow, right or left of an upright one,
+    // its usual side first.
+    const above = { anchor: "middle", dx: 0, dy: -8 - room, grow: -1, ax: 0, ay: -15 };
+    const under = { anchor: "middle", dx: 0, dy: 17 + room, grow: 0, ax: 0, ay: 15 };
+    const right = { anchor: "start", dx: 10 + room, dy: 4, grow: -0.5, ax: 14, ay: 0 };
+    const left = { anchor: "end", dx: -10 - room, dy: 4, grow: -0.5, ax: -14, ay: 0 };
     label.fit = {
-      g, width: g.horizontal ? Math.max(Math.abs(g.t.x - g.s.x) - 10, 90) : 170,
-      grow: g.horizontal ? (below ? 0 : -1) : -0.5,
-      dx: g.horizontal ? 0 : 10 + room, dy: g.horizontal ? (below ? 17 + room : -8 - room) : 4,
+      g, width: g.horizontal ? Math.max(Math.abs(g.t.x - g.s.x) + 20, 110) : 170,
+      sides: g.horizontal ? (below ? [under, above] : [above, under]) : [right, left],
     };
     labels.append(label);
     // Graded, an arrow with questions on it takes the colour of its worst one.
@@ -303,22 +429,29 @@ function drawBoard() {
     const graded = per && asked.length ? band(Math.min(...asked.map(([, i]) => per[i].score))) : "";
     const lit = open === e.id;
     svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") + (graded ? " " + graded : "") + (lit ? " hl" : "") },
-      el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": `url(#arrow${graded ? "-" + graded : lit ? "-accent" : ""})` })));
+      el("path", { d: `M${g.s.x} ${g.s.y} Q${g.c.x} ${g.c.y} ${g.t.x} ${g.t.y}`, "marker-end": `url(#arrow${graded ? "-" + graded : lit ? "-accent" : ""})` })));
   }
   for (const n of DATA.nodes) {
     const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === n.id);
-    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "") + (open === n.id ? " hl" : "");
+    const changed = n.kind === "component" || n.kind === "store";
+    let cls = "n" + (changed ? " chg" : "") + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "") + (open === n.id ? " hl" : "");
     if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
     const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
-    const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`, on: activate(() => select({ node: n.id })) },
+    const asked = pins.length ? `, ${pins.length} question${pins.length === 1 ? "" : "s"}` : "";
+    const g = el("g", { class: cls, tabindex: 0, role: "button", "data-key": `node-${n.id}`, "aria-current": state.sel && state.sel.node === n.id ? "true" : null,
+      "aria-label": `${n.label}: ${n.role}. ${KIND_TEXT(n)}${asked}`, on: activate(() => select({ node: n.id })) },
       el("title", { text: `${n.label}: ${n.role}` }),
-      el("rect", { x: n.x, y: n.y, width: W, height: H, rx: 12 }),
+      el("rect", { class: "ring", x: n.x - 5, y: n.y - 5, width: n.w + 10, height: n.h + 10, rx: 16 }),
+      el("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 12 }),
       el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
-      el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
-      el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
-    if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + W - 10}` }));
+      el("text", { class: "label", x: n.x + 14, y: n.y + 37 },
+        n.lines.map((line, k) => el("tspan", { x: n.x + 14, dy: k ? 17 : 0, text: line }))),
+      el("text", { class: "role", x: n.x + 14, y: n.y + 55 + 17 * (n.lines.length - 1), text: n.role }));
+    if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + n.w - 10}` }));
     svg.append(g);
-    g.querySelectorAll(".label, .role").forEach((t) => ellipsize(t, W - 28));
+    g.querySelectorAll(".label tspan").forEach((t) => ellipsize(t, n.w - 28));
+    const role = g.querySelector(".role");
+    if (n.role_lines > 1) wrapLabel(role, n.w - 28, 15); else ellipsize(role, n.w - 28);
   }
   svg.append(labels);
   placeLabels(svg, labels);
@@ -326,8 +459,15 @@ function drawBoard() {
     const at = pinAnchor(p);
     let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");
     if (per) cls += " " + band(per[i].score); else if (answered(i)) cls += " done";
-    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "data-pin": i, "aria-label": `Question ${i + 1}, ${p.kind}`,
-      on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); }) },
+    const said = pinState(i);
+    // Arrow keys step through the pins in question order, wrapping at either end, and pan
+    // the board to the one they land on.
+    const step = (d) => () => focusPin((i + d + DATA.pins.length) % DATA.pins.length);
+    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "data-key": `pin-${i}`, "data-pin": i, "aria-current": state.sel && state.sel.pin === i ? "true" : null,
+      "aria-label": `Question ${i + 1}, ${p.kind}${said ? ", " + said : ""}`,
+      on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); },
+        { ArrowRight: step(1), ArrowDown: step(1), ArrowLeft: step(-1), ArrowUp: step(-1), Home: () => focusPin(0), End: () => focusPin(DATA.pins.length - 1) }) },
+      el("circle", { class: "ring", cx: at.x, cy: at.y, r: 20 }),
       el("circle", { class: "dot", cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) }),
       el("g", { class: "check", "aria-hidden": "true" }, el("circle", { cx: at.x + 12, cy: at.y - 12, r: 7 }),
         el("path", { d: `M${at.x + 8.8} ${at.y - 12} l2.2 2.2 l4 -4.4` }))));
@@ -342,7 +482,7 @@ function pinList(indexes) {
   return el("ol", { class: "list" }, indexes.map((i) => {
     const p = DATA.pins[i];
     const status = state.result ? `${state.result.grades[i].score}/${PPQ}` : answered(i) ? "✓ ready" : "";
-    return el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
+    return el("li", {}, el("button", { type: "button", class: "item", "data-key": `item-${i}`, "aria-keyshortcuts": String(i + 1), on: { click: () => select({ pin: i }) } },
       el("span", { class: numClass(i), text: String(i + 1) }),
       el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.question })),
       el("span", { class: "s", text: status })));
@@ -359,7 +499,8 @@ function overview() {
         el("circle", { class: "arc " + (r.passed ? "pass" : "fail"), cx: 50, cy: 50, r: 42, fill: "none", "stroke-width": 9, "stroke-linecap": "round",
           pathLength: 100, "stroke-dasharray": `${r.score} 100`, transform: "rotate(-90 50 50)" }),
         el("text", { class: "big", x: 50, y: 56, text: String(r.score) }), el("text", { class: "unit", x: 50, y: 72, text: "/100" })),
-      el("div", {}, el("div", { class: "verdict " + (r.passed ? "pass" : "fail"), text: r.passed ? "PASS" : "NOT YET" }),
+      el("div", {}, el("h2", { class: "verdict " + (r.passed ? "pass" : "fail"), tabindex: -1, "data-key": "result" },
+          el("span", { class: "sr-only", text: `${scoreLine(r)}: ` }), r.passed ? "PASS" : "NOT YET"),
         el("p", { class: "small", text: r.verdict }))));
     parts.push(el("p", { class: "small", text: r.recorded
       ? (r.passed ? "The pass is remembered for this diff, so the push hook lets it through. You can close this tab." : `Below the pass mark of ${r.passing_score}. Open the coloured pins for feedback, re-read the diff, then run this again:`)
@@ -379,13 +520,15 @@ function overview() {
       parts.push(el("div", { class: "confirm", role: "group", "aria-labelledby": "confirm-text" },
         el("p", { id: "confirm-text" }, el("b", { text: `${missing} unanswered will score 0.` }), " Hand in anyway?"),
         el("div", { class: "row" },
-          el("button", { type: "button", class: "btn primary", id: "confirm-hand-in", text: "Hand in anyway", on: { click: handIn } }),
-          el("button", { type: "button", class: "btn", text: "Keep answering", on: { click: () => select({ pin: DATA.pins.findIndex((_, i) => !answered(i)) }) } }))));
+          el("button", { type: "button", class: "btn primary", id: "confirm-hand-in", "data-key": "confirm-hand-in", text: "Hand in anyway", on: { click: handIn } }),
+          el("button", { type: "button", class: "btn", "data-key": "keep-answering", text: "Keep answering", on: { click: () => select({ pin: DATA.pins.findIndex((_, i) => !answered(i)) }) } }))));
     } else {
       const label = MODE === "interview" ? (state.busy ? "Scoring…" : "Score interview") : state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`;
       parts.push(el("div", { class: "row" },
-        el("button", { type: "button", class: "btn primary", id: "hand-in", disabled: state.busy || done === 0, text: label,
-          on: { click: () => { if (MODE === "defend" && missing) { state.confirming = true; render(); document.getElementById("confirm-hand-in").focus(); } else handIn(); } } })));
+        // While grading the button stays focusable (aria-disabled, not disabled), so focus is not lost.
+        el("button", { type: "button", class: "btn primary", id: "hand-in", "data-key": "hand-in", disabled: !state.busy && done === 0,
+          "aria-disabled": state.busy ? "true" : null, text: label,
+          on: { click: () => { if (MODE === "defend" && missing && !state.busy) { state.confirming = true; render(["confirm-hand-in"]); } else handIn(); } } })));
     }
   }
   const notes = {
@@ -397,29 +540,32 @@ function overview() {
   return parts;
 }
 
-// A command to run, with a button that copies it.
+// A command to run, with a button that copies it. What happened shows next to it and is said
+// through the page's one status region.
 function copyable(command) {
-  const code = el("code", { text: command }), done = el("span", { class: "small", "aria-live": "polite" });
+  const code = el("code", { text: command }), done = el("span", { class: "small" });
+  const say = (text) => { done.textContent = text; announce(text); };
   const copy = async () => {
-    try { await navigator.clipboard.writeText(command); done.textContent = "Copied."; }
-    catch { getSelection().selectAllChildren(code); done.textContent = "Selected: press Ctrl-C (⌘C)."; }
+    try { await navigator.clipboard.writeText(command); say("Copied."); }
+    catch { getSelection().selectAllChildren(code); say("Selected: press Ctrl-C (⌘C)."); }
   };
-  return el("div", {}, el("div", { class: "cmd" }, code, el("button", { type: "button", class: "btn", text: "Copy", on: { click: copy } })), done);
+  return el("div", {}, el("div", { class: "cmd" }, code, el("button", { type: "button", class: "btn", "data-key": "copy-rerun", text: "Copy", on: { click: copy } })), done);
 }
 
 function pinView(i) {
   const p = DATA.pins[i];
   const parts = [el("div", { class: "row" },
-    el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }),
+    el("button", { type: "button", class: "btn", "data-key": "back", "aria-keyshortcuts": "Escape", text: "← All questions", on: { click: () => select(null) } }),
     el("span", { class: "small", text: `${i + 1} of ${DATA.pins.length} · on ${pinTarget(p)}` }))];
-  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }), el("p", { class: "question", text: p.question })));
+  parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }),
+    el("h2", { class: "question", id: `question-${i}`, tabindex: -1, "data-key": `question-${i}`, text: p.question })));
   const locked = state.busy || !!state.result;
   if (MODE === "interview") {
     parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, locked
       ? el("div", { class: "point" }, el("span", { class: "mark" + (state.ticks[i][k] ? " on" : ""), role: "img", "aria-label": state.ticks[i][k] ? "heard" : "not heard" }), el("span", { text: point }))
       : el("label", { for: `tick-${i}-${k}` },
-        el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k],
-          on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
+        el("input", { type: "checkbox", id: `tick-${i}-${k}`, "data-key": `tick-${i}-${k}`, checked: state.ticks[i][k],
+          on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; edited(); } } }),
         el("span", { text: point }))))));
   } else if (MODE !== "export") {  // a shared board only shows the question: there is nowhere to send an answer
     const count = el("p", { class: "count", id: `count-${i}` });
@@ -428,8 +574,8 @@ function pinView(i) {
       count.textContent = `${n.toLocaleString("en")} / ${MAX_ANSWER.toLocaleString("en")}`;
       count.classList.toggle("near", n > MAX_ANSWER * 0.9);
     };
-    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", "aria-describedby": `count-${i}`, placeholder: "A sentence or two, in your own words.", disabled: locked,
-      maxlength: MAX_ANSWER, on: { input: (ev) => { state.answers[i] = ev.target.value; state.confirming = false; counted(); drawBoard(); } } });
+    const ta = el("textarea", { id: `answer-${i}`, "data-key": `answer-${i}`, "aria-labelledby": `question-${i}`, "aria-describedby": `count-${i}`, placeholder: "A sentence or two, in your own words.", disabled: locked,
+      maxlength: MAX_ANSWER, on: { input: (ev) => { state.answers[i] = ev.target.value; state.confirming = false; counted(); edited(); } } });
     ta.value = state.answers[i];
     counted();
     parts.push(ta);
@@ -441,48 +587,210 @@ function pinView(i) {
   }
   const last = i === DATA.pins.length - 1;
   parts.push(el("div", { class: "row" },
-    el("button", { type: "button", class: "btn", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
-    el("button", { type: "button", class: "btn primary", text: last ? "Review all" : "Next", on: { click: () => select(last ? null : { pin: i + 1 }) } })));
+    el("button", { type: "button", class: "btn", "data-key": "previous", disabled: i === 0, text: "Previous", on: { click: () => select({ pin: i - 1 }) } }),
+    el("button", { type: "button", class: "btn primary", "data-key": "next", text: last ? "Review all" : "Next", on: { click: () => select(last ? null : { pin: i + 1 }) } })));
   return parts;
 }
 
 function nodeView(id) {
   const n = byId[id];
   const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === id).map(([, i]) => i);
-  const kind = n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
-  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", text: "← All questions", on: { click: () => select(null) } }))];
-  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: kind }), el("h2", { text: n.label }),
+  const parts = [el("div", { class: "row" }, el("button", { type: "button", class: "btn", "data-key": "back", "aria-keyshortcuts": "Escape", text: "← All questions", on: { click: () => select(null) } }))];
+  parts.push(el("div", { class: "nodeinfo" }, el("span", { class: "kind", text: KIND_TEXT(n) }), el("h2", { tabindex: -1, "data-key": "node-heading", text: n.label }),
     el("dl", {}, el("dt", { text: "Role" }), el("dd", { text: n.role }), el("dt", { text: "Files" }), el("dd", { text: n.files.length ? n.files.join(", ") : "none in the diff" }))));
   parts.push(pins.length ? pinList(pins) : el("p", { class: "small", text: "No question is pinned here. It is on the board so the questions around it make sense." }));
   return parts;
 }
 
+function scoreLine(r) {
+  return MODE === "interview" ? `Interview score ${r.score} out of 100` : `Grip Score ${r.score} out of 100, ${r.passed ? "passed" : "below the pass mark of " + r.passing_score}`;
+}
+// Screen readers hear only this short line: what grading is doing and the score. The panel
+// itself is not a live region, so moving between questions does not re-read all of it.
+function announce(text) {
+  const status = document.getElementById("status");
+  status.textContent = "";
+  setTimeout(() => { status.textContent = text; }, 60);
+}
+
+function edited() {
+  saveDraft();
+  if (state.stopped) document.getElementById("stopped-text").value = answersText();
+  drawBoard();
+}
+
+// The answers as plain text, for when grip is gone and they have to leave by the clipboard.
+function answersText() {
+  const lines = [`grip whiteboard: ${DATA.description}`, ""];
+  DATA.pins.forEach((p, i) => {
+    lines.push(`${i + 1}. ${p.question}`);
+    if (MODE === "interview") p.rubric.forEach((point, k) => lines.push(`[${state.ticks[i][k] ? "x" : " "}] ${point}`));
+    else lines.push(state.answers[i].trim() || "(no answer)");
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+function showStopped(on) {
+  const was = state.stopped;
+  state.stopped = on && !state.result;
+  const title = state.stopped ? "grip stopped: your answers are below, copy them" : "";
+  document.getElementById("stopped").hidden = !state.stopped;
+  document.getElementById("stopped-title").textContent = title;
+  document.getElementById("stopped-text").value = state.stopped ? answersText() : "";
+  document.getElementById("copy-status").textContent = "";
+  if (state.stopped && !was) announce(title);  // through the one status region, like the score
+}
+async function copyAnswers() {
+  const box = document.getElementById("stopped-text"), status = document.getElementById("copy-status");
+  // Shown next to the button, and said through the page's one status region.
+  const say = (text) => { status.textContent = text; announce(text); };
+  box.value = answersText();
+  try {
+    await navigator.clipboard.writeText(box.value);
+    say("Copied.");
+  } catch {
+    box.focus(); box.select();  // no clipboard access: leave them selected for Ctrl-C
+    say(document.execCommand("copy") ? "Copied." : "Selected: press Ctrl-C (⌘C) to copy.");
+  }
+}
+
+// grip stops after twenty minutes without a request, so while this page is open it says so
+// once a minute: thinking for half an hour is fine, a closed tab still times out. A failed
+// ping means grip is gone (Ctrl-C, a crash): say so now, before the answers are handed in.
+const HEARTBEAT_MS = 60 * 1000;
+async function heartbeat() {
+  if (state.result) return;
+  try {
+    await fetch("heartbeat", { cache: "no-store" });
+    if (state.stopped) showStopped(false);
+  } catch {
+    if (!state.stopped) showStopped(true);
+  }
+}
+
 async function handIn() {
+  if (state.busy) return;
   state.busy = true; state.error = null; state.sel = null; state.confirming = false; render();
+  announce("Grading your answers…");
   const body = MODE === "interview" ? { ticks: state.ticks } : { answers: state.answers };
+  let gone = false;
   try {
     const res = await fetch("answers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || `grip answered ${res.status}`);
     state.result = payload;
+    saveDraft();
   } catch (err) {
-    state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
+    // fetch rejects with a TypeError only when nothing answered at all: grip is not running.
+    gone = err instanceof TypeError;
+    if (!gone) state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
   } finally {
-    state.busy = false; render();
+    state.busy = false;
+    render(state.result ? "result" : "hand-in");
+    announce(state.result ? `${scoreLine(state.result)}.` : state.error);
+  }
+  showStopped(gone);
+  if (gone) {
+    document.getElementById("stopped").scrollIntoView({ block: "nearest" });
+    document.getElementById("copy-answers").focus({ preventScroll: true });
   }
 }
+
+// Every render rebuilds the board and the panel, so focus is put back by name: each
+// focusable part carries a data-key, and the one that had focus gets it again.
+function focusKey(key) {
+  const target = key && document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+  if (!target || target.disabled) return false;
+  target.focus({ preventScroll: true });
+  return true;
+}
+// Focus a pin from the keyboard and pan the board to it: focusing never scrolls by itself.
+function focusPin(i) {
+  if (focusKey(`pin-${i}`)) reveal(pinAnchor(DATA.pins[i]));
+}
 function select(sel) {
-  state.sel = sel; state.confirming = false; render();
-  if (sel && sel.pin != null) { const box = document.getElementById(`answer-${sel.pin}`); if (box) box.focus({ preventScroll: true }); }
+  const prev = state.sel;
+  state.sel = sel; state.confirming = false;
+  let next = null;
+  if (sel && sel.pin != null) next = [`answer-${sel.pin}`, `tick-${sel.pin}-0`, `question-${sel.pin}`];
+  else if (sel && sel.node) next = ["node-heading"];
+  else if (prev && prev.pin != null) next = [`item-${prev.pin}`];  // back where you left the list
+  else if (prev && prev.node) next = [`node-${prev.node}`];
+  render(next);
+  if (sel) reveal(sel.pin != null ? pinAnchor(DATA.pins[sel.pin]) : centre(byId[sel.node]));
   // On a phone the panel sits under the board: bring the question up to where the tap was.
   const panel = document.getElementById("panel"), top = panel.getBoundingClientRect().top;
   if (sel && matchMedia("(max-width: 900px)").matches && (top < 0 || top > innerHeight * 0.4)) {
     panel.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }
 }
+
+
+// ------------------------------------------------------------------ moving around the board
+// The board is drawn at a zoom of at least 1 (more when it has room), so its text is never
+// smaller than written. It pans by scrolling, by dragging with the mouse, or with a finger;
+// Ctrl + scroll (a trackpad pinch), a two-finger pinch, and the buttons zoom it.
+const viewport = document.getElementById("viewport");
+const view = { z: 1, mode: "auto" };  // auto: as large as fits, from 1 to 1.25; fit; or manual
+const ZOOM_MIN = 0.2, ZOOM_MAX = 3;
+function fitZoom() {
+  const room = parseFloat(getComputedStyle(viewport).maxHeight) || viewport.clientHeight;
+  return Math.min((viewport.clientWidth - 24) / DATA.size.width, (room - 24) / DATA.size.height);
+}
+const autoZoom = () => Math.min(1.25, Math.max(1, fitZoom()));
+function setZoom(z, at) {
+  z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  const svg = document.getElementById("board"), r = viewport.getBoundingClientRect();
+  const ax = at ? at.x : r.left + viewport.clientWidth / 2, ay = at ? at.y : r.top + viewport.clientHeight / 2;
+  const before = svg.getBoundingClientRect(), bx = (ax - before.left) / view.z, by = (ay - before.top) / view.z;
+  view.z = z;
+  svg.setAttribute("width", DATA.size.width * z); svg.setAttribute("height", DATA.size.height * z);
+  viewport.style.setProperty("--z", z);
+  // Keep the point under the cursor (or the middle) where it was.
+  const after = svg.getBoundingClientRect();
+  viewport.scrollLeft += after.left + bx * z - ax;
+  viewport.scrollTop += after.top + by * z - ay;
+  document.getElementById("zoom-level").textContent = `${Math.round(z * 100)}%`;
+}
+function reveal(pt) {
+  const svg = document.getElementById("board"), s = svg.getBoundingClientRect(), r = viewport.getBoundingClientRect();
+  const x = s.left + pt.x * view.z - r.left, y = s.top + pt.y * view.z - r.top, m = 56;
+  const dx = x < m ? x - m : x > viewport.clientWidth - m ? x - viewport.clientWidth + m : 0;
+  const dy = y < m ? y - m : y > viewport.clientHeight - m ? y - viewport.clientHeight + m : 0;
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (dx || dy) viewport.scrollBy({ left: dx, top: dy, behavior: smooth ? "smooth" : "auto" });
+}
+const zoomBy = (k) => { view.mode = "manual"; setZoom(view.z * k); };
+document.getElementById("zoom-in").addEventListener("click", () => zoomBy(1.25));
+document.getElementById("zoom-out").addEventListener("click", () => zoomBy(0.8));
+document.getElementById("zoom-level").addEventListener("click", () => { view.mode = "manual"; setZoom(1); });
+document.getElementById("zoom-fit").addEventListener("click", () => { view.mode = "fit"; setZoom(fitZoom()); });
+viewport.addEventListener("wheel", (ev) => {
+  if (!ev.ctrlKey && !ev.metaKey) return;  // a plain wheel scrolls
+  ev.preventDefault();
+  view.mode = "manual";
+  setZoom(view.z * Math.exp(-ev.deltaY * 0.0025), { x: ev.clientX, y: ev.clientY });
+}, { passive: false });
+// Drag with the mouse to pan. A drag that moved is not a click, so it does not select.
+let drag = null;
+viewport.addEventListener("pointerdown", (ev) => {
+  if (ev.pointerType === "mouse" && ev.button === 0) drag = { x: ev.clientX, y: ev.clientY, left: viewport.scrollLeft, top: viewport.scrollTop, moved: false };
+});
+viewport.addEventListener("pointermove", (ev) => {
+  if (!drag || !(ev.buttons & 1)) return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+  if (!drag.moved) { drag.moved = true; viewport.setPointerCapture(ev.pointerId); viewport.classList.add("panning"); }
+  viewport.scrollLeft = drag.left - dx; viewport.scrollTop = drag.top - dy;
+});
+const endDrag = () => { viewport.classList.remove("panning"); if (drag && !drag.moved) drag = null; };
+viewport.addEventListener("pointerup", endDrag);
+viewport.addEventListener("pointercancel", () => { drag = null; viewport.classList.remove("panning"); });
+viewport.addEventListener("click", (ev) => { if (drag && drag.moved) { ev.stopPropagation(); ev.preventDefault(); } drag = null; }, true);
 // A pin is a small target for a finger, so on a touch screen a tap within 22px of one (a
-// 44px circle) opens the nearest, even when it lands on the box beneath.
-document.getElementById("board").addEventListener("click", (ev) => {
+// 44px circle, measured on screen whatever the zoom) opens the nearest, even when it lands
+// on the box beneath or on the board around the drawing.
+viewport.addEventListener("click", (ev) => {
   const touch = ev.pointerType ? ev.pointerType !== "mouse" : matchMedia("(pointer: coarse)").matches;
   if (!touch || ev.target.closest(".p")) return;
   let nearest = null, best = 22;
@@ -493,14 +801,52 @@ document.getElementById("board").addEventListener("click", (ev) => {
   }
   if (nearest != null) { ev.stopPropagation(); select({ pin: nearest }); }
 }, true);
-function render() {
+// Two fingers pinch to zoom; one finger scrolls the board, and the page past its edges.
+let pinch = null;
+const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+viewport.addEventListener("touchstart", (ev) => { if (ev.touches.length === 2) pinch = { d: spread(ev.touches), z: view.z }; }, { passive: true });
+viewport.addEventListener("touchmove", (ev) => {
+  if (!pinch || ev.touches.length !== 2) return;
+  if (ev.cancelable) ev.preventDefault();
+  view.mode = "manual";
+  const [a, b] = ev.touches;
+  setZoom(pinch.z * spread(ev.touches) / pinch.d, { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+}, { passive: false });
+viewport.addEventListener("touchend", (ev) => { if (ev.touches.length < 2) pinch = null; });
+window.addEventListener("resize", () => { if (view.mode !== "manual") setZoom(view.mode === "fit" ? fitZoom() : autoZoom()); });
+function render(focusOn) {
+  const had = document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-key]");
   drawBoard();
   const panel = document.getElementById("panel");
   panel.replaceChildren(...(state.sel && state.sel.pin != null ? pinView(state.sel.pin) : state.sel && state.sel.node ? nodeView(state.sel.node) : overview()));
+  const keys = [...[focusOn || []].flat(), had && had.dataset.key];
+  for (const key of keys) if (focusKey(key)) break;
 }
+
+// Keys: 1 to 5 open a question, Esc goes back to the list. Number keys are left alone
+// while typing an answer; Esc is not, since the answer is kept.
+document.addEventListener("keydown", (ev) => {
+  if (ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  if (ev.key === "Escape" && state.sel) { ev.preventDefault(); select(null); return; }
+  if (ev.target.closest && ev.target.closest("textarea, input, select")) return;
+  const n = /^[1-9]$/.test(ev.key) ? Number(ev.key) : 0;
+  if (n && n <= DATA.pins.length) { ev.preventDefault(); select({ pin: n - 1 }); }
+});
+document.getElementById("skip").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  focusKey(state.sel && state.sel.pin != null ? `question-${state.sel.pin}` : "item-0") || document.getElementById("panel").focus();
+});
+document.getElementById("title").textContent = `grip whiteboard: ${DATA.description}`;
 document.getElementById("meta").textContent = `${DATA.description} · ${DATA.files.length} file${DATA.files.length === 1 ? "" : "s"} · pass mark ${DATA.passing_score}`;
 document.getElementById("mode-chip").textContent = { defend: "Defend", interview: "Interview", export: "Shared" }[MODE];
+document.getElementById("copy-answers").addEventListener("click", copyAnswers);
+if (MODE !== "export") { loadDraft(); setInterval(heartbeat, HEARTBEAT_MS); }
 render();
+setZoom(autoZoom());
+viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+viewport.scrollLeft = 0;
+// Labels are fitted by measuring them, so fit them again once the fonts have arrived.
+if (document.fonts && document.fonts.status !== "loaded") document.fonts.ready.then(() => drawBoard());
 </script>
 </body>
 </html>

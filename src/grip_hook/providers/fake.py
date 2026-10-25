@@ -14,7 +14,13 @@ Two modes:
 Without a script, the whiteboard is drawn from the changed files: an untrusted caller, one
 box per file in order, and the five whiteboard questions pinned across them.
 
+An appeal (``grip appeal``) is upheld with full marks when the justification says
+``because``, or with a scripted rule's score when one matches it and beats the first grade.
+
 ``GRIP_FAKE_DELAY`` (seconds, float) makes each call sleep, so the spinner is visible.
+
+Every call is timed and reports fixed token counts (:data:`FAKE_USAGE`), so the cost and
+latency shown after a quiz can be tested.
 """
 
 from __future__ import annotations
@@ -33,10 +39,18 @@ from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
+from grip_hook.providers.base import CallLog, call_kind
 from grip_hook.whiteboard import MAX_LABEL, Board, Edge, Node, Pin, PinKind
 
 SCRIPT_ENV = "GRIP_FAKE_SCRIPT"
 DELAY_ENV = "GRIP_FAKE_DELAY"
+FAKE_USAGE: dict[str, tuple[int, int]] = {
+    "questions": (1200, 400),
+    "board": (1500, 700),
+    "grade": (1400, 300),
+    "appeal": (900, 100),
+}
+"""``(input, output)`` tokens the fake provider reports for each kind of request."""
 
 _TEMPLATES = (
     ("behaviour", "What does the change to {file} do, in one or two sentences?"),
@@ -109,7 +123,7 @@ def load_script(path: Path) -> Script:
         raise ProviderError(f"could not load {SCRIPT_ENV}={path}: {exc}") from exc
 
 
-class FakeProvider:
+class FakeProvider(CallLog):
     """Offline stand-in for a real model."""
 
     name = "fake"
@@ -122,14 +136,22 @@ class FakeProvider:
             self.delay = float(os.environ.get(DELAY_ENV, "0") or 0)
         except ValueError:
             self.delay = 0.0
+        self.model_calls = []
 
-    def _pause(self) -> None:
+    def _pause(self) -> float:
+        """Sleep for ``GRIP_FAKE_DELAY``; return when the call started, for the log."""
+        started = time.perf_counter()
         if self.delay > 0:
             time.sleep(self.delay)
+        return started
+
+    def _done(self, schema: type, started: float) -> None:
+        self._log_call(schema, started, *FAKE_USAGE[call_kind(schema)])
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """Produce five questions, scripted or templated over the changed files."""
-        self._pause()
+        started = self._pause()
+        self._done(QuestionSet, started)
         if self.script is not None:
             questions = [
                 Question(question=q.question, rubric=q.rubric, focus=q.focus)
@@ -156,7 +178,7 @@ class FakeProvider:
         self, diff: Diff, difficulty: Difficulty, problems: tuple[str, ...]
     ) -> Board:
         """The scripted board, or one drawn from the changed files."""
-        self._pause()
+        self._done(Board, self._pause())
         if self.script is not None and self.script.board is not None:
             return self.script.board
         return _board_from_files(list(diff.files)[:5] or ["the diff"])
@@ -169,7 +191,7 @@ class FakeProvider:
         difficulty: Difficulty,
     ) -> GradeSheet:
         """Score answers deterministically, by script rules or by length."""
-        self._pause()
+        self._done(GradeSheet, self._pause())
         by_index = {a.question_index: a.text.strip() for a in answers}
         grades = []
         for i in range(len(questions)):
@@ -187,6 +209,28 @@ class FakeProvider:
         if self.script is not None:
             return GradeSheet(grades=grades, verdict=self.script.verdict_for(total))
         return GradeSheet(grades=grades, verdict=f"Fake verdict: {total} points.")
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Uphold an appeal that says ``because`` (or matches a scripted rule), else keep it."""
+        self._done(QuestionGrade, self._pause())
+        index = answer.question_index
+        score, feedback = grade.score, "Appeal not upheld: the first grade stands."
+        if self.script is not None:
+            scripted, why = self.script.questions[index].grade(justification)
+            if scripted > score:
+                score, feedback = scripted, f"Appeal upheld. {why}"
+        elif "because" in justification.lower():
+            score, feedback = POINTS_PER_QUESTION, "Appeal upheld: the answer was right."
+        return QuestionGrade(question_index=index, score=score, feedback=feedback)
 
 
 def _board_from_files(files: list[str]) -> Board:

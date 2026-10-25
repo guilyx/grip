@@ -30,7 +30,8 @@ DEFAULT_URL = "https://keepagrip.vercel.app"
 URL_ENV = "KEEPAGRIP_URL"
 TOKEN_ENV = "KEEPAGRIP_TOKEN"
 STATE_FILE = "grip/keepagrip.json"
-"""Under the repository's git dir: written by ``grip solve``, read by ``grip submit``."""
+"""Under the repository's git dir: written by ``grip platform solve``, read by
+``grip platform submit``."""
 
 _Opener = Callable[[str, str, dict[str, Any] | None, str | None], tuple[int, Any]]
 
@@ -40,7 +41,7 @@ class PlatformError(GripError):
 
 
 class Credentials(BaseModel):
-    """What ``grip login`` stores under the data home."""
+    """What ``grip platform login`` stores under the data home."""
 
     url: str = DEFAULT_URL
     token: str
@@ -65,7 +66,7 @@ class Problem(BaseModel):
 
 
 class SolveState(BaseModel):
-    """Everything ``grip submit`` needs, kept in :data:`STATE_FILE` at the repo root."""
+    """Everything ``grip platform submit`` needs, kept in :data:`STATE_FILE`."""
 
     version: int = 1
     url: str
@@ -191,7 +192,7 @@ class Client:
         if creds is None:
             raise PlatformError(
                 "not logged in. Create a token on your Keep A Grip dashboard and run "
-                "`grip login <token>`."
+                "`grip platform login <token>`."
             )
         return cls(creds.url, creds.token, opener)
 
@@ -310,7 +311,8 @@ def read_state(git_dir: Path) -> SolveState:
         return SolveState.model_validate_json(path.read_text("utf-8"))
     except FileNotFoundError as exc:
         raise PlatformError(
-            f"no {STATE_FILE} here. Run `grip solve <slug>` first, then work inside that directory."
+            f"no {STATE_FILE} here. Run `grip platform solve <slug>` first, then work "
+            "inside that directory."
         ) from exc
     except ValidationError as exc:
         raise PlatformError(f"{path} is not a valid solve state: {exc}") from exc
@@ -328,7 +330,7 @@ def problem_markdown(problem: Problem) -> str:
         f"{problem.statement.strip()}\n\n"
         f"## The quiz will probe\n\n{focus}\n"
         "## When you are done\n\n"
-        "```sh\ngrip submit\n```\n"
+        "```sh\ngrip platform submit\n```\n"
     )
 
 

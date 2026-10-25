@@ -27,9 +27,10 @@ hook_mode = "whiteboard"
 ```
 
 The hook prints the address, opens the browser and waits for you to hand in. A pass lets
-the push through; a score below the mark blocks it, and the page shows what each answer
-missed. Where no browser can be opened (over SSH, no display) the hook asks in the
-terminal as usual. Retrying the same diff reuses the board, so only the grading runs again.
+the push through; a score below the mark blocks it, and the page shows where each answer
+fell short. Where no browser can be opened (over SSH, no display) the hook asks in the
+terminal as usual. Retrying the same diff reuses the board, so only the grading runs again;
+with `retry_questions = "new"`, a failed defense gets a new board next time.
 
 ## What it asks
 
@@ -50,16 +51,36 @@ Code push gate let it through.
 
 ## Reading the board
 
-- **Solid boxes** are code the diff changes. **Dashed boxes** are outside it: callers,
-  services, the code it calls.
+- **Solid, tinted boxes** are code the diff changes. **Dashed boxes** are outside it:
+  callers, services, the code it calls. Long names wrap onto two lines and boxes grow to
+  fit them.
+- The board is drawn at full size, never shrunk to fit. Drag it or scroll to move around,
+  Ctrl + scroll (or pinch) to zoom, and **Fit** to see all of it at once.
 - The **pink area** holds untrusted input. Arrows crossing into it are where the
   malicious-actor question usually sits.
 - **Numbered pins** are the questions. Opening one lights up the box or arrow it is pinned
   to, and an answered pin gets a tick. After you hand in, each pin and the box or arrow it
-  sits on turn green, yellow or red, and the panel shows what each answer missed.
+  sits on turn green, yellow or red, and the panel shows where each answer fell short.
 - Answers can be up to 4,000 characters; a counter under the box shows how many are left.
   Handing in with questions unanswered asks first ("2 unanswered will score 0"). Below the
   pass mark, the page gives the command to run again, with a Copy button.
+
+## If grip stops
+
+The page keeps a draft of your answers in the tab, so reloading it loses nothing. While it
+is open it tells grip so once a minute, so a long think never hits the 20-minute idle
+timeout; only a closed tab does. If grip stops anyway (Ctrl-C, a crash), the page says
+"grip stopped: your answers are below, copy them" and gives you a **Copy answers** button,
+so you can keep them before running `grip whiteboard` again.
+
+## Keyboard
+
+Everything works without a mouse. Tab reaches the boxes and pins in turn, and a skip link
+jumps straight to the questions. On a pin, the arrow keys move to the next or previous
+pin; Enter opens it. Keys `1` to `5` open a question from anywhere except an answer box,
+and Esc goes back to the list. Focus stays where you were when the page redraws, and a
+screen reader hears each pin's state (not answered, answered, scored 14 of 20) and the
+score once it is graded.
 
 ## Interview mode
 
@@ -97,7 +118,9 @@ conversation; the agent reports the score at the end. See [coding agents](agents
 - grip lays the board out itself, so the same board always looks the same.
 - The page is served on `127.0.0.1` on a random port, behind a random token. It accepts only
   its own address as `Host` and `Origin`, and its Content-Security-Policy allows nothing but
-  its own inline script and style. Rubrics never reach the page in defend mode.
+  its own inline script and style and the fonts that ship with grip (Archivo, Instrument
+  Sans and JetBrains Mono, all under the SIL Open Font License). Rubrics never reach the
+  page in defend mode.
 - Everything the model wrote is shown as text, never as markup, so a diff that tries to
   inject a script into the drawing only gets a strange label.
 - Like the terminal quiz, it cannot stop someone on your machine from answering for you: a
