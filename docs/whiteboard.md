@@ -57,6 +57,14 @@ Code push gate let it through.
 - **Numbered pins** are the questions. After you hand in, each pin and the box it sits on
   turn green, yellow or red, and the panel shows what each answer missed.
 
+## If grip stops
+
+The page keeps a draft of your answers in the tab, so reloading it loses nothing. While it
+is open it tells grip so once a minute, so a long think never hits the 20-minute idle
+timeout; only a closed tab does. If grip stops anyway (Ctrl-C, a crash), the page says
+"grip stopped: your answers are below, copy them" and gives you a **Copy answers** button,
+so you can keep them before running `grip whiteboard` again.
+
 ## Interview mode
 
 ```bash

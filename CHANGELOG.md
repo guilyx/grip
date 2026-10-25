@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Whiteboard answers are no longer lost when grip stops. The open page pings grip every
+  minute, so a long think no longer hits the 20-minute idle timeout; answers are kept as
+  a draft in the tab and survive a reload; and if grip is gone at hand-in, the page says
+  "grip stopped: your answers are below, copy them" with a Copy answers button.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

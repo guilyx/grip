@@ -374,7 +374,8 @@ injection may have shaped:
 - the board is embedded as JSON with `<` escaped, so no label can close the script tag,
   and the page only ever writes text with `textContent`;
 - request bodies are capped at 64 kB, grading happens at most once (requests run on
-  threads, behind a lock), and the server stops after 20 idle minutes.
+  threads, behind a lock), and the server stops after 20 minutes without a request that
+  carries the token; the open page sends a heartbeat every minute.
 
 Handing in sends the five answers to the same `grade()` as the terminal quiz: each pin
 becomes a question whose rubric is its rubric points. A pass is recorded under the same

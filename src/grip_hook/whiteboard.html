@@ -69,6 +69,11 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .p.pass circle { fill: var(--pass); } .p.warn circle { fill: var(--warn); } .p.fail circle { fill: var(--fail); }
 .p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
 .n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
+.side { display: grid; gap: 14px; min-width: 0; }
+.stopped { display: grid; gap: 10px; padding: 16px 18px; border: 1.5px solid var(--fail); border-radius: 18px; background: var(--fail-soft); }
+.stopped p { margin: 0; }
+.stopped .title { font: 700 16px/1.35 var(--text); }
+.stopped textarea { min-height: 150px; font: 13px/1.5 var(--mono); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
 .panel h2 { font: 800 21px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
 .panel p { margin: 0; }
@@ -130,7 +135,18 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
       <span><i class="pin"></i>question pinned here</span>
     </div>
   </section>
-  <aside class="panel" id="panel" aria-live="polite"></aside>
+  <div class="side">
+    <section class="stopped" id="stopped" aria-labelledby="stopped-title" hidden>
+      <p class="title" id="stopped-title" role="alert"></p>
+      <p class="small">This page can no longer hand in. Keep them somewhere before closing the tab, then run grip whiteboard again.</p>
+      <textarea id="stopped-text" readonly aria-label="Your answers, to copy"></textarea>
+      <div class="row">
+        <button type="button" class="btn primary" id="copy-answers">Copy answers</button>
+        <span class="small" id="copy-status" aria-live="polite"></span>
+      </div>
+    </section>
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
 </main>
 <script type="application/json" id="board-data">__BOARD_DATA__</script>
 <script>
@@ -144,10 +160,29 @@ const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "tspan", "title", 
 const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
 const edgeById = Object.fromEntries(DATA.edges.map((e) => [e.id, e]));
 const state = {
-  sel: null, busy: false, error: null, result: null,
+  sel: null, busy: false, error: null, result: null, stopped: false,
   answers: DATA.pins.map(() => ""),
   ticks: DATA.pins.map((p) => (p.rubric || []).map(() => false)),
 };
+
+// A draft of the answers lives in this tab's sessionStorage under this board's digest, so a
+// reload keeps it and no other board picks it up. It is dropped once grip has graded.
+// Storage can be off (private windows, policies): then there is simply no draft.
+const DRAFT_KEY = `grip-whiteboard:${MODE}:${DATA.digest}`;
+function loadDraft() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
+    if (!Array.isArray(saved) || saved.length !== DATA.pins.length) return;
+    if (MODE === "interview") state.ticks = state.ticks.map((row, i) => row.map((_, k) => Array.isArray(saved[i]) && saved[i][k] === true));
+    else state.answers = saved.map((a) => (typeof a === "string" ? a.slice(0, 4000) : ""));
+  } catch { /* no storage, or not a draft we wrote */ }
+}
+function saveDraft() {
+  try {
+    if (state.result) sessionStorage.removeItem(DRAFT_KEY);
+    else if (MODE !== "export") sessionStorage.setItem(DRAFT_KEY, JSON.stringify(MODE === "interview" ? state.ticks : state.answers));
+  } catch { /* no storage: the answers stay in this page only */ }
+}
 
 function el(tag, attrs = {}, ...kids) {
   const node = SVG_TAGS.has(tag) ? document.createElementNS(NS, tag) : document.createElement(tag);
@@ -368,11 +403,11 @@ function pinView(i) {
   if (MODE === "interview") {
     parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, el("label", { for: `tick-${i}-${k}` },
       el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: locked,
-        on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
+        on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; edited(); } } }),
       el("span", { text: point }))))));
   } else {
     const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", placeholder: "A sentence or two, in your own words.", disabled: locked,
-      maxlength: 4000, on: { input: (ev) => { state.answers[i] = ev.target.value; drawBoard(); } } });
+      maxlength: 4000, on: { input: (ev) => { state.answers[i] = ev.target.value; edited(); } } });
     ta.value = state.answers[i];
     parts.push(ta);
   }
@@ -398,18 +433,77 @@ function nodeView(id) {
   return parts;
 }
 
+function edited() {
+  saveDraft();
+  if (state.stopped) document.getElementById("stopped-text").value = answersText();
+  drawBoard();
+}
+
+// The answers as plain text, for when grip is gone and they have to leave by the clipboard.
+function answersText() {
+  const lines = [`grip whiteboard: ${DATA.description}`, ""];
+  DATA.pins.forEach((p, i) => {
+    lines.push(`${i + 1}. ${p.question}`);
+    if (MODE === "interview") p.rubric.forEach((point, k) => lines.push(`[${state.ticks[i][k] ? "x" : " "}] ${point}`));
+    else lines.push(state.answers[i].trim() || "(no answer)");
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+function showStopped(on) {
+  state.stopped = on && !state.result;
+  document.getElementById("stopped").hidden = !state.stopped;
+  document.getElementById("stopped-title").textContent = state.stopped ? "grip stopped: your answers are below, copy them" : "";
+  document.getElementById("stopped-text").value = state.stopped ? answersText() : "";
+  document.getElementById("copy-status").textContent = "";
+}
+async function copyAnswers() {
+  const box = document.getElementById("stopped-text"), status = document.getElementById("copy-status");
+  box.value = answersText();
+  try {
+    await navigator.clipboard.writeText(box.value);
+    status.textContent = "Copied.";
+  } catch {
+    box.focus(); box.select();  // no clipboard access: leave them selected for Ctrl-C
+    status.textContent = document.execCommand("copy") ? "Copied." : "Selected: press Ctrl-C (⌘C) to copy.";
+  }
+}
+
+// grip stops after twenty minutes without a request, so while this page is open it says so
+// once a minute: thinking for half an hour is fine, a closed tab still times out. A failed
+// ping means grip is gone (Ctrl-C, a crash): say so now, before the answers are handed in.
+const HEARTBEAT_MS = 60 * 1000;
+async function heartbeat() {
+  if (state.result) return;
+  try {
+    await fetch("heartbeat", { cache: "no-store" });
+    if (state.stopped) showStopped(false);
+  } catch {
+    if (!state.stopped) showStopped(true);
+  }
+}
+
 async function handIn() {
   state.busy = true; state.error = null; state.sel = null; render();
   const body = MODE === "interview" ? { ticks: state.ticks } : { answers: state.answers };
+  let gone = false;
   try {
     const res = await fetch("answers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || `grip answered ${res.status}`);
     state.result = payload;
+    saveDraft();
   } catch (err) {
-    state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
+    // fetch rejects with a TypeError only when nothing answered at all: grip is not running.
+    gone = err instanceof TypeError;
+    if (!gone) state.error = `Could not grade: ${err.message}. Your answers are still here; try again, or check the terminal running grip.`;
   } finally {
     state.busy = false; render();
+  }
+  showStopped(gone);
+  if (gone) {
+    document.getElementById("stopped").scrollIntoView({ block: "nearest" });
+    document.getElementById("copy-answers").focus({ preventScroll: true });
   }
 }
 function select(sel) {
@@ -423,6 +517,8 @@ function render() {
 }
 document.getElementById("meta").textContent = `${DATA.description} · ${DATA.files.length} file${DATA.files.length === 1 ? "" : "s"} · pass mark ${DATA.passing_score}`;
 document.getElementById("mode-chip").textContent = { defend: "Defend", interview: "Interview", export: "Shared" }[MODE];
+document.getElementById("copy-answers").addEventListener("click", copyAnswers);
+if (MODE !== "export") { loadDraft(); setInterval(heartbeat, HEARTBEAT_MS); }
 render();
 </script>
 </body>
