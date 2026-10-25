@@ -98,8 +98,10 @@ remote, `/grip --range BASE..HEAD` an explicit range.
 **A `git push` gate**: a `PreToolUse` hook runs `grip agent-hook claude-code` before
 every Bash command. When the command is a `git push` and the unpushed diff has not passed
 a quiz, the push is denied and Claude is told to ask you to run `/grip --unpushed`.
-Once you pass, the diff is remembered and the push goes through. `GRIP_SKIP=1` bypasses
-the gate, as does `CI=true`.
+Once you pass, the diff is remembered and the push goes through. `GRIP_SKIP=1` in front
+of the command (`GRIP_SKIP=1 git push`, as the git hook reads it) bypasses the gate once,
+as do a pending `grip skip` and `CI=true`. A `GRIP_SKIP=1;` on its own does not count:
+it never reaches git.
 
 A status line badge shows the last Grip Score next to Claude's own status:
 
@@ -157,7 +159,8 @@ For an agent without skill support, paste this into `AGENTS.md`, `CLAUDE.md` or
 Before `git push`, run `grip check --unpushed`. If it exits 1, run `grip ask --unpushed`,
 show me the questions verbatim, wait for my answers, then run
 `grip grade --answers -` with my answers as a JSON list of five strings. Never answer
-the questions yourself. Push only after `grip check --unpushed` exits 0.
+the questions yourself, and never read the files under `.git/grip/`. Push only after
+`grip check --unpushed` exits 0.
 ```
 
 The JSON `grip ask` prints:
@@ -197,6 +200,17 @@ holds the same as data:
 
 ## Honour system
 
-The agent could answer for you. The skill and the snippet above tell it not to, and the
-rubrics never reach it, but grip cannot stop a determined cheat any more than a terminal
-hook can stop `--no-verify`. It is a forcing function for people who want one.
+This is an honour system, and it is worth being plain about what that means.
+
+- **The agent could answer for you.** The skills and the snippet above tell it not to.
+- **The agent could read the rubrics.** They are stored locally, under `.git/grip/`: in
+  `pending.json` while a quiz waits for answers, in `cache/` for a retry, and in
+  `last-report.json` and `history.jsonl` once it is graded. What `grip ask`, `grip grade`
+  and `grip last` print never includes them (`grip grade` does print the path of
+  `last-report.json`). The skills never point to those files and tell the agent not to
+  read them, but an agent with file access could open them anyway.
+- **The agent could skip the gate.** `GRIP_SKIP=1 git push` and `grip skip` work for it as
+  they work for you. The gate's message says to use them only when you ask.
+
+grip cannot stop a determined cheat any more than a terminal hook can stop `--no-verify`.
+It is a forcing function for people who want one.

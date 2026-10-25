@@ -11,7 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from grip_hook import QUESTION_COUNT
-from grip_hook.agent import PendingStore, gated_mode, parse_answers
+from grip_hook.agent import PendingStore, gated_mode, parse_answers, skip_requested
 from grip_hook.cli import cli
 from grip_hook.errors import GripError
 from grip_hook.models import Answer, Difficulty
@@ -359,6 +359,56 @@ def test_gated_mode(command: str, gate: str, expected: str | None) -> None:
     assert gated_mode(command, gate) == expected  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    ("command", "gate", "expected"),
+    [
+        ("GRIP_SKIP=1 git push", "push", True),
+        ("GRIP_SKIP=true git push -u origin main", "push", True),
+        ("FOO=bar GRIP_SKIP=yes git -C sub push", "push", True),
+        ("env GRIP_SKIP=1 git push", "push", True),
+        ("export GRIP_SKIP=1 && git push", "push", True),
+        ("cd sub && GRIP_SKIP=1 git push", "push", True),
+        ("GRIP_SKIP=1 git commit -m 'a; b'", "commit", True),
+        ("GRIP_SKIP='1' git push", "push", True),
+        ("git push", "push", False),
+        ("GRIP_SKIP=0 git push", "push", False),
+        ("GRIP_SKIP= git push", "push", False),
+        ("GRIP_SKIP=1; git push", "push", False),  # a shell variable, not in git's env
+        ("GRIP_SKIP=1 git push && git push", "push", False),  # the second push is not skipped
+        ("echo GRIP_SKIP=1 && git push", "push", False),
+        ("git push # GRIP_SKIP=1", "push", False),
+        ("GRIP_SKIP=1 git commit -m x && git push", "both", False),
+        ("GRIP_SKIP=1 git push 'unclosed", "push", False),
+        ("GRIP_SKIP=1 git status", "push", False),  # nothing gated, nothing to skip
+    ],
+)
+def test_skip_requested(command: str, gate: str, expected: bool) -> None:
+    assert skip_requested(command, gate) is expected  # type: ignore[arg-type]
+
+
+def test_agent_hook_honours_grip_skip_in_the_command(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    denied = runner.invoke(
+        cli,
+        ["agent-hook", "claude-code", "--gate", "both"],
+        input=_hook_payload("git commit -m x", in_repo),
+    )
+    decision = _json(denied)["hookSpecificOutput"]
+    assert isinstance(decision, dict)
+    reason = str(decision["permissionDecisionReason"])
+    assert "`GRIP_SKIP=1 git commit`" in reason and "`grip skip`" in reason
+    for command in ("GRIP_SKIP=1 git commit -m x", "GRIP_SKIP=1 git push origin main"):
+        result = runner.invoke(
+            cli,
+            ["agent-hook", "claude-code", "--gate", "both"],
+            input=_hook_payload(command, in_repo),
+        )
+        assert result.exit_code == 0, result.output
+        assert result.output.strip() == "", command
+
+
 def test_agent_hook_denies_push_until_passed(
     runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
 ) -> None:
@@ -449,3 +499,12 @@ def test_plugin_manifests() -> None:
         text = (plugin_dir / "skills" / name / "SKILL.md").read_text()
         assert text.startswith(f"---\nname: {name}\n"), name
         assert "disable-model-invocation: true" in text
+
+
+@pytest.mark.parametrize("name", ["grip", "grip-review", "grip-explain", "grip-whiteboard"])
+def test_skills_never_point_to_the_rubrics(name: str) -> None:
+    text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    for stored in ("last-report.json", "pending.json", "history.jsonl", "grip/cache"):
+        assert stored not in text, (name, stored)
+    assert "rubric" not in text.lower(), name
+    assert "Never read or open files under `.git/grip/`" in text, name

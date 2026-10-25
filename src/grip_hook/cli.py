@@ -23,6 +23,7 @@ from rich.table import Table
 
 from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT, __version__
 from grip_hook.agent import (
+    SKIP_ENV,
     Gate,
     PendingQuiz,
     PendingStore,
@@ -88,7 +89,6 @@ from grip_hook.whiteboard_server import IDLE_SECONDS, WhiteboardServer, render_p
 _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
 
-SKIP_ENV = "GRIP_SKIP"
 BINARY_ONLY = "only binary files changed, nothing to quiz."
 DEBUG_ENV = "GRIP_DEBUG"
 """When truthy, a failed git command also prints the full command line and git's output."""
@@ -1063,8 +1063,10 @@ def agent_hook_cmd(agent: str, gate: Gate) -> None:
     """Claude Code PreToolUse hook: deny `git push` until the diff passed a quiz.
 
     Reads the hook payload from stdin and prints a decision when one is needed. Honours
-    GRIP_SKIP and CI like the git hooks do. Always exits 0 so a missing repository or a
-    broken payload never blocks the agent by accident.
+    GRIP_SKIP and CI like the git hooks do, whether set in this hook's environment or in
+    front of the git command itself (`GRIP_SKIP=1 git push`), and a pending `grip skip`.
+    Always exits 0 so a missing repository or a broken payload never blocks the agent by
+    accident.
     """
     if _truthy(os.environ.get(SKIP_ENV)) or _truthy(os.environ.get("CI")):
         return
@@ -1081,11 +1083,14 @@ def agent_hook_cmd(agent: str, gate: Gate) -> None:
         return
     if verdict is None:
         return
+    verb = "push" if mode == "unpushed" else "commit"
     _emit(
         claude_code_decision(
             f"grip: {verdict} Ask the developer to run /grip"
             f"{' --unpushed' if mode == 'unpushed' else ''} and answer the questions "
-            f"themselves, then retry. Do not answer for them. GRIP_SKIP=1 bypasses once."
+            "themselves, then retry. Do not answer for them. Only if the developer asks to "
+            f"skip grip: prefix the command with {SKIP_ENV}=1 (`{SKIP_ENV}=1 git {verb}`), "
+            "or run `grip skip` first; either bypasses it once."
         )
     )
 

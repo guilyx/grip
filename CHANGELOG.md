@@ -82,6 +82,11 @@ All notable changes to this project are documented here. The format follows
   the configured provider, it was not graded by `fake`. `grip grade` no longer takes
   `--passing-score`, and `grip status` says when a pass does not count and why. Passes
   recorded by older versions are asked again once.
+- The Claude Code push gate honours `GRIP_SKIP=1 git push` typed in the command, as its
+  message promised; before, it only read its own environment and denied the push anyway.
+  The `/grip` skill no longer tells the agent where the rubrics are stored, every skill
+  and the agent rules say not to read `.git/grip/`, and the docs say plainly that the
+  rubrics are on disk there and that an agent with file access could read them.
 
 ## [0.4.1] - 2026-10-21
 

@@ -5,7 +5,9 @@ agent relays the quiz: ``grip ask`` writes the questions as JSON (the rubrics st
 disk in ``.git/grip/pending.json``), the agent shows them to the developer, and
 ``grip grade`` scores the answers and remembers a pass exactly like the hook does.
 ``grip check`` reports whether the current diff already passed, and ``grip agent-hook``
-turns that into a Claude Code ``PreToolUse`` decision that blocks ``git push`` until it has.
+turns that into a Claude Code ``PreToolUse`` decision that blocks ``git push`` until it has,
+unless the command itself sets ``GRIP_SKIP`` for git (``GRIP_SKIP=1 git push``), which the
+git hook would honour too.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -31,6 +34,13 @@ Gate = Literal["push", "commit", "both"]
 # ``git [-C dir] [-c k=v] [--flag] push``: the subcommand after any global options.
 _PUSH_RE = re.compile(r"(?:^|[\s;&|(])git\s+(?:-[Cc]\s+\S+\s+|-\S+\s+)*push\b")
 _COMMIT_RE = re.compile(r"(?:^|[\s;&|(])git\s+(?:-[Cc]\s+\S+\s+|-\S+\s+)*commit\b")
+
+SKIP_ENV = "GRIP_SKIP"
+"""Set to a truthy value to skip grip once: the git hooks and the agent gate honour it."""
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_SEPARATOR_CHARS = frozenset(";&|()")
 
 
 class PendingQuiz(BaseModel):
@@ -201,8 +211,77 @@ def gated_mode(command: str, gate: Gate) -> str | None:
     return None
 
 
+def _simple_commands(command: str) -> list[list[str]] | None:
+    """The words of each simple command in a shell line, or ``None`` if it does not parse.
+
+    Split on ``;``, ``&&``, ``||``, ``|``, ``&``, parentheses and newlines, with quotes
+    honoured, so ``git commit -m "a; b"`` stays one command.
+    """
+    lexer = shlex.shlex(command.replace("\n", ";"), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:  # an unclosed quote
+        return None
+    commands: list[list[str]] = [[]]
+    for token in tokens:
+        if token and set(token) <= _SEPARATOR_CHARS:
+            commands.append([])
+        else:
+            commands[-1].append(token)
+    return [words for words in commands if words]
+
+
+def skip_requested(command: str, gate: Gate) -> bool:
+    """Whether every gated git command in ``command`` runs with ``GRIP_SKIP`` set.
+
+    This is what the shell would put in git's environment, and so what the git hook itself
+    would see: a ``GRIP_SKIP=1`` assignment in front of the command (``GRIP_SKIP=1 git
+    push``, also after ``env``), or an earlier ``export GRIP_SKIP=1`` in the same line. A
+    plain ``GRIP_SKIP=1; git push`` does not reach git, so it does not count. When the line
+    cannot be parsed, nothing is skipped.
+    """
+    commands = _simple_commands(command)
+    if commands is None:
+        return False
+    exported: dict[str, str] = {}
+    gated = 0
+    for words in commands:
+        if words[0] == "export":
+            exported.update(_assignments(words[1:]))
+            continue
+        env = dict(exported)
+        start = 0
+        while start < len(words):
+            word = words[start : start + 1]
+            if word != ["env"] and not _assignments(word):
+                break
+            env.update(_assignments(word))
+            start += 1
+        if gated_mode(" ".join(words[start:]), gate) is None:
+            continue
+        gated += 1
+        if env.get(SKIP_ENV, "").strip().lower() not in _TRUTHY:
+            return False
+    return gated > 0
+
+
+def _assignments(words: list[str]) -> dict[str, str]:
+    """The ``NAME=value`` words among ``words``, as a mapping."""
+    found: dict[str, str] = {}
+    for word in words:
+        name, sep, value = word.partition("=")
+        if sep and _NAME_RE.fullmatch(name):
+            found[name] = value
+    return found
+
+
 def hook_request(text: str, gate: Gate) -> tuple[str, Path] | None:
-    """``(mode, cwd)`` when a Claude Code ``PreToolUse`` payload needs a check, else ``None``."""
+    """``(mode, cwd)`` when a Claude Code ``PreToolUse`` payload needs a check, else ``None``.
+
+    No check is needed when the command is not gated, or when it sets ``GRIP_SKIP`` for
+    every gated git command in it (see :func:`skip_requested`).
+    """
     try:
         payload = json.loads(text or "{}")
     except json.JSONDecodeError:
@@ -213,7 +292,7 @@ def hook_request(text: str, gate: Gate) -> tuple[str, Path] | None:
     if not isinstance(command, str):
         return None
     mode = gated_mode(command, gate)
-    if mode is None:
+    if mode is None or skip_requested(command, gate):
         return None
     return mode, Path(payload.get("cwd") or Path.cwd())
 
@@ -230,6 +309,7 @@ def claude_code_decision(reason: str) -> dict[str, Any]:
 
 
 __all__ = [
+    "SKIP_ENV",
     "Gate",
     "PendingQuiz",
     "PendingStore",
@@ -241,4 +321,5 @@ __all__ = [
     "parse_answers",
     "questions_payload",
     "report_payload",
+    "skip_requested",
 ]

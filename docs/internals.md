@@ -334,7 +334,10 @@ The [`/grip` skill](agents.md) tells the agent never to answer, hint or open the
 the developer. The Claude Code plugin adds a guard that does not depend on the agent
 following instructions. `grip agent-hook claude-code` runs as a `PreToolUse` hook,
 recognises `git push` (including `git -C dir push` and pushes chained with `&&` or `;`),
-and returns a `deny` decision until `grip check` passes.
+and returns a `deny` decision until `grip check` passes. It steps aside, as the git hook
+would, when `GRIP_SKIP` reaches git: every gated command in the line carries a
+`GRIP_SKIP=1` prefix (also after `env`) or follows an `export GRIP_SKIP=1`. The line is
+split with shell quoting rules; one that does not parse is gated as usual.
 
 ## The whiteboard
 
