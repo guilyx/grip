@@ -30,12 +30,13 @@ To upgrade: `pipx upgrade grip-hook` (or `uv tool upgrade grip-hook`).
 ## 2. Give it a model
 
 Already have Claude Code, Codex or Gemini CLI installed and signed in? grip uses it
-automatically, no key needed: with no provider configured, it picks the first of the three
-it finds. `grip init` (step 3) asks which one to use and writes it down:
+automatically, no key needed: with `provider = "auto"` (the default, and what `grip init`
+writes in step 3), it picks the first of the three it finds on each machine. To pin one
+for the whole team instead:
 
 ```toml
 # .grip.toml at the root of your repository
-provider = "claude-code"   # or "codex", "gemini", or "auto"
+provider = "claude-code"   # or "codex", "gemini"
 ```
 
 With none of them installed, grip uses Anthropic's API:
@@ -68,8 +69,8 @@ cd your-repo
 grip init
 ```
 
-It writes a commented `.grip.toml` (picking `claude-code`, `codex` or `gemini` as the
-provider when that CLI is installed, `anthropic` otherwise), installs the pre-push hook,
+It writes a commented `.grip.toml` with `provider = "auto"` (and says whether that means
+`claude-code`, `codex`, `gemini` or `anthropic` on your machine), installs the pre-push hook,
 and writes the rule file for every [coding agent](agents.md) found on your machine. Commit
 what it wrote and the team shares it. Flags: `--provider`, `--passing-score`,
 `--difficulty`, `--stage`, `--no-hook`, `--no-agents`, `--force`.

@@ -8,8 +8,9 @@ pick, not on the transport.
 
 With no `provider` set anywhere, grip uses `auto`: the first of Claude Code, Codex and
 Gemini CLI it finds on `PATH`, and the Anthropic API when there is none. `grip status`
-and `grip install` say which one that is. `grip init` asks, and writes your choice to
-`.grip.toml`; `provider = "auto"` there lets each teammate use the agent they have.
+and `grip install` say which one that is. `grip init` writes `provider = "auto"` to
+`.grip.toml` so each teammate uses the agent they have, unless you pick a provider in its
+menu. `--provider auto` works on the command line too.
 
 ## Coding agents you already have
 

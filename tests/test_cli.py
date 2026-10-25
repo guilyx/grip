@@ -55,6 +55,13 @@ def test_quiz_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     assert result.exit_code == 0
 
 
+def test_provider_flag_accepts_auto(runner: CliRunner, in_repo: Path) -> None:
+    # The configuration takes auto, so the flag does too (nothing staged: no model call).
+    result = runner.invoke(cli, ["quiz", "--provider", "auto"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to quiz" in result.output
+
+
 def test_quiz_pass_then_remembered(
     runner: CliRunner,
     in_repo: Path,

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `grip init` writes `provider = "auto"` instead of this machine's coding agent, so the
+  committed `.grip.toml` works for teammates without that tool. It prints what `auto`
+  means on this machine, lists `auto` first in its menu, and writes a concrete provider
+  only when you pick one. It now also asks for the difficulty (default `normal`) and says
+  "wrote AGENTS.md for any coding agent that reads it" instead of "for AGENTS.md
+  readers". `--provider auto` is accepted on every command.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
