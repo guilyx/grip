@@ -21,6 +21,11 @@ If the client runs hooks without a terminal, grip cannot ask questions. By defau
 prints a notice and lets the operation through; set `require_tty = true` to block instead.
 Most IDE terminals work fine.
 
+GUI clients often run hooks with a shorter `PATH` than your shell. The hook does not
+depend on it: it runs grip by the absolute path recorded at `grip install`. If you later
+move or reinstall grip, run `grip install` again; `grip status` shows `grip missing` until
+you do.
+
 ## Does it run in CI?
 
 No. When `CI` is set grip exits immediately. CI should run your tests, not quiz a robot.

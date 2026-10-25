@@ -26,7 +26,7 @@ from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT
 from grip_hook.config import Config
 from grip_hook.errors import GripError, ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, QuestionSet, Report, Stage
+from grip_hook.models import Answer, Difficulty, QuestionSet, Report, Stage
 from grip_hook.providers.base import Provider
 
 Gate = Literal["push", "commit", "both"]
@@ -57,6 +57,9 @@ class PendingQuiz(BaseModel):
     files: list[str]
     truncated: bool
     question_set: QuestionSet
+    difficulty: Difficulty | None = None
+    """The difficulty the questions were written at, so grading matches it. ``None`` in
+    files written before it was stored: grading then uses the configured difficulty."""
 
     @property
     def diff(self) -> Diff:
@@ -106,6 +109,7 @@ def ask(diff: Diff, cfg: Config, provider: Provider, stage: Stage) -> PendingQui
         files=list(diff.files),
         truncated=diff.truncated,
         question_set=question_set,
+        difficulty=cfg.difficulty,
     )
 
 
@@ -152,7 +156,8 @@ def grade(pending: PendingQuiz, answers: list[str], cfg: Config, provider: Provi
     """Grade ``answers`` against the pending questions and build the report."""
     answer_models = [Answer(question_index=i, text=a) for i, a in enumerate(answers)]
     diff = pending.diff
-    sheet = provider.grade(diff, pending.question_set.questions, answer_models, cfg.difficulty)
+    difficulty = cfg.difficulty if pending.difficulty is None else pending.difficulty
+    sheet = provider.grade(diff, pending.question_set.questions, answer_models, difficulty)
     if len(sheet.grades) != QUESTION_COUNT:
         raise ProviderError(
             f"provider returned {len(sheet.grades)} grades, expected {QUESTION_COUNT}"

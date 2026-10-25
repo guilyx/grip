@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import os
+import time
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -13,7 +15,7 @@ from click.testing import CliRunner
 from grip_hook import QUESTION_COUNT
 from grip_hook import cli as cli_module
 from grip_hook.cli import cli
-from grip_hook.memory import SkipState
+from grip_hook.memory import SkipState, local_time
 from tests.conftest import FakeTerminalFactory
 
 GOOD = ["this is a long and specific answer because reasons"] * QUESTION_COUNT
@@ -60,11 +62,36 @@ def test_until_pauses_then_expires(tmp_path: Path) -> None:
     state = SkipState(tmp_path)
     now = datetime(2026, 1, 1, 12, tzinfo=UTC)
     state.set_until(now + timedelta(hours=2))
-    assert state.describe(now) == "paused until 2026-01-01 14:00 UTC"
+    assert state.describe(now) == f"paused until {local_time(now + timedelta(hours=2))}"
     assert state.consume(now + timedelta(hours=1)) is not None
     assert state.consume(now + timedelta(hours=1)) is not None  # a pause is not used up
     assert state.consume(now + timedelta(hours=3)) is None
     assert not state.path.exists()  # expired entries are cleaned away
+
+
+@pytest.fixture
+def central_european_time() -> Iterator[None]:
+    """Run in UTC+1, named CET, with a POSIX TZ string that needs no zoneinfo files."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is POSIX only")
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "CET-1"
+    time.tzset()
+    yield
+    if old is None:
+        del os.environ["TZ"]
+    else:
+        os.environ["TZ"] = old
+    time.tzset()
+
+
+@pytest.mark.usefixtures("central_european_time")
+def test_pause_times_are_local_with_the_zone_name(tmp_path: Path) -> None:
+    state = SkipState(tmp_path)
+    now = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    state.set_until(now + timedelta(hours=2))
+    assert state.describe(now) == "paused until 2026-01-01 15:00 CET"
+    assert state.consume(now) == "paused by `grip skip` until 2026-01-01 15:00 CET"
 
 
 def test_corrupt_file_means_no_skip(tmp_path: Path) -> None:

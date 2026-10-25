@@ -147,8 +147,8 @@ The skill is a thin wrapper over three commands that any agent can call:
 | Command | What it does |
 | --- | --- |
 | `grip ask [--unpushed \| --range A..B]` | Prints the summary and five questions as JSON. Rubrics stay in `.git/grip/pending.json`. |
-| `grip grade --answers FILE` | Grades a JSON list of answers, prints the scores, remembers a pass. Exit 1 on fail. |
-| `grip check [--unpushed]` | Exit 0 when the diff already passed (or is empty), 1 otherwise. |
+| `grip grade --answers FILE` | Grades a JSON list of answers against the configured pass mark (no `--passing-score`), prints the scores, remembers a pass. Exit 1 on fail. |
+| `grip check [--unpushed \| --range A..B]` | Exit 0 when the diff already passed (or is empty), 1 otherwise. Without a flag it checks what the installed hook quizzes. |
 
 For an agent without skill support, paste this into `AGENTS.md`, `CLAUDE.md` or
 `GEMINI.md`:
@@ -180,7 +180,22 @@ The JSON `grip ask` prints:
 ```
 
 `status` is `nothing-to-quiz` when the diff is empty and `already-passed` when it was
-quizzed recently. `grip grade` prints `status` (`pass` or `fail`), `score`, per-question
+quizzed recently. With `nothing-to-quiz`, `message` says what there is instead and `hint`
+holds the same as data:
+
+```json
+{
+  "status": "nothing-to-quiz",
+  "message": "nothing staged. 1 untracked file: `git add` it first; 2 unpushed commits: try `grip ask --unpushed` or `--branch`.",
+  "hint": {
+    "staged_files": 0, "modified_files": 0, "untracked_files": 1,
+    "unpushed_commits": 2, "branch_commits": 2,
+    "try": ["git add", "grip ask --unpushed", "grip ask --branch"]
+  }
+}
+```
+
+`grip grade` prints `status` (`pass` or `fail`), `score`, per-question
 `grades` with `feedback`, the `verdict`, and the path of the full report.
 
 ## Honour system
