@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+import click
 import pytest
 from click.testing import CliRunner
 
 from grip_hook import cli as cli_module
 from grip_hook.cli import cli
+from grip_hook.config import load_config
 from grip_hook.errors import NoTerminalError
 from grip_hook.git import ZERO_SHA, Git
 from tests.conftest import FakeTerminalFactory
@@ -53,6 +57,26 @@ def test_version(runner: CliRunner) -> None:
 def test_quiz_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["quiz"])
     assert result.exit_code == 0
+
+
+def test_provider_flag_accepts_auto(runner: CliRunner, in_repo: Path) -> None:
+    # The configuration takes auto, so the flag does too (nothing staged: no model call).
+    result = runner.invoke(cli, ["quiz", "--provider", "auto"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to quiz" in result.output
+
+
+def test_nothing_staged_says_what_to_add(runner: CliRunner, in_repo: Path) -> None:
+    # Right after `grip init` in a new repository: new files, nothing staged, no remote.
+    (in_repo / "app.py").write_text("x = 1\n")
+    (in_repo / "README.md").write_text("# changed\n")
+    (in_repo / "uv.lock").write_text("excluded, so not counted\n")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0
+    assert " ".join(result.output.split()) == (
+        "grip: nothing to quiz: nothing staged. 2 untracked files and 1 modified file: "
+        "`git add` them first; 1 unpushed commit: try `grip quiz --unpushed`."
+    )
 
 
 def test_quiz_pass_then_remembered(
@@ -112,6 +136,50 @@ def test_flags_override_config(
     assert "Grip Score: 50/100" in factory.text
 
 
+def _staged_state(root: Path) -> str:
+    """The `grip status` row for staged changes, without the table wrapping it."""
+    return cli_module._diff_state(Git(root), load_config(root), "staged")
+
+
+def test_pass_below_the_configured_mark_does_not_open_the_hook(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    terminal(BAD)
+    result = runner.invoke(cli, ["quiz", "--passing-score", "0"])
+    assert result.exit_code == 0, result.output  # blank answers "pass" a mark of 0
+    assert "does not count (below the pass mark of 70)" in " ".join(result.output.split())
+    assert (in_repo / ".git" / "grip" / "passed.json").exists()
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+    assert "does not count (below the pass mark of 70)" in _staged_state(in_repo)
+    # A real pass on the same diff replaces it.
+    terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert runner.invoke(cli, ["check"]).exit_code == 0
+
+
+def test_fake_pass_does_not_count_for_a_real_provider(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    (in_repo / ".grip.toml").write_text('provider = "anthropic"\n')
+    stage_change("a.py", "x = 1\n")
+    terminal(GOOD)
+    result = runner.invoke(cli, ["quiz", "--provider", "fake"])
+    assert result.exit_code == 0, result.output
+    assert "does not count (graded by fake)" in " ".join(result.output.split())
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+    assert "does not count (graded by fake)" in _staged_state(in_repo)
+    # With fake configured (demos, tests), the same pass counts.
+    (in_repo / ".grip.toml").write_text('provider = "fake"\n')
+    assert runner.invoke(cli, ["check"]).exit_code == 0
+
+
 def test_no_terminal_skips_or_fails(
     runner: CliRunner,
     in_repo: Path,
@@ -124,11 +192,35 @@ def test_no_terminal_skips_or_fails(
         raise NoTerminalError("no tty")
 
     monkeypatch.setattr(cli_module, "open_terminal", no_tty)
-    result = runner.invoke(cli, ["quiz"])
+    # A hook steps aside (a GUI client pushing), unless require_tty says to block.
+    result = runner.invoke(cli, ["hook", "pre-commit"])
     assert result.exit_code == 0
+    assert "Skipping the quiz" in result.output
     monkeypatch.setenv("GRIP_REQUIRE_TTY", "1")
+    result = runner.invoke(cli, ["hook", "pre-commit"])
+    assert result.exit_code == 2
+
+
+def test_explicit_quiz_without_terminal_fails(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+
+    def no_tty() -> None:
+        raise NoTerminalError("no interactive terminal is available to ask questions.")
+
+    monkeypatch.setattr(cli_module, "open_terminal", no_tty)
+    # Typed by hand: an exit 0 would read as a pass, so it fails whatever require_tty says.
     result = runner.invoke(cli, ["quiz"])
     assert result.exit_code == 2
+    output = " ".join(result.output.split())
+    assert "grip error: no interactive terminal" in output
+    assert "grip ask" in output and "grip grade" in output and "grip whiteboard" in output
+    assert "Skipping" not in output
+    assert not (in_repo / ".git" / "grip" / "passed.json").exists()
 
 
 def test_provider_error_blocks_unless_fail_open(
@@ -150,6 +242,29 @@ def test_provider_error_blocks_unless_fail_open(
     assert result.exit_code == 0
 
 
+def test_missing_key_fails_before_the_quiz_starts(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    for name in list(os.environ):
+        if name.startswith("ANTHROPIC_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    factory = terminal(GOOD)
+    result = runner.invoke(cli, ["quiz", "--provider", "anthropic"])
+    assert result.exit_code == 2
+    output = " ".join(result.output.split())
+    assert "no credentials" in output and "--provider fake" in output
+    assert "Nothing was sent upstream" in output and "GRIP_SKIP" in output
+    assert factory.text == ""  # no intro, no spinner: the check ran before the quiz
+
+
 def test_quiz_range_and_unpushed(
     runner: CliRunner,
     in_repo: Path,
@@ -160,14 +275,82 @@ def test_quiz_range_and_unpushed(
     base = run_git("rev-parse", "HEAD").strip()
     stage_change("a.py", "x = 1\n")
     run_git("commit", "-q", "-m", "a")
-    terminal(GOOD)
-    assert runner.invoke(cli, ["quiz", "--range", f"{base}..HEAD"]).exit_code == 0
+    factory = terminal(GOOD)
+    assert runner.invoke(cli, ["quiz", "--range", "main~1.."]).exit_code == 0
+    assert "questions about your main~1..HEAD (manual)" in factory.text
     assert runner.invoke(cli, ["quiz", "--range", "nonsense"]).exit_code == 2
     # No remotes at all: everything since the root commit is unpushed.
     factory = terminal(BAD)
     result = runner.invoke(cli, ["quiz", "--unpushed"])
     assert result.exit_code == 1
     assert "README.md" in factory.text
+    text = " ".join(factory.text.split())
+    assert "2 unpushed commits on main, everything since the first commit" in text
+    assert base[:12] not in text
+
+
+def test_quiz_says_when_the_diff_was_truncated(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    stage_change("big.txt", "line\n" * 5000)
+    factory = terminal(GOOD)
+    (in_repo / ".grip.toml").write_text('provider = "fake"\nmax_diff_bytes = 1000\n')
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0, result.output
+    text = " ".join(factory.text.split())
+    # 30 KB with LF line endings; a Windows checkout may store CRLF.
+    assert re.search(r"grip saw the first 1 KB of a (30|35) KB change \(max_diff_bytes\)\.", text)
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("main..feat", ("main", "feat", False)),
+        ("main...feat", ("main", "feat", True)),
+        ("main..", ("main", "HEAD", False)),
+        ("main...", ("main", "HEAD", True)),
+        ("v1.2..v1.3", ("v1.2", "v1.3", False)),
+        ("origin/main...HEAD", ("origin/main", "HEAD", True)),
+    ],
+)
+def test_parse_range(given: str, expected: tuple[str, str, bool]) -> None:
+    assert cli_module._parse_range(given) == expected
+
+
+@pytest.mark.parametrize("given", ["main", "..HEAD", "...HEAD", "a....b", "a..b..c", "a...b...c"])
+def test_parse_range_rejects_malformed(given: str) -> None:
+    with pytest.raises(click.BadParameter, match=r"BASE\.\.\.HEAD"):
+        cli_module._parse_range(given)
+
+
+def test_three_dot_range_diffs_from_the_merge_base(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+) -> None:
+    run_git("checkout", "-q", "-b", "feat")
+    stage_change("f.py", "f = 1\n")
+    run_git("commit", "-q", "-m", "f")
+    run_git("checkout", "-q", "main")
+    stage_change("m.py", "m = 1\n")
+    run_git("commit", "-q", "-m", "m")
+    run_git("checkout", "-q", "feat")
+    for rev_range in ("main...HEAD", "main..."):
+        result = runner.invoke(cli, ["ask", "--range", rev_range])
+        assert result.exit_code == 0, result.output
+        diff = json.loads(result.stdout)["diff"]
+        assert diff["files"] == ["f.py"]
+        assert diff["description"] == "main...HEAD"
+    two_dot = json.loads(runner.invoke(cli, ["ask", "--range", "main.."]).stdout)
+    assert set(two_dot["diff"]["files"]) == {"f.py", "m.py"}
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "main....HEAD"])
+        assert result.exit_code == 2
+        assert "expected BASE..HEAD or BASE...HEAD" in result.output
 
 
 def test_hook_skip_envs(
@@ -223,6 +406,7 @@ def test_hook_pre_push_stdin_and_pre_commit_env(
     result = runner.invoke(cli, ["hook", "pre-push", "origin", str(bare)], input=stdin)
     assert result.exit_code == 0, result.output
     assert "a.py" in factory.text
+    assert "questions about your 1 commit on main → origin (pre-push)" in factory.text
 
     # Nothing to push (delete only) -> skip
     result = runner.invoke(
@@ -254,7 +438,9 @@ def test_install_status_uninstall(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
     assert "installed" in result.output
-    assert "passing_score" in result.output
+    assert "pass mark" in result.output and "70/100" in result.output
+    assert "passing_score" not in result.output  # the full table is `grip config`'s
+    assert "grip config" in result.output
 
     result = runner.invoke(cli, ["config"])
     assert result.exit_code == 0 and "fake" in result.output
@@ -265,6 +451,34 @@ def test_install_status_uninstall(runner: CliRunner, in_repo: Path) -> None:
     assert not (in_repo / ".git" / "hooks" / "pre-commit").exists()
     result = runner.invoke(cli, ["uninstall"])
     assert "nothing to remove" in result.output
+
+
+def _row(output: str, option: str) -> str:
+    """The table row for ``option``, its cells joined by single spaces."""
+    for line in output.splitlines():
+        words = line.replace("│", " ").replace("|", " ").split()
+        if words and words[0] == option:
+            return " ".join(words)
+    raise AssertionError(f"no row for {option} in:\n{output}")
+
+
+def test_config_shows_where_each_value_came_from(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for key in [k for k in os.environ if k.startswith("GRIP_") and k != "GRIP_DATA_HOME"]:
+        monkeypatch.delenv(key)
+    monkeypatch.setenv("GRIP_TIMEOUT", "30")
+    result = runner.invoke(cli, ["config", "--difficulty", "hard"])
+    assert result.exit_code == 0, result.output
+    assert _row(result.output, "provider") == "provider fake .grip.toml"
+    assert _row(result.output, "timeout") == "timeout 30.0 env GRIP_TIMEOUT"
+    assert _row(result.output, "difficulty") == "difficulty hard flag --difficulty"
+    assert _row(result.output, "passing_score") == "passing_score 70 default"
+    assert "config files" in result.output and ".grip.toml" in result.output
+
+    (in_repo / ".grip.toml").unlink()
+    result = runner.invoke(cli, ["config"])
+    assert "no config file" in result.output and "[tool.grip]" in result.output
 
 
 def test_install_foreign_hook_error(runner: CliRunner, in_repo: Path) -> None:
@@ -297,6 +511,57 @@ def test_main_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert exc.value.code == 2
 
 
+@pytest.mark.parametrize("command", [["status"], ["quiz"], ["init", "--yes"], ["ask"]])
+def test_outside_a_repo_is_one_plain_line(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    result = runner.invoke(cli, command)
+    assert result.exit_code == 2
+    assert result.output == (
+        "grip error: not inside a git repository (run grip from your project)\n"
+    )
+
+
+def test_grip_debug_shows_the_git_command(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GRIP_DEBUG", "1")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 2
+    assert "not inside a git repository" in result.output
+    assert "$ git rev-parse --show-toplevel" in result.output
+    assert "fatal: not a git repository" in result.output
+
+
+def test_unknown_revision_in_a_range(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "nope..HEAD"])
+        assert result.exit_code == 2
+        assert result.output == "grip error: unknown revision 'nope'\n"
+
+
+def test_a_repository_with_no_commits(
+    runner: CliRunner, empty_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(empty_repo)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    (empty_repo / ".grip.toml").write_text('provider = "fake"\n')
+    for command in (["quiz", "--unpushed"], ["quiz", "--branch"], ["check", "--unpushed"]):
+        result = runner.invoke(cli, command)
+        assert result.exit_code == 2
+        assert result.output == "grip error: this repository has no commits yet\n"
+    status = runner.invoke(cli, ["status"])
+    assert status.exit_code == 0, status.output
+    assert "no commits yet" in status.output
+    assert "could not check" not in status.output
+
+
 def test_last_shows_the_graded_quiz(
     runner: CliRunner,
     in_repo: Path,
@@ -322,3 +587,150 @@ def test_last_shows_the_graded_quiz(
     assert data["answers"] == GOOD and len(data["questions"]) == 5
     assert "summary" in data and "at" in data
     assert "rubric" not in json.dumps(data).lower()
+
+
+# -- command groups -----------------------------------------------------------------------
+
+PLUMBING = ("hook", "agent-hook", "statusline", "ask", "grade")
+PLATFORM = ("login", "logout", "whoami", "problems", "solve", "submit")
+
+
+def _listed(help_text: str) -> set[str]:
+    """The command names a help page lists, one per indented row."""
+    return {line.split()[0] for line in help_text.splitlines() if line.startswith("  ")}
+
+
+def test_top_level_help_shows_the_core_commands_first(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    text = result.output
+    core, rest = text.split("Setup and upkeep:")
+    assert "Core commands:" in core and "More:" in rest
+    assert {"init", "quiz", "whiteboard", "status", "skip"} <= _listed(core)
+    assert "platform" in _listed(rest)
+    assert "Examples:" in rest and "grip quiz --branch" in rest
+    assert not _listed(text) & {*PLUMBING, *PLATFORM}
+
+
+def test_platform_group_lists_its_commands(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["platform", "--help"])
+    assert result.exit_code == 0
+    assert set(PLATFORM) <= _listed(result.output)
+
+
+@pytest.mark.parametrize("name", PLUMBING + PLATFORM)
+def test_hidden_commands_still_run(runner: CliRunner, name: str) -> None:
+    result = runner.invoke(cli, [name, "--help"], prog_name="grip")
+    assert result.exit_code == 0, result.output
+    assert f"Usage: grip {name} [OPTIONS]" in result.output
+
+
+def test_old_platform_names_still_work_with_a_note(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["logout"])
+    assert result.exit_code == 0
+    assert "no stored token" in result.stdout
+    assert "`grip logout` is now `grip platform logout`" in result.stderr
+    assert len(result.stderr.strip().splitlines()) == 1
+    result = runner.invoke(cli, ["platform", "logout"])
+    assert result.exit_code == 0 and result.stderr == ""
+
+
+# -- paper cuts ----------------------------------------------------------------------------
+
+
+class InterruptingTerminal(FakeTerminalFactory):
+    """A terminal where the developer presses Ctrl-C at the first question."""
+
+    def __call__(self) -> Any:
+        term = super().__call__()
+
+        def interrupt(prompt: str = "") -> str:
+            raise KeyboardInterrupt
+
+        term.read_line = interrupt  # type: ignore[method-assign]
+        return term
+
+
+def test_ctrl_c_exits_130_and_records_nothing(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    monkeypatch.setattr(cli_module, "open_terminal", InterruptingTerminal([]))
+    for args in (["quiz"], ["hook", "pre-commit"]):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 130, result.output
+        assert "grip: stopped, nothing recorded." in result.output
+        assert "Aborted" not in result.output
+    assert not (in_repo / ".git" / "grip" / "last-report.json").exists()
+
+
+def test_forget_says_when_there_was_nothing(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    assert "no remembered passes" in runner.invoke(cli, ["forget"]).output
+    stage_change("a.py", "x = 1\n")
+    terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert "forgot 1 remembered pass." in runner.invoke(cli, ["forget"]).output
+    assert "no remembered passes" in runner.invoke(cli, ["forget"]).output
+
+
+def test_binary_only_changes_are_not_quizzed(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (in_repo / "blob.bin").write_bytes(b"\x00\x01\x02binary\x00")
+    run_git("add", "blob.bin")
+
+    def boom() -> None:
+        raise AssertionError("terminal should not be opened")
+
+    monkeypatch.setattr(cli_module, "open_terminal", boom)
+    for args in (["quiz"], ["hook", "pre-commit"]):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert "grip: only binary files changed, nothing to quiz." in result.output
+    assert runner.invoke(cli, ["check"]).exit_code == 0
+    payload = json.loads(runner.invoke(cli, ["ask"]).output)
+    assert payload["status"] == "nothing-to-quiz"
+
+    stage_change("a.py", "x = 1\n")  # with a text file alongside, the quiz runs
+    factory = terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert "PASS" in factory.text
+
+
+def test_hook_paths_are_relative_to_the_repo(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = runner.invoke(cli, ["install"])
+    assert "installed at .git/hooks/pre-push" in result.output
+    (in_repo / "sub").mkdir()
+    monkeypatch.chdir(in_repo / "sub")
+    result = runner.invoke(cli, ["status"])
+    assert result.exit_code == 0, result.output
+    assert ".git/hooks/pre-push" in result.output
+    assert ".git/hooks/pre-commit" in result.output
+    assert "…" not in result.output
+    assert "removed from .git/hooks/pre-push" in runner.invoke(cli, ["uninstall"]).output
+
+
+def test_grade_help_has_no_question_options(runner: CliRunner) -> None:
+    grade_help = runner.invoke(cli, ["grade", "--help"]).output
+    assert "--fresh" not in grade_help and "--difficulty" not in grade_help
+    options = grade_help.split("Options:")[1]
+    assert "--passing-score" not in options  # the configured pass mark, always
+    assert "--provider" in grade_help and "--report" in grade_help
+    quiz_help = runner.invoke(cli, ["quiz", "--help"]).output
+    assert "--fresh" in quiz_help and "--difficulty" in quiz_help
+    assert "--passing-score" in quiz_help

@@ -60,10 +60,10 @@ ones is a design intent backed by the rubric prompt, not a measurement. The pass
   with `provider = "claude-code"` the calls ride an existing subscription.
   [Cost and privacy](cost-and-privacy.md) shows how to estimate them.
 - **Gaming by the agent.** Nothing stops a coding agent from answering for you if you tell
-  it to. The skill forbids it, and the questions it relays carry no rubrics. The rubrics
-  are still on disk, in `.git/grip/pending.json` before grading and
-  `.git/grip/last-report.json` after it, where an agent that reads files can find them.
-  That is the extent of it.
+  it to. The skills forbid it. The rubrics are stored locally under `.git/grip/`; the
+  skills never show them or point to them and tell the agent not to read those files, but
+  an agent with file access could. It is an honour system, and that is the extent of it.
+  See [Coding agents](agents.md#honour-system).
 
 ## Where grip gets in the way
 

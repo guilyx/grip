@@ -50,8 +50,8 @@ steps 2 and 3 together so the team stops seeing grip in one change.
 grip keeps its records inside `.git/grip/` in each clone and never pushes them. Delete
 the directory if you do not want to keep your quiz history. The list of quizzed
 repositories for `grip study` lives in `~/.local/share/grip/` (`$XDG_DATA_HOME/grip`, or
-`GRIP_DATA_HOME`), along with a Keep A Grip token if you ran `grip login`. Run
-`grip logout` first, then delete the directory.
+`GRIP_DATA_HOME`), along with a Keep A Grip token if you ran `grip platform login`. Run
+`grip platform logout` first, then delete the directory.
 
 ## 5. The command
 

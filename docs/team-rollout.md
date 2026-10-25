@@ -23,10 +23,10 @@ what would be written for whom without touching anything.
 
 Two things to check before committing:
 
-- **`provider`.** `grip init` picks the coding agent installed on the machine that runs
-  it, so the committed file can say `provider = "claude-code"` for a teammate who only
-  has Codex. `provider = "auto"` lets each person use whichever agent they have; a fixed
-  provider gives everyone the same model and the same vendor (see
+- **`provider`.** `grip init` writes `provider = "auto"` unless you pick one, so each
+  person uses whichever coding agent they have (else `anthropic`). A fixed provider, such
+  as `provider = "claude-code"`, gives everyone the same model and the same vendor, but
+  fails for a teammate who only has Codex (see
   [Cost and privacy](cost-and-privacy.md)).
 - **The agent files.** Once `CLAUDE.md`, `AGENTS.md` and `.claude/settings.json` are on
   the main branch, every teammate's coding agent follows the rule and runs `grip check`

@@ -153,9 +153,7 @@ def open_terminal() -> Terminal:
         return TtyTerminal(sys.stdin, sys.stdout, owns=False)
     handles = _open_controlling_tty()
     if handles is None:
-        raise NoTerminalError(
-            "grip needs an interactive terminal to ask questions, but none is available."
-        )
+        raise NoTerminalError("no interactive terminal is available to ask questions.")
     reader, writer = handles
     return TtyTerminal(reader, writer, owns=True)
 

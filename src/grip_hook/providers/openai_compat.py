@@ -28,6 +28,7 @@ from grip_hook.prompts import (
     grading_prompt,
     question_prompt,
 )
+from grip_hook.providers.base import missing_credentials
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -53,8 +54,9 @@ class OpenAICompatibleProvider:
         default_key_env = "OLLAMA_API_KEY" if self.name == "ollama" else "OPENAI_API_KEY"
         key_env = cfg.api_key_env or default_key_env
         self._api_key = os.environ.get(key_env, "")
-        if not self._api_key and self.name != "ollama":
-            raise ProviderError(f"{key_env} is not set; the {self.name} provider needs an API key")
+        # Ollama and self-hosted servers at a base_url often take no key at all.
+        if not self._api_key and self.name != "ollama" and not cfg.base_url:
+            raise ProviderError(missing_credentials(self.name, key_env))
         self._timeout = cfg.timeout
         self._opener = opener or urllib.request.urlopen
 

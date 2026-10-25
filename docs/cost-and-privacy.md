@@ -57,7 +57,7 @@ server you run. Pointed somewhere else, it is a remote provider like the others.
 | --- | --- |
 | `.git/grip/last-report.json` | The last graded quiz: questions, rubrics, answers, grades |
 | `.git/grip/history.jsonl` | One line per graded quiz, for `grip study export` |
-| `.git/grip/passed.json` | Digests of diffs that passed, and when |
+| `.git/grip/passed.json` | Digests of diffs that passed: when, the score and pass mark, and which provider and model graded them |
 | `.git/grip/cache/` | Questions and boards written for a diff, reused for `cache_hours` |
 | `.git/grip/pending.json` | The questions from `grip ask`, until `grip grade` |
 | `~/.local/share/grip/` | The list of quizzed repositories and an installation id, for `grip study` |
@@ -75,7 +75,8 @@ remote either.
 | `grip whiteboard --export` or `--interview` | 1 to draw the board (2 when it is asked for again). Nothing is graded by the model |
 | A diff that already passed within `remember_passes_hours` | 0 |
 
-`--fresh`, or `cache_hours = 0`, makes a retry write new questions again: two calls.
+`--fresh`, `cache_hours = 0`, or `retry_questions = "new"` after a failed attempt, makes a
+retry write new questions again: two calls.
 
 ## Estimating the cost
 

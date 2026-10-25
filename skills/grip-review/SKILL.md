@@ -26,8 +26,8 @@ branch). Add `--questions-only` to skip the grading and just print the questions
      `grip forget` if they want a fresh quiz anyway.
 3. Show the `summary` and the five questions verbatim, numbered, each with its `focus`.
 4. With `--questions-only`: stop here, formatted so the text can be pasted into the pull
-   request as review questions for the author. Mention that the rubrics stay local in
-   `.git/grip/pending.json` and that `grip grade` can score the author's replies later.
+   request as review questions for the author. Mention that grip keeps what it grades
+   against on this machine and that `grip grade` can score the author's replies later.
 5. Otherwise the reviewer answers all five in one reply. Do not answer, hint or open the
    code for them. Grade:
 
@@ -45,6 +45,7 @@ branch). Add `--questions-only` to skip the grading and just print the questions
 
 ## Notes
 
+- Never read or open files under `.git/grip/`; relay only what `grip` prints.
 - The pass mark comes from the repository's `.grip.toml` (`passing_score`, default 70).
 - A reviewer's pass is remembered for the range like any other quiz; it does not affect
   the author's own hook.

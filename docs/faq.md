@@ -23,6 +23,11 @@ If the client runs hooks without a terminal, grip cannot ask questions. By defau
 prints a notice and lets the operation through; set `require_tty = true` to block instead.
 Most IDE terminals work fine.
 
+GUI clients often run hooks with a shorter `PATH` than your shell. The hook does not
+depend on it: it runs grip by the absolute path recorded at `grip install`. If you later
+move or reinstall grip, run `grip install` again; `grip status` shows `grip missing` until
+you do.
+
 ## Does it run in CI?
 
 No. When `CI` is set grip exits immediately. CI should run your tests, not quiz a robot.
@@ -32,8 +37,9 @@ No. When `CI` is set grip exits immediately. CI should run your tests, not quiz 
 Because the diff is the same. The questions written for a diff are reused for
 `cache_hours` (24 by default) when that exact diff is quizzed again, so a retry after a
 failed quiz is graded against the same five questions and costs one model call instead of
-two. Change the diff, pass `--fresh` for one run, or set `cache_hours = 0` to get new
-questions every time.
+two. The feedback says where to look again, not what the answer was. Change the diff, set
+`retry_questions = "new"` for new questions after a failed attempt, pass `--fresh` for one
+run, or set `cache_hours = 0` to get new questions every time.
 
 A diff that *passed* is remembered for `remember_passes_hours`, so an identical diff is
 not quizzed again at all. `grip forget` clears that memory.
