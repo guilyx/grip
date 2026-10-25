@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Upgrading from 0.4: passes remembered by 0.4 are asked once more, because
+`passed.json` now records the score and grader of each pass. `grip grade` no longer
+takes `--passing-score`; the pass mark comes from the configuration. The Keep A Grip
+commands moved under `grip platform`, and their old names still work for now.
+
 ### Added
 
 - `retry_questions` option: `same` (the default) keeps reusing a diff's questions and
