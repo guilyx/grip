@@ -72,6 +72,7 @@ def auto_provider() -> str:
 
 
 HOOK_MODES = ("quiz", "whiteboard")
+RETRY_QUESTIONS = ("same", "new")
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +116,12 @@ class Config:
     is quizzed again, so a retry after a failed quiz costs one grading call. ``0`` asks
     the model every time; ``--fresh`` does so once."""
 
+    retry_questions: str = "same"
+    """What a retry after a failed quiz asks: ``same`` reuses the questions (or board)
+    written for the diff, within ``cache_hours``; ``new`` forgets them on a failure, so
+    the next try on the same diff gets new ones from the model. Either way the grading
+    feedback says where to look, not what the rubric expected."""
+
     hook_mode: str = "quiz"
     """What the git hook asks for: ``quiz`` (questions in the terminal) or ``whiteboard``
     (defend a board of the change in the browser, as ``grip whiteboard --defend`` does).
@@ -146,6 +153,11 @@ class Config:
         if self.hook_mode not in HOOK_MODES:
             allowed = ", ".join(HOOK_MODES)
             raise ConfigError(f"hook_mode must be one of {allowed}, got {self.hook_mode!r}")
+        if self.retry_questions not in RETRY_QUESTIONS:
+            allowed = ", ".join(RETRY_QUESTIONS)
+            raise ConfigError(
+                f"retry_questions must be one of {allowed}, got {self.retry_questions!r}"
+            )
         return self
 
     @property
@@ -182,7 +194,7 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             return float(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"{name} must be a number, got {value!r}") from exc
-    if name == "hook_mode":
+    if name in {"hook_mode", "retry_questions"}:
         return str(value).strip().lower()
     if name in {"require_tty", "fail_open"}:
         if isinstance(value, bool):
@@ -315,6 +327,7 @@ provider = "{provider}"
 # hook_mode = "quiz"           # quiz | whiteboard (defend a board in the browser)
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
+# retry_questions = "same"     # same | new (after a failed quiz, ask new questions)
 # fail_open = false            # let the commit through when the provider is down
 """
 
@@ -358,6 +371,7 @@ __all__ = [
     "DEFAULT_PASSING_SCORE",
     "DEFAULT_SOURCE",
     "HOOK_MODES",
+    "RETRY_QUESTIONS",
     "TEMPLATE",
     "Config",
     "Resolved",

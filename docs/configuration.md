@@ -28,6 +28,7 @@ use. `grip status` shows only the provider, pass mark, difficulty and hook mode.
 | `max_diff_bytes` | `200000` | Larger patches are truncated before being sent, and the quiz says how much the model saw. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
 | `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
+| `retry_questions` | `"same"` | What a retry after a failed quiz or whiteboard defense asks. `same`: the questions (or board) already written for the diff, within `cache_hours`. `new`: a failure forgets them, so the next try on the same diff gets new ones, for one more model call. Either way the feedback points to where to look again, not to the rubric's answer. |
 | `hook_mode` | `"quiz"` | What the git hook asks for. `quiz`: questions in the terminal. `whiteboard`: the [whiteboard](whiteboard.md) opens in your browser and you defend the change there. With no browser to open (over SSH, no display), the hook falls back to the terminal quiz. `grip quiz` always asks in the terminal. |
 | `require_tty` | `false` | Hooks fail (exit 2) instead of skipping when no interactive terminal is available. `grip quiz` always fails then. |
 | `fail_open` | `false` | Let the commit or push through when the provider errors out. |
