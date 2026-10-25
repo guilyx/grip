@@ -58,6 +58,14 @@ All notable changes to this project are documented here. The format follows
   quizzed instead of skipped with "grip: not installed". When that path is gone, the hook
   says so and suggests `grip install` again, and `grip status` shows `grip missing`.
   Re-running `grip install --append` refreshes the appended block.
+- CLI paper cuts: Ctrl-C exits 130 with `grip: stopped, nothing recorded.` instead of
+  `Aborted!` and exit 1; `grip forget` says `no remembered passes` when there were none;
+  pause times are shown in local time with the time zone instead of UTC; a change where
+  every file is binary is skipped instead of quizzed; `grip status`, `install` and
+  `uninstall` show hook paths relative to the repository root (`.git/hooks/pre-push`);
+  `grip grade --help` no longer lists `--fresh` and `--difficulty`, and grading uses the
+  difficulty `grip ask` wrote the questions at; a retry that reuses cached questions no
+  longer shows a "reading your diff" spinner.
 
 ## [0.4.1] - 2026-10-21
 

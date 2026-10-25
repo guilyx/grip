@@ -71,7 +71,7 @@ grip exits 0 without asking anything when:
 - `CI` is set (hooks in CI have nobody to answer);
 - a hook finds no interactive terminal and `require_tty` is false (the default);
   `grip quiz` typed by hand fails instead;
-- the diff is empty after exclusions;
+- the diff is empty after exclusions, or every changed file is binary;
 - the exact same diff passed within `remember_passes_hours`.
 
 Provider failures (no key, network down, model unavailable) **block** by default so a

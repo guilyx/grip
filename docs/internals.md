@@ -109,7 +109,8 @@ checks, in this order, and stops at the first that applies:
 3. **A pause from `grip skip`** is pending: consume it and skip. `grip skip` stores a
    one-off skip, `grip skip --hours N` a deadline; both live in `.git/grip/skip.json`.
 4. Load the configuration and **collect the diff** (next section).
-5. **The diff is empty** after exclusions: skip.
+5. **The diff is empty** after exclusions, or **only binary files changed**
+   (`git diff --numstat` counts every file as `-`): skip.
 6. **This exact diff passed recently**: skip, with
    `this exact diff already passed recently, skipping the quiz.`
 7. **No interactive terminal** can be found: skip, unless `require_tty = true`, which

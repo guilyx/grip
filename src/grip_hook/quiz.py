@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT
+from grip_hook.cache import CachedProvider
 from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
@@ -169,8 +170,13 @@ def run_quiz(
     """Run the full quiz and return the outcome. Does not exit or raise on failure."""
     render_intro(term, diff, cfg, stage)
 
-    with term.console.status("[dim]grip is reading your diff…[/dim]"):
-        question_set = provider.generate_questions(diff, cfg.difficulty)
+    # Questions reused from the cache come back at once: no spinner claims a read.
+    question_set = None
+    if isinstance(provider, CachedProvider):
+        question_set = provider.cached_questions(diff, cfg.difficulty)
+    if question_set is None:
+        with term.console.status("[dim]grip is reading your diff…[/dim]"):
+            question_set = provider.generate_questions(diff, cfg.difficulty)
     if len(question_set.questions) != QUESTION_COUNT:
         raise ProviderError(
             f"provider returned {len(question_set.questions)} questions, expected {QUESTION_COUNT}"

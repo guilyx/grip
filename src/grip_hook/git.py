@@ -96,6 +96,9 @@ class Diff:
     context: str = ""
     """Optional text about the task the diff solves, shown to the model as data."""
 
+    binary_only: bool = False
+    """``True`` when every changed file is binary: the patch has no lines to ask about."""
+
     size: int = 0
     """Bytes in the whole patch before truncation; ``0`` when not known."""
 
@@ -349,6 +352,9 @@ class Git:
         if not files:
             return Diff(description, "", "", ())
         stat = self.run(*common, "--stat=100", *spec).rstrip()
+        # ``--numstat`` counts a binary file's lines as ``-\t-``.
+        counts = self.run(*common, "--numstat", *spec).splitlines()
+        binary_only = bool(counts) and all(line.startswith("-\t-\t") for line in counts)
         patch = self.run(*common, "--unified=3", "--diff-filter=ACDMRT", *spec)
         encoded = patch.encode("utf-8")
         truncated = False
@@ -356,7 +362,9 @@ class Git:
             keep = encoded[:max_bytes].decode("utf-8", "ignore")
             patch = keep + _TRUNCATION_NOTE.format(omitted=len(encoded) - max_bytes)
             truncated = True
-        return Diff(description, stat, patch, files, truncated, size=len(encoded))
+        return Diff(
+            description, stat, patch, files, truncated, binary_only=binary_only, size=len(encoded)
+        )
 
     def _names(self, args: list[str], exclude: tuple[str, ...]) -> tuple[str, ...]:
         out = self.run(*args, *self._pathspec(exclude), check=False)
@@ -470,8 +478,9 @@ class Git:
         files = tuple(dict.fromkeys(f for p in parts for f in p.files))
         stat = "\n\n".join(p.stat for p in parts)
         description = "; ".join(p.description for p in parts)
+        binary_only = all(p.binary_only for p in parts)
         size = sum(p.size for p in parts)
-        return Diff(description, stat, patch, files, truncated, size=size)
+        return Diff(description, stat, patch, files, truncated, binary_only=binary_only, size=size)
 
 
 __all__ = [
