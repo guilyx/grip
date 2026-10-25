@@ -22,6 +22,7 @@ grip reads configuration from four places. Higher in the list wins.
 | `base_url` | provider default | Override the API base URL, for proxies or self-hosted servers. |
 | `exclude` | lockfiles and generated files | Globs removed from the diff. Patterns without `/` match at any depth. |
 | `max_diff_bytes` | `200000` | Larger patches are truncated before being sent. |
+| `include_commit_messages` | `true` | Send the messages of the commits being quizzed (pushes, `--unpushed`, `--branch`, `--range`) to the model with the diff, up to 4 KB, newest first, so it can ask why and grade your answers against what you said you meant. Staged changes have no commits yet. `false` sends the diff alone. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
 | `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
 | `hook_mode` | `"quiz"` | What the git hook asks for. `quiz`: questions in the terminal. `whiteboard`: the [whiteboard](whiteboard.md) opens in your browser and you defend the change there. With no browser to open (over SSH, no display), the hook falls back to the terminal quiz. `grip quiz` always asks in the terminal. |

@@ -65,6 +65,14 @@ def test_invalid_config(tmp_path: Path, content: str) -> None:
         load_config(tmp_path, env={})
 
 
+def test_include_commit_messages(tmp_path: Path) -> None:
+    assert Config().include_commit_messages is True
+    (tmp_path / ".grip.toml").write_text("include_commit_messages = false\n")
+    assert load_config(tmp_path, env={}).include_commit_messages is False
+    env = {"GRIP_INCLUDE_COMMIT_MESSAGES": "1"}
+    assert load_config(tmp_path, env=env).include_commit_messages is True
+
+
 def test_no_root() -> None:
     assert load_config(None, env={}) == Config()
 

@@ -186,8 +186,9 @@ get per-question feedback on what to re-read.
 
 ## Bring your own model
 
-grip writes and grades the questions with whatever you already use. Nothing but the diff
-and your answers leaves the machine, and only to the provider you choose.
+grip writes and grades the questions with whatever you already use. Nothing but the diff,
+its commit messages and your answers leaves the machine, and only to the provider you
+choose.
 
 | You have | Set in `.grip.toml` | Key needed |
 | --- | --- | --- |

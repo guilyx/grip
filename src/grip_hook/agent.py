@@ -46,12 +46,21 @@ class PendingQuiz(BaseModel):
     patch: str
     files: list[str]
     truncated: bool
+    commits: str = ""
+    """The commit messages the model saw with the diff, so grading sees them too."""
     question_set: QuestionSet
 
     @property
     def diff(self) -> Diff:
         """Rebuild the diff the questions were written about."""
-        return Diff(self.description, self.stat, self.patch, tuple(self.files), self.truncated)
+        return Diff(
+            self.description,
+            self.stat,
+            self.patch,
+            tuple(self.files),
+            self.truncated,
+            commits=self.commits,
+        )
 
 
 class PendingStore:
@@ -95,6 +104,7 @@ def ask(diff: Diff, cfg: Config, provider: Provider, stage: Stage) -> PendingQui
         patch=diff.patch,
         files=list(diff.files),
         truncated=diff.truncated,
+        commits=diff.commits,
         question_set=question_set,
     )
 

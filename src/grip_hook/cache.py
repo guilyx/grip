@@ -6,8 +6,9 @@ written for it can be too: a retry then costs one grading call instead of two. G
 always runs; the answers are what changed.
 
 Entries live in ``<git dir>/grip/cache/`` as one JSON file each, named by a hash of what
-was asked: the kind (questions or board), the diff digest, the task context, the
-difficulty, the provider and the model. Change any of those and the model is asked again.
+was asked: the kind (questions or board), the diff digest, the task context, the commit
+messages, the difficulty, the provider and the model. Change any of those (reword a commit,
+say) and the model is asked again.
 Entries older than ``Config.cache_hours`` are ignored and pruned.
 """
 
@@ -45,7 +46,8 @@ class GenerationCache:
     def key(kind: Kind, diff: Diff, difficulty: Difficulty, provider: str, model: str) -> str:
         """The name of the entry for one request."""
         context = hashlib.sha256(diff.context.encode("utf-8")).hexdigest()
-        parts = (kind, diff.digest, context, difficulty.value, provider, model)
+        commits = hashlib.sha256(diff.commits.encode("utf-8")).hexdigest()
+        parts = (kind, diff.digest, context, commits, difficulty.value, provider, model)
         return hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()
 
     def load(

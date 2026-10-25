@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The model reads the messages of the commits being quizzed (pushes, `--unpushed`,
+  `--branch`, `--range`), up to 4 KB, as delimited data next to the diff, so questions can
+  ask why and grading can weigh what the developer said they meant. Rewording a commit gets
+  new questions. `include_commit_messages = false` sends the diff alone.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

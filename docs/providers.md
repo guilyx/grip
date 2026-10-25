@@ -50,9 +50,9 @@ already pay for.
 
 Every agent starts in an empty temporary directory with tools disabled where the CLI
 allows it, so it cannot read your repository, run commands, or pick up project
-instructions and hooks. It only sees the diff and your answers, exactly like the API
-providers. `timeout` applies to the whole agent run; agents are slower than a direct API
-call, so raise it if you see timeouts.
+instructions and hooks. It only sees the diff, its commit messages and your answers,
+exactly like the API providers. `timeout` applies to the whole agent run; agents are
+slower than a direct API call, so raise it if you see timeouts.
 
 !!! tip "Which one?"
     Claude Code and Codex enforce the JSON schema themselves, so their output is always
