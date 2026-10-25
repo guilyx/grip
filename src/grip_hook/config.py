@@ -106,6 +106,14 @@ class Config:
     exclude: tuple[str, ...] = DEFAULT_EXCLUDES
     """Path globs excluded from the diff (lockfiles, generated code)."""
 
+    skip_paths: tuple[str, ...] = ()
+    """Path globs (``docs/**``, ``*.md``) with nothing to quiz about: a diff that touches
+    only these paths is skipped. Unlike ``exclude``, a diff that also touches other files
+    is quizzed whole."""
+
+    min_changed_lines: int = 0
+    """Skip diffs that add and remove fewer lines than this in total. ``0`` disables."""
+
     remember_passes_hours: float = 24.0
     """How long a passed diff stays valid without re-quizzing. ``0`` disables."""
 
@@ -134,6 +142,8 @@ class Config:
             raise ConfigError(f"passing_score must be between 0 and 100, got {self.passing_score}")
         if self.max_diff_bytes <= 0:
             raise ConfigError("max_diff_bytes must be positive")
+        if self.min_changed_lines < 0:
+            raise ConfigError("min_changed_lines must be zero or positive")
         if self.remember_passes_hours < 0:
             raise ConfigError("remember_passes_hours must be zero or positive")
         if self.cache_hours < 0:
@@ -165,13 +175,13 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
         except ValueError as exc:
             allowed = ", ".join(d.value for d in Difficulty)
             raise ConfigError(f"difficulty must be one of {allowed}, got {value!r}") from exc
-    if name == "exclude":
+    if name in {"exclude", "skip_paths"}:
         if isinstance(value, str):
             return tuple(p.strip() for p in value.split(",") if p.strip())
         if isinstance(value, list | tuple):
             return tuple(str(p) for p in value)
-        raise ConfigError("exclude must be a list of globs")
-    if name in {"passing_score", "max_diff_bytes"}:
+        raise ConfigError(f"{name} must be a list of globs")
+    if name in {"passing_score", "max_diff_bytes", "min_changed_lines"}:
         try:
             return int(value)
         except (TypeError, ValueError) as exc:
@@ -262,6 +272,8 @@ provider = "{provider}"
 # hook_mode = "quiz"           # quiz | whiteboard (defend a board in the browser)
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
+# skip_paths = []              # e.g. ["docs/**", "*.md"]: a diff touching only these is skipped
+# min_changed_lines = 0        # skip diffs smaller than this many added + removed lines
 # fail_open = false            # let the commit through when the provider is down
 """
 

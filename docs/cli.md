@@ -15,7 +15,12 @@ grip quiz --passing-score 90 --difficulty hard
 grip quiz --provider fake       # offline dry run
 grip quiz --report out.json     # also write the report here
 grip quiz --fresh               # new questions, even for a diff quizzed recently
+grip quiz --force               # quiz a rename, whitespace or skip_paths diff anyway
 ```
+
+A diff with nothing to explain (only renames or mode changes, only whitespace, only
+[`skip_paths`](configuration.md#diffs-with-nothing-to-explain), or fewer lines than
+`min_changed_lines`) is not quizzed: grip says why and exits 0. `--force` quizzes it.
 
 Trying again on the same diff reuses the questions from the last attempt (see
 [`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for

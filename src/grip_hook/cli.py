@@ -45,7 +45,7 @@ from grip_hook.config import (
     render_template,
 )
 from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
-from grip_hook.git import Diff, Git, PushedRef
+from grip_hook.git import Diff, Git, PushedRef, matches_path
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory, SkipState
@@ -187,16 +187,55 @@ def _provider(git: Git, cfg: Config) -> Provider:
     return CachedProvider(provider, GenerationCache(git.git_dir(), cfg.cache_hours), reused)
 
 
+def _trivial(diff: Diff, cfg: Config) -> str | None:
+    """Why ``diff`` has nothing to explain, or ``None`` when it deserves a quiz.
+
+    A diff that only touches ``skip_paths``, only renames files or changes their mode, only
+    changes whitespace (a re-indent is not whitespace), or changes fewer lines than
+    ``min_changed_lines``. A binary file, or a diff git did not measure, always counts.
+    """
+    if cfg.skip_paths and diff.files and all(matches_path(f, cfg.skip_paths) for f in diff.files):
+        return f"it only touches skip_paths ({', '.join(cfg.skip_paths)})"
+    stats = diff.stats
+    if stats is None or stats.binary:
+        return None
+    if stats.changed == 0:
+        return "it changes no lines (only renames, mode changes or empty files)"
+    if stats.significant == 0:
+        return "it only changes whitespace"
+    if stats.changed < cfg.min_changed_lines:
+        lines = f"{stats.changed} changed line{'' if stats.changed == 1 else 's'}"
+        return f"{lines}, under min_changed_lines = {cfg.min_changed_lines}"
+    return None
+
+
+def _nothing_to_quiz(diff: Diff, cfg: Config, stage: Stage, *, force: bool) -> str | None:
+    """What to print when ``diff`` is not quizzed at all, or ``None`` to quiz it."""
+    if diff.is_empty:
+        return "nothing to quiz, no changes found."
+    reason = None if force else _trivial(diff, cfg)
+    if reason is None:
+        return None
+    if stage is Stage.MANUAL:
+        return f"nothing to explain: {reason}. `grip quiz --force` quizzes it anyway."
+    return f"nothing to explain: {reason}, skipping the quiz."
+
+
 def _run(
     git: Git,
     diff: Diff,
     cfg: Config,
     stage: Stage,
     report_path: Path | None,
+    *,
+    force: bool = False,
 ) -> int:
-    """Shared driver for ``quiz`` and ``hook``. Returns the process exit code."""
-    if diff.is_empty:
-        _skip("nothing to quiz, no changes found.")
+    """Shared driver for ``quiz`` and ``hook``. Returns the process exit code.
+
+    ``force`` quizzes a diff that :func:`_trivial` would skip.
+    """
+    if skipped := _nothing_to_quiz(diff, cfg, stage, force=force):
+        _skip(skipped)
         return 0
 
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
@@ -329,10 +368,16 @@ def cli() -> None:
     "--branch", "mode", flag_value="branch", help="Quiz the branch since it left main: its PR."
 )
 @click.option("--range", "rev_range", default=None, help="Quiz an explicit BASE..HEAD range.")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Quiz a diff with nothing to explain (renames, whitespace, skip_paths) anyway.",
+)
 @quiz_options
 def quiz(
     mode: str,
     rev_range: str | None,
+    force: bool,
     report_path: Path | None,
     **overrides: Any,
 ) -> None:
@@ -340,7 +385,7 @@ def quiz(
     git = Git()
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
-    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
+    sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path, force=force))
 
 
 def _branch_diff(git: Git, cfg: Config) -> Diff | None:
@@ -678,7 +723,7 @@ def check_cmd(mode: str, rev_range: str | None) -> None:
 def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | None:
     """``None`` when the diff may go through, otherwise why it may not."""
     diff = _select_diff(git, cfg, mode, rev_range)
-    if diff.is_empty:
+    if diff.is_empty or _trivial(diff, cfg):
         return None
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
         return None
@@ -1178,8 +1223,10 @@ def _diff_state(git: Git, cfg: Config, mode: str) -> str:
         diff = _select_diff(git, cfg, mode, None)
     except GripError as exc:
         return f"[yellow]could not check[/yellow] ({escape(str(exc))})"
-    if diff.is_empty:
-        return "[dim]nothing[/dim]"
+    reason = "" if diff.is_empty else _trivial(diff, cfg)
+    if reason is not None:
+        what = f"nothing to explain ({escape(reason)})" if reason else "nothing"
+        return f"[dim]{what}[/dim]"
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     files = _files(diff)
     latest = memory.latest_for(diff.digest)

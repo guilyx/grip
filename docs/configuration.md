@@ -21,6 +21,8 @@ grip reads configuration from four places. Higher in the list wins.
 | `api_key_env` | provider default | Name of the environment variable holding the API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY`). |
 | `base_url` | provider default | Override the API base URL, for proxies or self-hosted servers. |
 | `exclude` | lockfiles and generated files | Globs removed from the diff. Patterns without `/` match at any depth. |
+| `skip_paths` | `[]` | Globs for paths with nothing to quiz about, e.g. `["docs/**", "*.md"]`. A diff that touches only these paths is skipped; one that also touches other files is quizzed whole. Read like `exclude`. |
+| `min_changed_lines` | `0` | Skip diffs that add and remove fewer lines than this in total. `0` turns it off. |
 | `max_diff_bytes` | `200000` | Larger patches are truncated before being sent. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
 | `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
@@ -41,6 +43,25 @@ exclude = [
 ```
 
 Setting `exclude` replaces the list; copy the defaults if you want to extend them.
+
+## Diffs with nothing to explain
+
+Some diffs are skipped without a quiz, and grip prints why:
+
+- Only renames (100% similar) and file mode changes.
+- Only whitespace: `git diff -w` shows nothing. A line whose indentation changed still
+  counts, since in Python, YAML or a Makefile that changes what the code means.
+- Only paths in `skip_paths`.
+- Fewer changed lines than `min_changed_lines`, when it is set.
+
+A diff with a binary file in it is never skipped this way. `grip check`, the agent push
+gate and `grip status` treat these diffs as nothing to quiz too. `grip quiz` prints the
+reason and exits 0; `grip quiz --force` quizzes the diff anyway.
+
+```toml
+skip_paths = ["docs/**", "*.md"]
+min_changed_lines = 3
+```
 
 ## Examples
 

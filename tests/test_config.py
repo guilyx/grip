@@ -56,6 +56,8 @@ def test_dashed_keys_and_bools(tmp_path: Path) -> None:
         "exclude = 3\n",
         "timeout = 0\n",
         "hook_mode = 'slides'\n",
+        "min_changed_lines = -1\n",
+        "skip_paths = 3\n",
         "this is not toml\n",
     ],
 )
@@ -63,6 +65,22 @@ def test_invalid_config(tmp_path: Path, content: str) -> None:
     (tmp_path / ".grip.toml").write_text(content)
     with pytest.raises(ConfigError):
         load_config(tmp_path, env={})
+
+
+def test_skip_paths_and_min_changed_lines(tmp_path: Path) -> None:
+    assert Config().skip_paths == () and Config().min_changed_lines == 0
+    (tmp_path / ".grip.toml").write_text(
+        'skip_paths = ["docs/**", "*.md"]\nmin-changed-lines = 3\n'
+    )
+    cfg = load_config(tmp_path, env={})
+    assert cfg.skip_paths == ("docs/**", "*.md")
+    assert cfg.min_changed_lines == 3
+    cfg = load_config(
+        tmp_path, env={"GRIP_SKIP_PATHS": "*.rst, docs/", "GRIP_MIN_CHANGED_LINES": "0"}
+    )
+    assert cfg.skip_paths == ("*.rst", "docs/")
+    assert cfg.min_changed_lines == 0
+    assert dict(describe(Config()))["skip_paths"] == "(none)"
 
 
 def test_no_root() -> None:

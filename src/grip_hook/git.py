@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -18,6 +19,7 @@ _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...
 
 
 _HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_INDENT = re.compile(r"[ \t]*")
 
 
 def _short(rev: str) -> str:
@@ -54,6 +56,92 @@ class PushedRef:
 
 
 @dataclass(frozen=True, slots=True)
+class DiffStats:
+    """How many lines a diff changes, to tell a diff with nothing to explain from the rest."""
+
+    added: int
+    """Lines added, from ``git diff --numstat``."""
+
+    removed: int
+    """Lines removed, from ``git diff --numstat``."""
+
+    significant: int
+    """Added plus removed lines once whitespace-only edits are set aside (``git diff -w``).
+    A line whose indentation changed still counts: in Python, YAML or a Makefile that
+    changes what the code means."""
+
+    binary: bool = False
+    """A binary file changed. It has no line count, so such a diff is never trivial."""
+
+    @property
+    def changed(self) -> int:
+        """Added plus removed lines."""
+        return self.added + self.removed
+
+    def __add__(self, other: DiffStats) -> DiffStats:
+        return DiffStats(
+            self.added + other.added,
+            self.removed + other.removed,
+            self.significant + other.significant,
+            self.binary or other.binary,
+        )
+
+
+def _numstat(out: str) -> tuple[int, int, bool]:
+    """``(added, removed, binary)`` summed over ``git diff --numstat`` output."""
+    added = removed = 0
+    binary = False
+    for line in out.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        if parts[0] == "-" or parts[1] == "-":
+            binary = True
+            continue
+        with contextlib.suppress(ValueError):
+            added, removed = added + int(parts[0]), removed + int(parts[1])
+    return added, removed, binary
+
+
+def _reindents(patch: str) -> bool:
+    """Whether a patch that ``git diff -w`` calls empty still changes some indentation.
+
+    When every change is whitespace, each run of removed lines in a hunk pairs up, in
+    order, with the run of added lines that replaces it; a pair whose leading whitespace
+    differs is a re-indent. Runs that do not pair up count as one too, so a patch this
+    cannot read is never called whitespace-only.
+    """
+    removed: list[str] = []
+    added: list[str] = []
+
+    def moved() -> bool:
+        if len(removed) != len(added):
+            return True
+        indent = [_INDENT.match(line) for line in (*removed, *added)]
+        lead = [m.group() if m else "" for m in indent]
+        return lead[: len(removed)] != lead[len(removed) :]
+
+    in_hunk = False
+    for line in patch.splitlines():
+        if line.startswith(("diff --git ", "@@")):
+            in_hunk = line.startswith("@@")
+        elif in_hunk and line.startswith("-"):
+            removed.append(line[1:])
+            continue
+        elif in_hunk and line.startswith("+"):
+            added.append(line[1:])
+            continue
+        elif not in_hunk or not line.startswith(" "):
+            continue
+        # A hunk header, a file header or a context line ends a run of changes.
+        if moved():
+            return True
+        removed.clear()
+        added.clear()
+    return moved()
+
+
+@dataclass(frozen=True, slots=True)
 class Diff:
     """A collected diff, ready to be sent to a provider."""
 
@@ -73,6 +161,9 @@ class Diff:
 
     context: str = ""
     """Optional text about the task the diff solves, shown to the model as data."""
+
+    stats: DiffStats | None = None
+    """Line counts, when git measured them. ``None`` is unknown, and never trivial."""
 
     @property
     def is_empty(self) -> bool:
@@ -269,13 +360,25 @@ class Git:
             return Diff(description, "", "", ())
         stat = self.run(*common, "--stat=100", *spec).rstrip()
         patch = self.run(*common, "--unified=3", "--diff-filter=ACDMRT", *spec)
+        stats = self._stats(common, spec, patch)
         truncated = False
         if len(patch.encode("utf-8")) > max_bytes:
             encoded = patch.encode("utf-8")
             keep = encoded[:max_bytes].decode("utf-8", "ignore")
             patch = keep + _TRUNCATION_NOTE.format(omitted=len(encoded) - max_bytes)
             truncated = True
-        return Diff(description, stat, patch, files, truncated)
+        return Diff(description, stat, patch, files, truncated, stats=stats)
+
+    def _stats(self, common: list[str], spec: list[str], patch: str) -> DiffStats:
+        """Line counts for the diff that ``common`` selects; ``patch`` is its full text."""
+        numstat = [*common, "--numstat", "--diff-filter=ACDMRT"]
+        added, removed, binary = _numstat(self.run(*numstat, *spec))
+        significant = added + removed
+        if significant and not binary:
+            blind_added, blind_removed, _ = _numstat(self.run(*numstat, "-w", *spec))
+            if blind_added + blind_removed == 0 and not _reindents(patch):
+                significant = 0
+        return DiffStats(added, removed, significant, binary)
 
     def staged_diff(self, exclude: tuple[str, ...] = (), max_bytes: int = 200_000) -> Diff:
         """Changes staged for the next commit."""
@@ -338,7 +441,56 @@ class Git:
         files = tuple(dict.fromkeys(f for p in parts for f in p.files))
         stat = "\n\n".join(p.stat for p in parts)
         description = "push (" + ", ".join(p.description for p in parts) + ")"
-        return Diff(description, stat, patch, files, truncated)
+        measured = [p.stats for p in parts if p.stats is not None]
+        stats = sum(measured[1:], measured[0]) if len(measured) == len(parts) else None
+        return Diff(description, stat, patch, files, truncated, stats=stats)
 
 
-__all__ = ["ZERO_SHA", "Diff", "Git", "PushedRef"]
+def matches_path(path: str, patterns: tuple[str, ...]) -> bool:
+    """Whether the repository path ``path`` matches one of the globs in ``patterns``.
+
+    Read the way ``exclude`` is: a pattern without ``/`` matches at any depth (``*.md``),
+    one with ``/`` from the repository root (``docs/**``). ``*`` and ``?`` stay within one
+    directory, ``**`` spans several, and a pattern that matches a directory (``docs``,
+    ``docs/``) matches everything inside it.
+    """
+    parts = path.split("/")
+    for raw in patterns:
+        anywhere = "/" not in raw.strip().rstrip("/")
+        pattern = raw.strip().strip("/")
+        if not pattern:
+            continue
+        regex = re.compile(_glob_regex(pattern))
+        # Without a slash the pattern may start at any segment; with one, at the root.
+        starts = range(len(parts)) if anywhere else range(1)
+        for start in starts:
+            for end in range(start + 1, len(parts) + 1):
+                if regex.fullmatch("/".join(parts[start:end])):
+                    return True
+    return False
+
+
+def _glob_regex(pattern: str) -> str:
+    """A regex for ``pattern``: ``*`` and ``?`` stay in one segment, ``**`` crosses them."""
+    out: list[str] = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return "".join(out)
+
+
+__all__ = ["ZERO_SHA", "Diff", "DiffStats", "Git", "PushedRef", "matches_path"]
