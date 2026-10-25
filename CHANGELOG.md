@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A GitHub Action (`uses: guilyx/grip@...`): on each pull request it writes five
+  questions about the diff since the merge base and posts them as one comment, updated on
+  every push, for the author or a reviewer to answer in review. Nothing is graded in CI.
+  `export-board: true` also uploads the whiteboard as a workflow artifact and links it.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
