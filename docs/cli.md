@@ -11,6 +11,7 @@ grip quiz                       # staged changes
 grip quiz --unpushed            # commits not on any remote
 grip quiz --branch              # the branch since it left main: its pull request
 grip quiz --range main..HEAD    # explicit range
+grip quiz --range main...HEAD   # HEAD since it forked from main (merge base), like a PR
 grip quiz --passing-score 90 --difficulty hard
 grip quiz --provider fake       # offline dry run
 grip quiz --report out.json     # also write the report here
@@ -25,11 +26,29 @@ new ones. `grip whiteboard` reuses its board the same way.
 at, else `origin/main` or `origin/master`, else a local `main` or `master`. It is the
 "quiz my PR" command, whatever has or has not been pushed yet.
 
+`--range` takes git's two spellings. `BASE..HEAD` compares the two tips, so whatever `BASE`
+gained after `HEAD` forked from it shows up too, as if reverted. `BASE...HEAD` diffs from
+their merge base, so only `HEAD`'s side counts, as in a pull request. A missing `HEAD`
+(`main..`, `main...`) means `HEAD`.
+
+When the diff is empty, grip says what there is instead and what to run, and exits 0:
+
+```text
+grip: nothing to quiz: nothing staged. 3 untracked files and 1 modified file: `git add`
+them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`.
+```
+
 Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
-pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
-pasted line still answers the next question.)
+pasted answer keeps its line breaks and ends at the next empty line, or at the empty line
+the paste itself ends with. (On Windows each pasted line still answers the next
+question.)
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
+
+`grip quiz` needs an interactive terminal. Without one (stdin redirected, a script, an IDE
+task) it exits `2` rather than skipping, and points to `grip ask` / `grip grade` (JSON in,
+JSON out) or `grip whiteboard`. The hooks still skip in that case unless `require_tty` is
+set.
 
 ## `grip whiteboard`
 
@@ -42,6 +61,7 @@ grip whiteboard                         # staged changes
 grip whiteboard --unpushed              # commits not on any remote
 grip whiteboard --branch                # the whole branch since main
 grip whiteboard --range main..HEAD      # explicit range
+grip whiteboard --range main...HEAD     # HEAD since it forked from main (merge base)
 grip whiteboard --interview             # rubrics visible to the person asking; nothing recorded
 grip whiteboard --export board.html     # standalone page, no rubrics, nothing graded
 grip whiteboard --no-open --port 8765   # print the address instead of opening a browser
@@ -94,12 +114,17 @@ Sets a repository up in one go: writes a commented `.grip.toml`, installs the pr
 (chaining after an existing hook rather than failing) and runs `grip agents` for the
 coding agents it detects.
 
-In a terminal it asks three questions, each with a default picked for this machine: which
-model writes and grades the questions (an installed coding agent first, else
-`anthropic`), the pass mark, and whether to quiz before pushes, commits or both. Press
-Enter to keep a default. A flag answers its question up front, `--yes` takes every
-default without asking, and outside a terminal (scripts, CI) nothing is asked. It then
-says what is still missing for the chosen provider, such as `ANTHROPIC_API_KEY`.
+In a terminal it asks four questions: which model writes and grades the questions, the
+pass mark, the difficulty (`easy`, `normal` or `hard`), and whether to quiz before
+pushes, commits or both. Press Enter to keep a default. A flag answers its question up
+front, `--yes` takes every default without asking, and outside a terminal (scripts, CI)
+nothing is asked.
+
+The provider defaults to `auto`, and `.grip.toml` is meant to be committed, so each
+teammate gets the coding agent they have installed (Claude Code, Codex or Gemini CLI),
+else `anthropic`. `grip init` prints what `auto` resolves to on your machine. It writes a
+concrete provider only when you pick one in the menu or pass `--provider`. It then says
+what is still missing for that provider, such as `ANTHROPIC_API_KEY`.
 
 ```bash
 grip init                                   # ask, write, install

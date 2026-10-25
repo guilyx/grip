@@ -8,11 +8,39 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- An empty diff in `grip quiz`, `grip whiteboard` and `grip ask` says what there is
+  instead and what to run, e.g. "nothing staged. 3 untracked files and 1 modified file:
+  `git add` them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`".
+  `grip ask` adds the same as data in a `hint` field. The "Try it" line at the end of
+  `grip init` suggests a command that has something to quiz in that repository.
+- `grip init` writes `provider = "auto"` instead of this machine's coding agent, so the
+  committed `.grip.toml` works for teammates without that tool. It prints what `auto`
+  means on this machine, lists `auto` first in its menu, and writes a concrete provider
+  only when you pick one. It now also asks for the difficulty (default `normal`) and says
+  "wrote AGENTS.md for any coding agent that reads it" instead of "for AGENTS.md
+  readers". `--provider auto` is accepted on every command.
 - A missing API key for the `anthropic` or `openai` provider is reported before the
   quiz starts, instead of after the "reading your diff" spinner. The message lists the
   fixes: set the key variable (`api_key_env`, `ANTHROPIC_API_KEY` by default), use a
   coding agent installed on the machine, or try `--provider fake`. The `openai` provider
   no longer asks for a key when `base_url` points at a server of your own.
+
+### Fixed
+
+- `--range main...HEAD` (three dots) no longer fails with `bad revision '.HEAD'`. It diffs
+  from the merge base, as git does, in `grip quiz`, `ask`, `check` and `whiteboard`.
+  `main..` and `main...` run up to `HEAD`, and a malformed range is rejected with the
+  expected form.
+- Git failures are one plain line instead of git's command line and stderr: "not inside a
+  git repository (run grip from your project)", "this repository has no commits yet",
+  "unknown revision 'nope'". `GRIP_DEBUG=1` also prints the full git command and output.
+  `grip status` works in a repository with no commits yet.
+- `grip quiz` without an interactive terminal (`grip quiz </dev/null`, a script) exits 2
+  and points to `grip ask` / `grip grade` or `grip whiteboard`, instead of skipping with
+  exit 0. Hooks still skip unless `require_tty` is set, and the notice no longer reads
+  "grip: grip needs".
+- A pasted answer that ends with an empty line ends there, instead of waiting for one
+  more Enter. Empty lines between pasted paragraphs are still kept.
 
 ## [0.4.1] - 2026-10-21
 

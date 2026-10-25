@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import sys
 import webbrowser
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -37,6 +37,7 @@ from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.config import (
     AGENT_PROVIDERS,
     AUTO_PROVIDER,
+    DEFAULT_EXCLUDES,
     DEFAULT_PASSING_SCORE,
     Config,
     auto_provider,
@@ -44,8 +45,8 @@ from grip_hook.config import (
     load_config,
     render_template,
 )
-from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
-from grip_hook.git import Diff, Git, PushedRef
+from grip_hook.errors import GitError, GripError, NoTerminalError, ProviderError, QuizFailed
+from grip_hook.git import NO_COMMITS, Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory, SkipState
@@ -85,6 +86,8 @@ _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
 
 SKIP_ENV = "GRIP_SKIP"
+DEBUG_ENV = "GRIP_DEBUG"
+"""When truthy, a failed git command also prints the full command line and git's output."""
 
 
 class _Failure(click.ClickException):
@@ -94,9 +97,12 @@ class _Failure(click.ClickException):
         super().__init__(str(error))
         self.exit_code = error.exit_code  # type: ignore[misc]
         self.prefix = "grip" if isinstance(error, QuizFailed) else "grip error"
+        self.detail = error.detail if isinstance(error, GitError) else ""
 
     def show(self, file: Any = None) -> None:
         _err.print(f"[bold red]{self.prefix}:[/bold red] {self.format_message()}")
+        if self.detail and _truthy(os.environ.get(DEBUG_ENV)):
+            _err.print(escape(self.detail), style="dim")
 
 
 class _Group(click.Group):
@@ -117,6 +123,11 @@ def _stage_choice() -> click.Choice[str]:
     return click.Choice([s.value for s in INSTALLABLE_STAGES])
 
 
+def _provider_choice() -> click.Choice[str]:
+    """Every provider name, ``auto`` included, as the configuration accepts them."""
+    return click.Choice(sorted({*REGISTRY, AUTO_PROVIDER}), case_sensitive=False)
+
+
 def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
     """Options shared by every command that can run a quiz."""
     decorators = [
@@ -128,9 +139,9 @@ def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         ),
         click.option(
             "--provider",
-            type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+            type=_provider_choice(),
             default=None,
-            help="LLM provider.",
+            help="LLM provider. auto: an installed coding agent, else anthropic.",
         ),
         click.option("--model", default=None, help="Model identifier for the provider."),
         click.option(
@@ -212,9 +223,15 @@ def _run(
     try:
         term = open_terminal()
     except NoTerminalError as exc:
+        if stage is Stage.MANUAL:
+            # Typed by hand, so skipping would only hide that nothing was asked.
+            raise NoTerminalError(
+                f"{exc} Without one, `grip ask` and `grip grade` run the quiz as JSON, "
+                "and `grip whiteboard` asks in the browser."
+            ) from exc
         if cfg.require_tty:
             raise
-        _skip(f"{exc} Skipping. Set require_tty = true to fail instead.")
+        _skip(f"{exc} Skipping the quiz. Set require_tty = true to fail instead.")
         return 0
 
     try:
@@ -328,7 +345,12 @@ def cli() -> None:
 @click.option(
     "--branch", "mode", flag_value="branch", help="Quiz the branch since it left main: its PR."
 )
-@click.option("--range", "rev_range", default=None, help="Quiz an explicit BASE..HEAD range.")
+@click.option(
+    "--range",
+    "rev_range",
+    default=None,
+    help="Quiz an explicit BASE..HEAD range (BASE...HEAD: since the merge base).",
+)
 @quiz_options
 def quiz(
     mode: str,
@@ -340,6 +362,9 @@ def quiz(
     git = Git()
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
+    if diff.is_empty:
+        _skip(f"nothing to quiz: {_nothing_found(git, cfg, mode, rev_range, 'quiz')[0]}")
+        return
     sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
 
 
@@ -358,13 +383,29 @@ def _branch_diff(git: Git, cfg: Config) -> Diff | None:
     )
 
 
+def _parse_range(rev_range: str) -> tuple[str, str, bool]:
+    """Split ``BASE..HEAD`` or ``BASE...HEAD`` into ``(base, head, three_dot)``.
+
+    Two dots diff ``BASE`` against ``HEAD``; three dots diff from their merge base, as git
+    does, which is what a pull request shows. A missing ``HEAD`` means ``HEAD``.
+    """
+    base, sep, rest = rev_range.strip().partition("..")
+    three_dot = rest.startswith(".")
+    head = rest[1:] if three_dot else rest
+    if not sep or not base or head.startswith(".") or ".." in head:
+        raise click.BadParameter(
+            f"expected BASE..HEAD or BASE...HEAD, got {rev_range!r}", param_hint="--range"
+        )
+    return base, head or "HEAD", three_dot
+
+
 def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Diff:
     """The diff for ``--staged`` (default), ``--unpushed``, ``--branch`` or ``--range``."""
     if rev_range:
-        base, sep, head = rev_range.partition("..")
-        if not sep or not base:
-            raise click.BadParameter("expected BASE..HEAD", param_hint="--range")
-        return git.range_diff(base, head or "HEAD", cfg.exclude, cfg.max_diff_bytes)
+        base, head, three_dot = _parse_range(rev_range)
+        if three_dot:
+            return git.merge_base_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
+        return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
     if mode == "unpushed":
         head_sha = git.run("rev-parse", "HEAD").strip()
         base_sha = git.unpushed_base(head_sha)
@@ -374,12 +415,112 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
     if mode == "branch":
         diff = _branch_diff(git, cfg)
         if diff is None:
+            if not git.has_commits():
+                raise GitError(NO_COMMITS)
             raise GripError(
                 "no default branch to compare with (no origin/HEAD, main or master); "
                 "use --range BASE..HEAD"
             )
         return diff
     return git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Elsewhere:
+    """What there is to quiz besides the diff that came out empty."""
+
+    staged: int
+    """Files with staged changes."""
+    modified: int
+    """Tracked files changed in the working tree but not staged."""
+    untracked: int
+    unpushed: int
+    """Commits not on any remote."""
+    branch: int
+    """Commits on the current branch since it left the default branch."""
+    default: str | None
+    """The default branch ``branch`` counts from."""
+
+    def hint(self, tries: list[str]) -> dict[str, Any]:
+        """The machine-readable side, for ``grip ask``."""
+        return {
+            "staged_files": self.staged,
+            "modified_files": self.modified,
+            "untracked_files": self.untracked,
+            "unpushed_commits": self.unpushed,
+            "branch_commits": self.branch,
+            "try": tries,
+        }
+
+
+def _elsewhere(git: Git, exclude: tuple[str, ...]) -> _Elsewhere:
+    found = git.branch_base()
+    return _Elsewhere(
+        staged=len(git.staged_files(exclude)),
+        modified=len(git.unstaged_files(exclude)),
+        untracked=len(git.untracked_files(exclude)),
+        unpushed=git.count_commits("HEAD", "--not", "--remotes"),
+        branch=git.count_commits(f"{found[1]}..HEAD") if found else 0,
+        default=found[0] if found else None,
+    )
+
+
+def _count(n: int, thing: str) -> str:
+    return f"{n} {thing}{'' if n == 1 else 's'}"
+
+
+def _nothing_found(
+    git: Git, cfg: Config, mode: str, rev_range: str | None, command: str
+) -> tuple[str, dict[str, Any]]:
+    """Why the selected diff is empty, what there is instead and what to run.
+
+    Returns the sentence for people and the same as data for ``grip ask``: right after
+    ``grip init`` nothing is staged and the new files are untracked, which a bare "no
+    changes found" does not say.
+    """
+    found = _elsewhere(git, cfg.exclude)
+    if rev_range:
+        return f"no changes in {rev_range}.", found.hint([])
+    grip = f"grip {command}"
+    offers: list[str] = []
+    tries: list[str] = []
+    if mode != "staged" and found.staged:
+        offers.append(f"{_count(found.staged, 'staged file')}: try `{grip}`")
+        tries.append(grip)
+    work = [
+        _count(n, kind)
+        for n, kind in ((found.untracked, "untracked file"), (found.modified, "modified file"))
+        if n
+    ]
+    if work:
+        them = "it" if found.untracked + found.modified == 1 else "them"
+        then = "first" if mode == "staged" else f"then `{grip}`"
+        offers.append(f"{' and '.join(work)}: `git add` {them} {then}")
+        tries.append("git add")
+    if mode != "unpushed" and found.unpushed:
+        branch_too = mode != "branch" and found.branch > 0
+        offers.append(
+            f"{_count(found.unpushed, 'unpushed commit')}: try `{grip} --unpushed`"
+            + (" or `--branch`" if branch_too else "")
+        )
+        tries += [f"{grip} --unpushed", *([f"{grip} --branch"] if branch_too else [])]
+    elif mode != "branch" and found.branch:
+        offers.append(
+            f"{_count(found.branch, 'commit')} since {found.default}: try `{grip} --branch`"
+        )
+        tries.append(f"{grip} --branch")
+    lead = {
+        "unpushed": "no unpushed commits",
+        "branch": f"no changes on this branch since {found.default or 'the default branch'}",
+    }.get(mode, "nothing staged")
+    if not offers:
+        pushed = "" if mode == "unpushed" else " and every commit is pushed"
+        text = f"{lead}; the working tree is clean{pushed}."
+    elif len(offers) == 1:
+        text = f"{lead}, but {offers[0]}."
+    else:
+        text = f"{lead}. " + "; ".join(offers) + "."
+    return text, found.hint(tries)
 
 
 def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -391,7 +532,12 @@ def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         click.option(
             "--branch", "mode", flag_value="branch", help="The branch since it left main."
         ),
-        click.option("--range", "rev_range", default=None, help="An explicit BASE..HEAD range."),
+        click.option(
+            "--range",
+            "rev_range",
+            default=None,
+            help="An explicit BASE..HEAD range (BASE...HEAD: since the merge base).",
+        ),
     ]
     for decorator in reversed(decorators):
         fn = decorator(fn)
@@ -414,7 +560,8 @@ def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overri
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty:
-        _emit({"status": "nothing-to-quiz", "message": "no changes found"})
+        message, hint = _nothing_found(git, cfg, mode, rev_range, "ask")
+        _emit({"status": "nothing-to-quiz", "message": message, "hint": hint})
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest):
@@ -503,7 +650,7 @@ def whiteboard_cmd(
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty:
-        _skip("nothing to draw, no changes found.")
+        _skip(f"nothing to draw: {_nothing_found(git, cfg, mode, rev_range, 'whiteboard')[0]}")
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     defending = not interview and export_path is None
@@ -813,16 +960,11 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
     return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
 
 
-def _default_provider() -> str:
-    """The provider ``grip init`` picks: a signed-in coding agent when there is one."""
-    return auto_provider()
-
-
 _PROVIDER_HINTS = {
+    "auto": "each machine's coding agent, else anthropic",
     "claude-code": "Claude Code, already signed in: no key, no extra bill",
     "codex": "Codex CLI, already signed in: no key, no extra bill",
     "gemini": "Gemini CLI, already signed in: no key, no extra bill",
-    "auto": "each teammate's installed coding agent, else anthropic",
     "anthropic": "Anthropic API: needs ANTHROPIC_API_KEY or `ant auth login`",
     "ollama": "a local model through Ollama: free, set `model` in .grip.toml",
     "openai": "any OpenAI-compatible API: set `base_url` and OPENAI_API_KEY",
@@ -833,8 +975,21 @@ _PROVIDER_HINTS = {
 class _InitChoices:
     provider: str
     passing_score: int
+    difficulty: str
     stages: tuple[str, ...]
     agents: bool
+
+
+def _agent_names(agents: Iterable[str]) -> str:
+    """Who an agent file is for, without the generic "AGENTS.md readers" entry as a name."""
+    generic = {a.name for a in AGENTS if a.always}
+    names = list(agents)
+    named = [name for name in names if name not in generic]
+    if len(named) == len(names):
+        return ", ".join(named)
+    if named:
+        return f"{', '.join(named)} and other agents that read it"
+    return "any coding agent that reads it"
 
 
 def _init_wizard(
@@ -842,6 +997,7 @@ def _init_wizard(
     *,
     ask_provider: bool,
     ask_score: bool,
+    ask_difficulty: bool,
     ask_stages: bool,
     ask_agents: bool,
 ) -> _InitChoices:
@@ -850,10 +1006,13 @@ def _init_wizard(
     provider = defaults.provider
     if ask_provider:
         installed = [name for name, command in AGENT_PROVIDERS if shutil.which(command)]
-        options = [*installed, "auto", "anthropic", "ollama", "openai"]
+        options = [AUTO_PROVIDER, *installed, "anthropic", "ollama", "openai"]
         _out.print("[bold]Which model asks and grades the questions?[/bold]")
         for name in options:
-            _out.print(f"  [cyan]{name:<12}[/cyan] {_PROVIDER_HINTS[name]}")
+            hint = _PROVIDER_HINTS[name]
+            if name == AUTO_PROVIDER:
+                hint += f" (here: {auto_provider()})"
+            _out.print(f"  [cyan]{name:<12}[/cyan] {hint}")
         provider = click.prompt(
             "Provider", type=click.Choice(options), default=defaults.provider, show_choices=False
         )
@@ -862,6 +1021,13 @@ def _init_wizard(
         score = click.prompt(
             f"\nPass mark, out of {MAX_SCORE}", type=click.IntRange(0, MAX_SCORE), default=score
         )
+    difficulty = defaults.difficulty
+    if ask_difficulty:
+        difficulty = click.prompt(
+            "\nHow demanding should the questions be?",
+            type=click.Choice([d.value for d in Difficulty], case_sensitive=False),
+            default=difficulty,
+        ).lower()
     stages = defaults.stages
     if ask_stages:
         when = click.prompt(
@@ -880,7 +1046,7 @@ def _init_wizard(
             default=True,
         )
     _out.print()
-    return _InitChoices(provider, score, stages, agents)
+    return _InitChoices(provider, score, difficulty, stages, agents)
 
 
 def _interactive() -> bool:
@@ -906,9 +1072,9 @@ def _provider_tip(provider: str) -> str | None:
 @cli.command(name="init")
 @click.option(
     "--provider",
-    type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+    type=_provider_choice(),
     default=None,
-    help="Provider for .grip.toml. Defaults to an installed coding agent, else anthropic.",
+    help="Provider for .grip.toml. Defaults to auto: each machine's coding agent, else anthropic.",
 )
 @click.option(
     "--passing-score",
@@ -946,19 +1112,20 @@ def init_cmd(
 ) -> None:
     """Set a repository up in one go: .grip.toml, the git hook and the agent rule files.
 
-    In a terminal it asks which model to use, the pass mark and when to quiz, with
-    defaults picked for this machine; flags answer a question up front and --yes takes
-    every default. It picks a provider you will not need a key for when Claude Code, Codex
-    or Gemini CLI is installed. Everything it writes is meant to be committed so the whole
-    team shares it.
+    In a terminal it asks which model to use, the pass mark, the difficulty and when to
+    quiz; flags answer a question up front and --yes takes every default. The provider
+    defaults to auto, so each teammate uses the coding agent they have (Claude Code, Codex
+    or Gemini CLI), else anthropic. Everything it writes is meant to be committed so the
+    whole team shares it.
     """
     git = Git()
     root = git.root()
     toml_path = root / ".grip.toml"
     writing = force or not toml_path.exists()
     choices = _InitChoices(
-        provider=(provider or _default_provider()).lower(),
+        provider=(provider or AUTO_PROVIDER).lower(),
         passing_score=DEFAULT_PASSING_SCORE if passing_score is None else passing_score,
+        difficulty=(difficulty or Difficulty.NORMAL.value).lower(),
         stages=stages or (Stage.PRE_PUSH.value,),
         agents=not no_agents,
     )
@@ -967,6 +1134,7 @@ def init_cmd(
             choices,
             ask_provider=writing and provider is None,
             ask_score=writing and passing_score is None,
+            ask_difficulty=writing and difficulty is None,
             ask_stages=not no_hook and not stages,
             ask_agents=not no_agents,
         )
@@ -978,12 +1146,13 @@ def init_cmd(
         text = render_template(
             provider=choices.provider,
             passing_score=choices.passing_score,
-            difficulty=difficulty or Difficulty.NORMAL.value,
+            difficulty=choices.difficulty,
         )
         toml_path.write_text(text, "utf-8")
-        _out.print(
-            f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {choices.provider})"
-        )
+        which = choices.provider
+        if which == AUTO_PROVIDER:
+            which = f"{AUTO_PROVIDER}, which is {auto_provider()} on this machine"
+        _out.print(f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {which})")
         if tip := _provider_tip(choices.provider):
             _out.print(f"[yellow]grip:[/yellow] {tip}")
     if not no_hook:
@@ -998,12 +1167,35 @@ def init_cmd(
             if change.action in past:
                 _out.print(
                     f"[green]grip:[/green] {past[change.action]} {_pretty_path(change.path)} "
-                    f"for {', '.join(change.agents)}"
+                    f"for {_agent_names(change.agents)}"
                 )
     _out.print(
-        "\n[dim]Try it: grip quiz --provider fake. Commit the files above so your team gets "
+        f"\n[dim]Try it: {_try_it(git)}. Commit the files above so your team gets "
         "the same setup. grip status shows what is active.[/dim]"
     )
+
+
+def _try_it(git: Git) -> str:
+    """The dry run ``grip init`` suggests, picked so that it has something to quiz here.
+
+    In a fresh repository nothing is staged and the files init just wrote are untracked,
+    so a bare ``grip quiz`` would only say there is nothing to quiz.
+    """
+    try:
+        exclude = _config(git).exclude
+    except GripError:
+        exclude = DEFAULT_EXCLUDES
+    found = _elsewhere(git, exclude)
+    if found.staged:
+        return "grip quiz --provider fake"
+    if found.branch:
+        return "grip quiz --branch --provider fake"
+    if found.untracked or found.modified or not found.unpushed:
+        return (
+            "stage a change with `git add` (the files above will do), then "
+            "grip quiz --provider fake"
+        )
+    return "grip quiz --unpushed --provider fake"
 
 
 @cli.command(name="agents")
@@ -1205,7 +1397,10 @@ def _print_activity(git: Git, cfg: Config) -> None:
         when = f"{_ago(report.created_at)} ({report.stage.value})"
         table.add_row("last quiz", f"{report.score}/{MAX_SCORE} {verdict}, {when}")
     table.add_row("staged changes", _diff_state(git, cfg, "staged"))
-    table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    if git.has_commits():
+        table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    else:
+        table.add_row("unpushed commits", "[dim]none, no commits yet[/dim]")
     default = git.default_branch()
     if default is not None:
         table.add_row(f"branch vs {default}", _diff_state(git, cfg, "branch"))
