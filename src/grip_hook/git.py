@@ -308,6 +308,27 @@ class Git:
             truncated = True
         return Diff(description, stat, patch, files, truncated)
 
+    def _names(self, args: list[str], exclude: tuple[str, ...]) -> tuple[str, ...]:
+        out = self.run(*args, *self._pathspec(exclude), check=False)
+        return tuple(n for n in out.split("\n") if n)
+
+    def staged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths with changes staged for the next commit."""
+        return self._names(["diff", "--cached", "--name-only", "--no-renames"], exclude)
+
+    def unstaged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Tracked paths changed in the working tree but not staged."""
+        return self._names(["diff", "--name-only", "--no-renames"], exclude)
+
+    def untracked_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths git does not track yet, leaving out what ``.gitignore`` ignores."""
+        return self._names(["ls-files", "--others", "--exclude-standard"], exclude)
+
+    def count_commits(self, *revs: str) -> int:
+        """``git rev-list --count <revs>``; 0 when a revision does not resolve (no commits)."""
+        out = self.run("rev-list", "--count", *revs, check=False).strip()
+        return int(out) if out.isdigit() else 0
+
     def staged_diff(self, exclude: tuple[str, ...] = (), max_bytes: int = 200_000) -> Diff:
         """Changes staged for the next commit."""
         return self._collect("staged changes", ["--cached"], exclude, max_bytes)

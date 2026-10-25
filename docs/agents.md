@@ -177,7 +177,22 @@ The JSON `grip ask` prints:
 ```
 
 `status` is `nothing-to-quiz` when the diff is empty and `already-passed` when it was
-quizzed recently. `grip grade` prints `status` (`pass` or `fail`), `score`, per-question
+quizzed recently. With `nothing-to-quiz`, `message` says what there is instead and `hint`
+holds the same as data:
+
+```json
+{
+  "status": "nothing-to-quiz",
+  "message": "nothing staged. 1 untracked file: `git add` it first; 2 unpushed commits: try `grip ask --unpushed` or `--branch`.",
+  "hint": {
+    "staged_files": 0, "modified_files": 0, "untracked_files": 1,
+    "unpushed_commits": 2, "branch_commits": 2,
+    "try": ["git add", "grip ask --unpushed", "grip ask --branch"]
+  }
+}
+```
+
+`grip grade` prints `status` (`pass` or `fail`), `score`, per-question
 `grades` with `feedback`, the `verdict`, and the path of the full report.
 
 ## Honour system

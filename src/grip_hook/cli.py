@@ -37,6 +37,7 @@ from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.config import (
     AGENT_PROVIDERS,
     AUTO_PROVIDER,
+    DEFAULT_EXCLUDES,
     DEFAULT_PASSING_SCORE,
     Config,
     auto_provider,
@@ -350,6 +351,9 @@ def quiz(
     git = Git()
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
+    if diff.is_empty:
+        _skip(f"nothing to quiz: {_nothing_found(git, cfg, mode, rev_range, 'quiz')[0]}")
+        return
     sys.exit(_run(git, diff, cfg, Stage.MANUAL, report_path))
 
 
@@ -410,6 +414,104 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
     return git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Elsewhere:
+    """What there is to quiz besides the diff that came out empty."""
+
+    staged: int
+    """Files with staged changes."""
+    modified: int
+    """Tracked files changed in the working tree but not staged."""
+    untracked: int
+    unpushed: int
+    """Commits not on any remote."""
+    branch: int
+    """Commits on the current branch since it left the default branch."""
+    default: str | None
+    """The default branch ``branch`` counts from."""
+
+    def hint(self, tries: list[str]) -> dict[str, Any]:
+        """The machine-readable side, for ``grip ask``."""
+        return {
+            "staged_files": self.staged,
+            "modified_files": self.modified,
+            "untracked_files": self.untracked,
+            "unpushed_commits": self.unpushed,
+            "branch_commits": self.branch,
+            "try": tries,
+        }
+
+
+def _elsewhere(git: Git, exclude: tuple[str, ...]) -> _Elsewhere:
+    found = git.branch_base()
+    return _Elsewhere(
+        staged=len(git.staged_files(exclude)),
+        modified=len(git.unstaged_files(exclude)),
+        untracked=len(git.untracked_files(exclude)),
+        unpushed=git.count_commits("HEAD", "--not", "--remotes"),
+        branch=git.count_commits(f"{found[1]}..HEAD") if found else 0,
+        default=found[0] if found else None,
+    )
+
+
+def _count(n: int, thing: str) -> str:
+    return f"{n} {thing}{'' if n == 1 else 's'}"
+
+
+def _nothing_found(
+    git: Git, cfg: Config, mode: str, rev_range: str | None, command: str
+) -> tuple[str, dict[str, Any]]:
+    """Why the selected diff is empty, what there is instead and what to run.
+
+    Returns the sentence for people and the same as data for ``grip ask``: right after
+    ``grip init`` nothing is staged and the new files are untracked, which a bare "no
+    changes found" does not say.
+    """
+    found = _elsewhere(git, cfg.exclude)
+    if rev_range:
+        return f"no changes in {rev_range}.", found.hint([])
+    grip = f"grip {command}"
+    offers: list[str] = []
+    tries: list[str] = []
+    if mode != "staged" and found.staged:
+        offers.append(f"{_count(found.staged, 'staged file')}: try `{grip}`")
+        tries.append(grip)
+    work = [
+        _count(n, kind)
+        for n, kind in ((found.untracked, "untracked file"), (found.modified, "modified file"))
+        if n
+    ]
+    if work:
+        them = "it" if found.untracked + found.modified == 1 else "them"
+        then = "first" if mode == "staged" else f"then `{grip}`"
+        offers.append(f"{' and '.join(work)}: `git add` {them} {then}")
+        tries.append("git add")
+    if mode != "unpushed" and found.unpushed:
+        branch_too = mode != "branch" and found.branch > 0
+        offers.append(
+            f"{_count(found.unpushed, 'unpushed commit')}: try `{grip} --unpushed`"
+            + (" or `--branch`" if branch_too else "")
+        )
+        tries += [f"{grip} --unpushed", *([f"{grip} --branch"] if branch_too else [])]
+    elif mode != "branch" and found.branch:
+        offers.append(
+            f"{_count(found.branch, 'commit')} since {found.default}: try `{grip} --branch`"
+        )
+        tries.append(f"{grip} --branch")
+    lead = {
+        "unpushed": "no unpushed commits",
+        "branch": f"no changes on this branch since {found.default or 'the default branch'}",
+    }.get(mode, "nothing staged")
+    if not offers:
+        pushed = "" if mode == "unpushed" else " and every commit is pushed"
+        text = f"{lead}; the working tree is clean{pushed}."
+    elif len(offers) == 1:
+        text = f"{lead}, but {offers[0]}."
+    else:
+        text = f"{lead}. " + "; ".join(offers) + "."
+    return text, found.hint(tries)
+
+
 def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
     decorators = [
         click.option("--staged", "mode", flag_value="staged", default=True, help="Staged changes."),
@@ -447,7 +549,8 @@ def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overri
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty:
-        _emit({"status": "nothing-to-quiz", "message": "no changes found"})
+        message, hint = _nothing_found(git, cfg, mode, rev_range, "ask")
+        _emit({"status": "nothing-to-quiz", "message": message, "hint": hint})
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest):
@@ -536,7 +639,7 @@ def whiteboard_cmd(
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty:
-        _skip("nothing to draw, no changes found.")
+        _skip(f"nothing to draw: {_nothing_found(git, cfg, mode, rev_range, 'whiteboard')[0]}")
         return
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     defending = not interview and export_path is None
@@ -1034,9 +1137,32 @@ def init_cmd(
                     f"for {', '.join(change.agents)}"
                 )
     _out.print(
-        "\n[dim]Try it: grip quiz --provider fake. Commit the files above so your team gets "
+        f"\n[dim]Try it: {_try_it(git)}. Commit the files above so your team gets "
         "the same setup. grip status shows what is active.[/dim]"
     )
+
+
+def _try_it(git: Git) -> str:
+    """The dry run ``grip init`` suggests, picked so that it has something to quiz here.
+
+    In a fresh repository nothing is staged and the files init just wrote are untracked,
+    so a bare ``grip quiz`` would only say there is nothing to quiz.
+    """
+    try:
+        exclude = _config(git).exclude
+    except GripError:
+        exclude = DEFAULT_EXCLUDES
+    found = _elsewhere(git, exclude)
+    if found.staged:
+        return "grip quiz --provider fake"
+    if found.branch:
+        return "grip quiz --branch --provider fake"
+    if found.untracked or found.modified or not found.unpushed:
+        return (
+            "stage a change with `git add` (the files above will do), then "
+            "grip quiz --provider fake"
+        )
+    return "grip quiz --unpushed --provider fake"
 
 
 @cli.command(name="agents")

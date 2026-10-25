@@ -31,6 +31,13 @@ gained after `HEAD` forked from it shows up too, as if reverted. `BASE...HEAD` d
 their merge base, so only `HEAD`'s side counts, as in a pull request. A missing `HEAD`
 (`main..`, `main...`) means `HEAD`.
 
+When the diff is empty, grip says what there is instead and what to run, and exits 0:
+
+```text
+grip: nothing to quiz: nothing staged. 3 untracked files and 1 modified file: `git add`
+them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`.
+```
+
 Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
 pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
 pasted line still answers the next question.)
