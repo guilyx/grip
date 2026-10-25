@@ -55,6 +55,19 @@ def test_quiz_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     assert result.exit_code == 0
 
 
+def test_nothing_staged_says_what_to_add(runner: CliRunner, in_repo: Path) -> None:
+    # Right after `grip init` in a new repository: new files, nothing staged, no remote.
+    (in_repo / "app.py").write_text("x = 1\n")
+    (in_repo / "README.md").write_text("# changed\n")
+    (in_repo / "uv.lock").write_text("excluded, so not counted\n")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0
+    assert " ".join(result.output.split()) == (
+        "grip: nothing to quiz: nothing staged. 2 untracked files and 1 modified file: "
+        "`git add` them first; 1 unpushed commit: try `grip quiz --unpushed`."
+    )
+
+
 def test_quiz_pass_then_remembered(
     runner: CliRunner,
     in_repo: Path,

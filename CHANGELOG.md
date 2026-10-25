@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- An empty diff in `grip quiz`, `grip whiteboard` and `grip ask` says what there is
+  instead and what to run, e.g. "nothing staged. 3 untracked files and 1 modified file:
+  `git add` them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`".
+  `grip ask` adds the same as data in a `hint` field. The "Try it" line at the end of
+  `grip init` suggests a command that has something to quiz in that repository.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

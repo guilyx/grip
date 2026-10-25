@@ -25,6 +25,13 @@ new ones. `grip whiteboard` reuses its board the same way.
 at, else `origin/main` or `origin/master`, else a local `main` or `master`. It is the
 "quiz my PR" command, whatever has or has not been pushed yet.
 
+When the diff is empty, grip says what there is instead and what to run, and exits 0:
+
+```text
+grip: nothing to quiz: nothing staged. 3 untracked files and 1 modified file: `git add`
+them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`.
+```
+
 Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
 pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
 pasted line still answers the next question.)
