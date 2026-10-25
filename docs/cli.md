@@ -26,8 +26,9 @@ at, else `origin/main` or `origin/master`, else a local `main` or `master`. It i
 "quiz my PR" command, whatever has or has not been pushed yet.
 
 Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
-pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
-pasted line still answers the next question.)
+pasted answer keeps its line breaks and ends at the next empty line, or at the empty line
+the paste itself ends with. (On Windows each pasted line still answers the next
+question.)
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
 
