@@ -187,6 +187,19 @@ def _provider(git: Git, cfg: Config) -> Provider:
     return CachedProvider(provider, GenerationCache(git.git_dir(), cfg.cache_hours), reused)
 
 
+def _after_failure(git: Git, cfg: Config, digest: str) -> str:
+    """Forget the questions just failed when ``retry_questions = "new"``; what to tell.
+
+    The questions and board written for the diff are dropped from the cache, so the next
+    try on the same diff asks the model for new ones instead of the ones whose feedback
+    the developer has just read. Returns a sentence for the failure message, or ``""``.
+    """
+    if cfg.retry_questions != "new":
+        return ""
+    GenerationCache(git.git_dir(), cfg.cache_hours).forget(digest)
+    return " The next try asks new questions."
+
+
 def _run(
     git: Git,
     diff: Diff,
@@ -263,19 +276,6 @@ def _decide(
         f"{report.passing_score}. {retry_hint} `grip last` shows the feedback again "
         f"(report: {_pretty_path(saved)})."
     )
-
-
-def _after_failure(git: Git, cfg: Config, digest: str) -> str:
-    """Forget the questions just failed when ``retry_questions = "new"``; what to tell.
-
-    The questions and board written for the diff are dropped from the cache, so the next
-    try on the same diff asks the model for new ones instead of the ones whose feedback
-    the developer has just read. Returns a sentence for the failure message, or ``""``.
-    """
-    if cfg.retry_questions != "new":
-        return ""
-    GenerationCache(git.git_dir(), cfg.cache_hours).forget(digest)
-    return " The next try asks new questions."
 
 
 def _browser_available() -> bool:
