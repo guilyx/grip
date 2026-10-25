@@ -54,8 +54,12 @@ Code push gate let it through.
   services, the code it calls.
 - The **pink area** holds untrusted input. Arrows crossing into it are where the
   malicious-actor question usually sits.
-- **Numbered pins** are the questions. After you hand in, each pin and the box it sits on
-  turn green, yellow or red, and the panel shows what each answer missed.
+- **Numbered pins** are the questions. Opening one lights up the box or arrow it is pinned
+  to, and an answered pin gets a tick. After you hand in, each pin and the box or arrow it
+  sits on turn green, yellow or red, and the panel shows what each answer missed.
+- Answers can be up to 4,000 characters; a counter under the box shows how many are left.
+  Handing in with questions unanswered asks first ("2 unanswered will score 0"). Below the
+  pass mark, the page gives the command to run again, with a Copy button.
 
 ## Interview mode
 
@@ -64,7 +68,7 @@ grip whiteboard --range main..feature --interview
 ```
 
 For the person doing the pulling aside. The rubric for each question is visible and has a
-checkbox per point: ask aloud, tick what you hear, hand in for a score. Nothing is recorded
+checkbox per point: ask aloud, tick what you hear, then **Score interview**. Nothing is recorded
 and the answers never go to a model, so it works for a review over coffee as well as for a
 pairing session.
 
@@ -74,8 +78,8 @@ pairing session.
 grip whiteboard --export board.html
 ```
 
-Writes one self-contained page with the drawing and the questions, without rubrics and
-without grading. Attach it to a pull request so reviewers know what the author should be
+Writes one self-contained page with the drawing and the questions, without rubrics,
+answer boxes or grading. Attach it to a pull request so reviewers know what the author should be
 able to defend.
 
 ## From a coding agent

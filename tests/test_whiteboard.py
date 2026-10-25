@@ -276,6 +276,39 @@ def test_rubrics_reach_the_page_only_in_interview_mode(board: Board) -> None:
     assert interview["pins"][1]["rubric"] == board.pins[1].rubric
 
 
+def test_the_page_knows_how_to_bring_the_board_back(board: Board) -> None:
+    assert _data(board)["rerun"] == "grip whiteboard"
+    data = board_data(
+        board, mode="defend", passing_score=70, description="d", files=FILES, rerun="git push"
+    )
+    assert data["rerun"] == "git push"
+
+
+@pytest.mark.parametrize(
+    ("mode", "rev_range", "command"),
+    [
+        ("staged", None, "grip whiteboard"),
+        ("branch", None, "grip whiteboard --branch"),
+        ("unpushed", None, "grip whiteboard --unpushed"),
+        ("staged", "main..feat/x", "grip whiteboard --range main..feat/x"),
+        ("staged", "a b", "grip whiteboard --range 'a b'"),
+    ],
+)
+def test_whiteboard_command(mode: str, rev_range: str | None, command: str) -> None:
+    from grip_hook.cli import _whiteboard_command  # noqa: PLC0415
+
+    assert _whiteboard_command(mode, rev_range) == command
+
+
+def test_the_page_caps_answers_where_grip_does(board: Board) -> None:
+    from grip_hook.cli import MAX_ANSWER  # noqa: PLC0415
+
+    page = render_page(_data(board))
+    assert f"const MAX_ANSWER = {MAX_ANSWER};" in page
+    assert "unanswered will score 0." in page
+    assert '"Score interview"' in page
+
+
 def test_opposite_edges_are_drawn_side_by_side(board: Board) -> None:
     offsets = {e["id"]: e["offset"] for e in _data(board)["edges"]}
     assert offsets["client->handle"] == -offsets["handle->client"] != 0
@@ -471,6 +504,7 @@ def test_whiteboard_pass_is_remembered_for_the_push(
     result = _run(monkeypatch, {"answers": GOOD})
     assert result.exit_code == 0, result.output
     assert "Defended" in result.output
+    assert '"rerun": "grip whiteboard"' in _AutoServer.page
     assert CliRunner().invoke(cli, ["check"]).exit_code == 0
     report = json.loads((in_repo / ".git" / "grip" / "last-report.json").read_text("utf-8"))
     assert report["score"] >= 70
@@ -554,6 +588,7 @@ def test_the_hook_defends_on_the_whiteboard(
     assert result.exit_code == 1
     assert "below the pass mark" in result.output
     assert '"mode": "defend"' in _AutoServer.page
+    assert '"rerun": "git commit"' in _AutoServer.page  # what brings the board back
     _AutoServer.payload = {"answers": GOOD}
     result = CliRunner().invoke(cli, ["hook", "pre-commit"])
     assert result.exit_code == 0, result.output

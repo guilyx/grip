@@ -37,8 +37,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: 999px; padding: 4px 10px; color: var(--muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-.board { border: 1px solid var(--line); border-radius: 18px; overflow-x: auto;
+.board { border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
   background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / 20px 20px, var(--board); }
+.scroller { overflow-x: auto; }  /* the drawing scrolls sideways on a phone; the legend stays put */
 .board svg { display: block; width: 100%; min-width: 620px; height: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 16px 12px; font-size: 12.5px; color: var(--muted); }
 .legend i { display: inline-block; width: 18px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--line); }
@@ -47,6 +48,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
 svg text { font-family: var(--text); fill: var(--ink); }
 .arrowhead { fill: var(--muted); }
+.arrowhead.accent { fill: var(--accent); } .arrowhead.pass { fill: var(--pass); } .arrowhead.warn { fill: var(--warn); } .arrowhead.fail { fill: var(--fail); }
 .n rect { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
 .n.ext rect { stroke-dasharray: 6 4; }
 .n.ctx rect { fill: transparent; }
@@ -59,16 +61,23 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .n.sel rect { stroke: var(--accent); stroke-width: 2.5; }
 .e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
 .e.trust path { stroke: var(--zone-line); }
+.e.pass path { stroke: var(--pass); stroke-width: 2.5; } .e.warn path { stroke: var(--warn); stroke-width: 2.5; } .e.fail path { stroke: var(--fail); stroke-width: 2.5; }
+/* What the open question is pinned to: thicker, and in the accent colour until graded. */
+.e.hl path { stroke-width: 3; } .e.hl:not(.pass):not(.warn):not(.fail) path { stroke: var(--accent); }
 .e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
 .zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
 .zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
-.p circle { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
+.p circle.dot { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
 .p text { font: 700 13px var(--mono); fill: var(--on-accent); text-anchor: middle; dominant-baseline: central; }
-.p.sel circle { stroke: var(--ink); }
-.p.done circle { fill: var(--ink); } .p.done text { fill: var(--board); }
-.p.pass circle { fill: var(--pass); } .p.warn circle { fill: var(--warn); } .p.fail circle { fill: var(--fail); }
+.p.sel circle.dot { stroke: var(--ink); }
+/* An answered pin keeps its colour and gains a tick, so it never looks like the selected one. */
+.p .check { display: none; } .p.done .check { display: inline; }
+.p .check circle { fill: var(--pass); stroke: var(--board); stroke-width: 1.5; }
+.p .check path { fill: none; stroke: var(--board); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.p.pass circle.dot { fill: var(--pass); } .p.warn circle.dot { fill: var(--warn); } .p.fail circle.dot { fill: var(--fail); }
 .p.pass text, .p.warn text, .p.fail text { fill: var(--board); }
 .n.pass rect { stroke: var(--pass); stroke-width: 2.5; } .n.warn rect { stroke: var(--warn); stroke-width: 2.5; } .n.fail rect { stroke: var(--fail); stroke-width: 2.5; }
+.n.hl rect { stroke-width: 3.5; } .n.hl:not(.pass):not(.warn):not(.fail) rect { stroke: var(--accent); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
 .panel h2 { font: 800 21px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
 .panel p { margin: 0; }
@@ -79,7 +88,6 @@ svg text { font-family: var(--text); fill: var(--ink); }
   background: none; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .item:hover { border-color: var(--accent); }
 .num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 12.5px var(--mono); background: var(--accent); color: var(--on-accent); }
-.num.done { background: var(--ink); color: var(--board); }
 .num.pass { background: var(--pass); color: var(--board); } .num.warn { background: var(--warn); color: var(--board); } .num.fail { background: var(--fail); color: var(--board); }
 .item .q { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .item .s { font: 700 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -93,6 +101,17 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 .rubric { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: var(--page); list-style: none; }
 .rubric label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
 .rubric input { margin-top: 3px; accent-color: var(--accent); }
+/* After grading the ticks are a record, drawn at full contrast instead of as greyed-out boxes. */
+.rubric .point { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; }
+.rubric .mark { width: 16px; height: 16px; margin-top: 2px; border: 1.5px solid var(--ink); border-radius: 4px; display: grid; place-items: center; }
+.rubric .mark.on { background: var(--accent); border-color: var(--accent-ink); }
+.rubric .mark.on::after { content: ""; width: 4px; height: 8px; margin-top: -2px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.count { margin-top: -8px; font: 500 12px var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.count.near { color: var(--warn); font-weight: 700; }
+.confirm { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: var(--warn-soft); font-size: 14px; }
+.cmd { display: flex; gap: 8px; align-items: center; }
+.cmd code { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--page);
+  font: 500 13px var(--mono); overflow-wrap: anywhere; user-select: all; }
 .fb { display: grid; gap: 4px; padding: 12px; border-radius: 12px; font-size: 14px; }
 .fb.pass { background: var(--pass-soft); } .fb.warn { background: var(--warn-soft); } .fb.fail { background: var(--fail-soft); }
 .fb b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -108,7 +127,7 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 .nodeinfo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
 .nodeinfo dt { color: var(--muted); }
 .nodeinfo dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: no-preference) { .p circle, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
+@media (prefers-reduced-motion: no-preference) { .p circle.dot, .n rect, .num { transition: fill .25s, stroke .25s, background .25s; } }
 </style>
 </head>
 <body>
@@ -122,7 +141,7 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 </header>
 <main class="layout">
   <section class="board" aria-label="The change as a whiteboard">
-    <svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg>
+    <div class="scroller"><svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg></div>
     <div class="legend">
       <span><i></i>changed in this diff</span>
       <span><i class="ext"></i>outside the diff</span>
@@ -140,11 +159,12 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 const DATA = JSON.parse(document.getElementById("board-data").textContent);
 const MODE = DATA.mode, PPQ = DATA.points_per_question, W = DATA.node.width, H = DATA.node.height;
 const NS = "http://www.w3.org/2000/svg";
+const MAX_ANSWER = 4000;  // grip refuses longer answers
 const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "tspan", "title", "circle", "defs", "marker"]);
 const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
 const edgeById = Object.fromEntries(DATA.edges.map((e) => [e.id, e]));
 const state = {
-  sel: null, busy: false, error: null, result: null,
+  sel: null, busy: false, error: null, result: null, confirming: false,
   answers: DATA.pins.map(() => ""),
   ticks: DATA.pins.map((p) => (p.rubric || []).map(() => false)),
 };
@@ -257,14 +277,17 @@ function placeLabels(svg, labels) {
 function drawBoard() {
   const svg = document.getElementById("board");
   svg.setAttribute("viewBox", `0 0 ${DATA.size.width} ${DATA.size.height}`);
-  svg.replaceChildren(el("defs", {}, el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
-    el("path", { d: "M0 0 L10 5 L0 10 z", class: "arrowhead" }))));
+  // One arrowhead per colour an arrow can take: plain, highlighted, and the three grades.
+  svg.replaceChildren(el("defs", {}, ["", "accent", "pass", "warn", "fail"].map((c) =>
+    el("marker", { id: "arrow" + (c && "-" + c), viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+      el("path", { d: "M0 0 L10 5 L0 10 z", class: "arrowhead " + c })))));
   if (DATA.zone) {
     const [x, y, w, h] = DATA.zone;
     svg.append(el("g", { class: "zone" }, el("rect", { x, y, width: w, height: h, rx: 16 }), el("text", { x: x + 16, y: y + 24, text: "UNTRUSTED" })));
   }
   // Labels go in their own layer above the boxes, so a long one stays readable.
   const labels = el("g", { class: "e" });
+  const per = state.result ? state.result.grades : null, open = state.sel && state.sel.pin != null ? DATA.pins[state.sel.pin].on : null;
   for (const e of DATA.edges) {
     const g = edgeGeometry(e);
     const below = e.offset > 0, room = DATA.pins.some((p) => p.on === e.id) ? 13 : 0;
@@ -275,13 +298,16 @@ function drawBoard() {
       dx: g.horizontal ? 0 : 10 + room, dy: g.horizontal ? (below ? 17 + room : -8 - room) : 4,
     };
     labels.append(label);
-    svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") },
-      el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" })));
+    // Graded, an arrow with questions on it takes the colour of its worst one.
+    const asked = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === e.id);
+    const graded = per && asked.length ? band(Math.min(...asked.map(([, i]) => per[i].score))) : "";
+    const lit = open === e.id;
+    svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") + (graded ? " " + graded : "") + (lit ? " hl" : "") },
+      el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": `url(#arrow${graded ? "-" + graded : lit ? "-accent" : ""})` })));
   }
-  const per = state.result ? state.result.grades : null;
   for (const n of DATA.nodes) {
     const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === n.id);
-    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "");
+    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "") + (open === n.id ? " hl" : "");
     if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
     const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
     const g = el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `${n.label}: ${n.role}`, on: activate(() => select({ node: n.id })) },
@@ -300,9 +326,11 @@ function drawBoard() {
     const at = pinAnchor(p);
     let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");
     if (per) cls += " " + band(per[i].score); else if (answered(i)) cls += " done";
-    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "aria-label": `Question ${i + 1}, ${p.kind}`,
+    svg.append(el("g", { class: cls, tabindex: 0, role: "button", "data-pin": i, "aria-label": `Question ${i + 1}, ${p.kind}`,
       on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); }) },
-      el("circle", { cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
+      el("circle", { class: "dot", cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) }),
+      el("g", { class: "check", "aria-hidden": "true" }, el("circle", { cx: at.x + 12, cy: at.y - 12, r: 7 }),
+        el("path", { d: `M${at.x + 8.8} ${at.y - 12} l2.2 2.2 l4 -4.4` }))));
   });
 }
 
@@ -313,7 +341,7 @@ function numClass(i) {
 function pinList(indexes) {
   return el("ol", { class: "list" }, indexes.map((i) => {
     const p = DATA.pins[i];
-    const status = state.result ? `${state.result.grades[i].score}/${PPQ}` : answered(i) ? "ready" : "";
+    const status = state.result ? `${state.result.grades[i].score}/${PPQ}` : answered(i) ? "✓ ready" : "";
     return el("li", {}, el("button", { type: "button", class: "item", on: { click: () => select({ pin: i }) } },
       el("span", { class: numClass(i), text: String(i + 1) }),
       el("span", {}, el("span", { class: "kind", text: p.kind }), el("div", { class: "q", text: p.question })),
@@ -334,8 +362,9 @@ function overview() {
       el("div", {}, el("div", { class: "verdict " + (r.passed ? "pass" : "fail"), text: r.passed ? "PASS" : "NOT YET" }),
         el("p", { class: "small", text: r.verdict }))));
     parts.push(el("p", { class: "small", text: r.recorded
-      ? (r.passed ? "The pass is remembered for this diff, so the push hook lets it through. You can close this tab." : `Below the pass mark of ${r.passing_score}. Open the coloured pins for feedback, re-read the diff, and run grip whiteboard again.`)
+      ? (r.passed ? "The pass is remembered for this diff, so the push hook lets it through. You can close this tab." : `Below the pass mark of ${r.passing_score}. Open the coloured pins for feedback, re-read the diff, then run this again:`)
       : "Interview score. Nothing was recorded on this machine." }));
+    if (r.recorded && !r.passed) parts.push(copyable(DATA.rerun));
   } else {
     const heading = { defend: "Could you defend this at a whiteboard?", interview: "Ask these aloud. Tick what you hear.", export: "Could you defend this at a whiteboard?" }[MODE];
     parts.push(el("div", {}, el("span", { class: "kind", text: { defend: "Defend this change", interview: "Interview", export: "Shared board" }[MODE] }), el("h2", { text: heading })));
@@ -344,18 +373,38 @@ function overview() {
   if (state.error) parts.push(el("p", { class: "error", text: state.error }));
   parts.push(pinList(DATA.pins.map((_, i) => i)));
   if (!state.result && MODE !== "export") {
-    const done = DATA.pins.filter((_, i) => answered(i)).length;
-    parts.push(el("div", { class: "row" },
-      el("button", { type: "button", class: "btn primary", id: "hand-in", disabled: state.busy || done === 0,
-        text: state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`, on: { click: handIn } })));
+    const done = DATA.pins.filter((_, i) => answered(i)).length, missing = DATA.pins.length - done;
+    if (state.confirming) {
+      // Handing in is final, so a gap gets a second look before it costs points.
+      parts.push(el("div", { class: "confirm", role: "group", "aria-labelledby": "confirm-text" },
+        el("p", { id: "confirm-text" }, el("b", { text: `${missing} unanswered will score 0.` }), " Hand in anyway?"),
+        el("div", { class: "row" },
+          el("button", { type: "button", class: "btn primary", id: "confirm-hand-in", text: "Hand in anyway", on: { click: handIn } }),
+          el("button", { type: "button", class: "btn", text: "Keep answering", on: { click: () => select({ pin: DATA.pins.findIndex((_, i) => !answered(i)) }) } }))));
+    } else {
+      const label = MODE === "interview" ? (state.busy ? "Scoring…" : "Score interview") : state.busy ? "Grading…" : `Hand in ${done}/${DATA.pins.length}`;
+      parts.push(el("div", { class: "row" },
+        el("button", { type: "button", class: "btn primary", id: "hand-in", disabled: state.busy || done === 0, text: label,
+          on: { click: () => { if (MODE === "defend" && missing) { state.confirming = true; render(); document.getElementById("confirm-hand-in").focus(); } else handIn(); } } })));
+    }
   }
   const notes = {
     defend: "Answer in your own words; a sentence or two is enough. The rubrics stay with grip on this machine and never reach this page.",
     interview: "Interview mode shows the rubric to the person asking. Accept any wording that covers a point.",
     export: "A shared copy of the board. Nothing here is graded; run grip whiteboard to be scored.",
   };
-  parts.push(el("p", { class: "note", text: notes[MODE] }));
+  if (!state.result) parts.push(el("p", { class: "note", text: notes[MODE] }));
   return parts;
+}
+
+// A command to run, with a button that copies it.
+function copyable(command) {
+  const code = el("code", { text: command }), done = el("span", { class: "small", "aria-live": "polite" });
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(command); done.textContent = "Copied."; }
+    catch { getSelection().selectAllChildren(code); done.textContent = "Selected: press Ctrl-C (⌘C)."; }
+  };
+  return el("div", {}, el("div", { class: "cmd" }, code, el("button", { type: "button", class: "btn", text: "Copy", on: { click: copy } })), done);
 }
 
 function pinView(i) {
@@ -366,15 +415,25 @@ function pinView(i) {
   parts.push(el("div", {}, el("span", { class: "kind", text: p.kind }), el("p", { class: "question", text: p.question })));
   const locked = state.busy || !!state.result;
   if (MODE === "interview") {
-    parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, el("label", { for: `tick-${i}-${k}` },
-      el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k], disabled: locked,
-        on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
-      el("span", { text: point }))))));
-  } else {
-    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", placeholder: "A sentence or two, in your own words.", disabled: locked,
-      maxlength: 4000, on: { input: (ev) => { state.answers[i] = ev.target.value; drawBoard(); } } });
+    parts.push(el("ul", { class: "rubric" }, p.rubric.map((point, k) => el("li", {}, locked
+      ? el("div", { class: "point" }, el("span", { class: "mark" + (state.ticks[i][k] ? " on" : ""), role: "img", "aria-label": state.ticks[i][k] ? "heard" : "not heard" }), el("span", { text: point }))
+      : el("label", { for: `tick-${i}-${k}` },
+        el("input", { type: "checkbox", id: `tick-${i}-${k}`, checked: state.ticks[i][k],
+          on: { change: (ev) => { state.ticks[i][k] = ev.target.checked; drawBoard(); } } }),
+        el("span", { text: point }))))));
+  } else if (MODE !== "export") {  // a shared board only shows the question: there is nowhere to send an answer
+    const count = el("p", { class: "count", id: `count-${i}` });
+    const counted = () => {
+      const n = state.answers[i].length;
+      count.textContent = `${n.toLocaleString("en")} / ${MAX_ANSWER.toLocaleString("en")}`;
+      count.classList.toggle("near", n > MAX_ANSWER * 0.9);
+    };
+    const ta = el("textarea", { id: `answer-${i}`, "aria-label": "Your answer", "aria-describedby": `count-${i}`, placeholder: "A sentence or two, in your own words.", disabled: locked,
+      maxlength: MAX_ANSWER, on: { input: (ev) => { state.answers[i] = ev.target.value; state.confirming = false; counted(); drawBoard(); } } });
     ta.value = state.answers[i];
+    counted();
     parts.push(ta);
+    if (!state.result) parts.push(count);
   }
   if (state.result) {
     const g = state.result.grades[i];
@@ -399,7 +458,7 @@ function nodeView(id) {
 }
 
 async function handIn() {
-  state.busy = true; state.error = null; state.sel = null; render();
+  state.busy = true; state.error = null; state.sel = null; state.confirming = false; render();
   const body = MODE === "interview" ? { ticks: state.ticks } : { answers: state.answers };
   try {
     const res = await fetch("answers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -413,9 +472,27 @@ async function handIn() {
   }
 }
 function select(sel) {
-  state.sel = sel; render();
+  state.sel = sel; state.confirming = false; render();
   if (sel && sel.pin != null) { const box = document.getElementById(`answer-${sel.pin}`); if (box) box.focus({ preventScroll: true }); }
+  // On a phone the panel sits under the board: bring the question up to where the tap was.
+  const panel = document.getElementById("panel"), top = panel.getBoundingClientRect().top;
+  if (sel && matchMedia("(max-width: 900px)").matches && (top < 0 || top > innerHeight * 0.4)) {
+    panel.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
 }
+// A pin is a small target for a finger, so on a touch screen a tap within 22px of one (a
+// 44px circle) opens the nearest, even when it lands on the box beneath.
+document.getElementById("board").addEventListener("click", (ev) => {
+  const touch = ev.pointerType ? ev.pointerType !== "mouse" : matchMedia("(pointer: coarse)").matches;
+  if (!touch || ev.target.closest(".p")) return;
+  let nearest = null, best = 22;
+  for (const pin of document.querySelectorAll("#board .p")) {
+    const r = pin.querySelector("circle.dot").getBoundingClientRect();
+    const d = Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2));
+    if (d < best) { best = d; nearest = Number(pin.dataset.pin); }
+  }
+  if (nearest != null) { ev.stopPropagation(); select({ pin: nearest }); }
+}, true);
 function render() {
   drawBoard();
   const panel = document.getElementById("panel");

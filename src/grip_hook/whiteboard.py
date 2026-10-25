@@ -406,8 +406,13 @@ def board_data(
     passing_score: int,
     description: str,
     files: list[str],
+    rerun: str = "grip whiteboard",
 ) -> dict[str, Any]:
-    """What the page receives. Rubrics are included only in interview mode."""
+    """What the page receives. Rubrics are included only in interview mode.
+
+    ``rerun`` is the command that brings this board back, which the page offers to copy
+    after a score below the pass mark.
+    """
     placed = layout(board)
     edge_set = {board.edge_key(e) for e in board.edges}
     return {
@@ -415,6 +420,7 @@ def board_data(
         "summary": board.summary,
         "description": description,
         "files": files,
+        "rerun": rerun,
         "passing_score": passing_score,
         "points_per_question": POINTS_PER_QUESTION,
         "size": {"width": placed.width, "height": placed.height},
