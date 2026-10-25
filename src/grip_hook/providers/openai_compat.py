@@ -20,16 +20,18 @@ from pydantic import BaseModel, ValidationError
 from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 from grip_hook.prompts import (
+    APPEAL_SYSTEM_PROMPT,
     BOARD_SYSTEM_PROMPT,
     GRADING_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    appeal_prompt,
     board_prompt,
     grading_prompt,
     question_prompt,
 )
-from grip_hook.providers.base import CallLog, token_count
+from grip_hook.providers.base import CallLog, missing_credentials, token_count
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -55,8 +57,9 @@ class OpenAICompatibleProvider(CallLog):
         default_key_env = "OLLAMA_API_KEY" if self.name == "ollama" else "OPENAI_API_KEY"
         key_env = cfg.api_key_env or default_key_env
         self._api_key = os.environ.get(key_env, "")
-        if not self._api_key and self.name != "ollama":
-            raise ProviderError(f"{key_env} is not set; the {self.name} provider needs an API key")
+        # Ollama and self-hosted servers at a base_url often take no key at all.
+        if not self._api_key and self.name != "ollama" and not cfg.base_url:
+            raise ProviderError(missing_credentials(self.name, key_env))
         self._timeout = cfg.timeout
         self._opener = opener or urllib.request.urlopen
         self.model_calls = []
@@ -145,6 +148,22 @@ class OpenAICompatibleProvider(CallLog):
         return self._complete(
             GRADING_SYSTEM_PROMPT, grading_prompt(diff, questions, answers, difficulty), GradeSheet
         )
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Grade one answer again, given the developer's case against ``grade``."""
+        prompt = appeal_prompt(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
+        return self._complete(APPEAL_SYSTEM_PROMPT, prompt, QuestionGrade)
 
 
 __all__ = ["OLLAMA_URL", "OPENAI_URL", "OpenAICompatibleProvider"]

@@ -1,0 +1,68 @@
+name: Action test
+
+# Runs the GitHub Action in this repository (uses: ./) on its own pull requests, with the
+# offline fake provider, so it needs no secrets. grip under test is this checkout, not the
+# release on PyPI.
+
+on:
+  pull_request:
+    paths:
+      - "action.yml"
+      - "scripts/action/**"
+      - "src/**"
+      - "pyproject.toml"
+      - ".github/workflows/action-test.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fake:
+    name: Questions and board with the fake provider
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Run the action
+        id: grip
+        uses: ./
+        with:
+          provider: fake
+          package: .
+          export-board: "true"
+          # A fork's pull request gets a read-only token: questions in the job summary only.
+          post-comment: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+
+      - name: Check what it produced
+        env:
+          STATUS: ${{ steps.grip.outputs.status }}
+          QUESTIONS: ${{ steps.grip.outputs.questions-file }}
+          BOARD_URL: ${{ steps.grip.outputs.board-url }}
+          COMMENT_URL: ${{ steps.grip.outputs.comment-url }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          echo "status=$STATUS questions=$QUESTIONS board=$BOARD_URL comment=$COMMENT_URL"
+          if [ "$STATUS" = "nothing-to-quiz" ]; then
+            echo "Nothing to quiz in this pull request; nothing else to check."
+            exit 0
+          fi
+          test "$STATUS" = "questions"
+          python - "$QUESTIONS" <<'PY'
+          import json, sys
+          payload = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert len(payload["questions"]) == 5, payload
+          # The rubrics stay in .git/grip/pending.json, never in what the action posts.
+          assert all(set(q) == {"index", "focus", "question"} for q in payload["questions"])
+          PY
+          test -n "$BOARD_URL"
+          python scripts/action/comment.py "$QUESTIONS" --board-url "$BOARD_URL" | grep -q "grip-action"
+          if [ "$SAME_REPO" = "true" ]; then
+            test -n "$COMMENT_URL"
+          fi

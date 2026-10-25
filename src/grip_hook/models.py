@@ -90,8 +90,9 @@ class QuestionGrade(BaseModel):
     )
     feedback: str = Field(
         description=(
-            "One or two sentences: what was right, what was missing or wrong. "
-            "Be concrete and refer to the code."
+            "One or two sentences: what was right and, when points were lost, where in "
+            "the code to look again and what kind of point is missing or wrong. Never "
+            "state the missing rubric point itself."
         )
     )
 
@@ -137,6 +138,27 @@ class ModelCall(BaseModel):
         return self.input_tokens + self.output_tokens
 
 
+class Appeal(BaseModel):
+    """A developer's appeal against the grade of one question, and how it ended."""
+
+    question_index: int
+    """Zero-based index of the appealed question."""
+    justification: str
+    """Why the developer says their answer was right, as they wrote it."""
+    old_score: int
+    """Points before the appeal."""
+    new_score: int
+    """Points after it: never lower than ``old_score``."""
+    feedback: str
+    """What the second grading said about the appeal."""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def upheld(self) -> bool:
+        """Whether the appeal raised the score."""
+        return self.new_score > self.old_score
+
+
 class Report(BaseModel):
     """Everything about one quiz run, persisted as JSON for later inspection."""
 
@@ -157,6 +179,9 @@ class Report(BaseModel):
     calls: list[ModelCall] = Field(default_factory=list)
     """The model requests behind this report, oldest first. Questions or a board reused
     from the cache made none. Empty in reports from before grip measured them."""
+
+    appeals: list[Appeal] = Field(default_factory=list)
+    """``grip appeal`` re-grades, oldest first; at most one per question."""
 
     @property
     def max_score(self) -> int:

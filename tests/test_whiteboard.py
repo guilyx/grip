@@ -489,6 +489,22 @@ def test_whiteboard_fail_exits_one_and_records_no_pass(
     assert CliRunner().invoke(cli, ["check"]).exit_code == 1
 
 
+@pytest.mark.parametrize(("retry", "redrawn"), [("same", False), ("new", True)])
+def test_whiteboard_retry_after_a_failure(
+    in_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_git: Callable[..., str],
+    retry: str,
+    redrawn: bool,
+) -> None:
+    monkeypatch.setenv("GRIP_RETRY_QUESTIONS", retry)
+    run_git("add", "api/handlers.py")
+    assert _run(monkeypatch, {"answers": [""] * 5}).exit_code == 1
+    again = _run(monkeypatch, {"answers": [""] * 5})
+    assert again.exit_code == 1
+    assert ("same diff as" not in again.stderr) is redrawn
+
+
 def test_whiteboard_interview_scores_ticks_and_records_nothing(
     in_repo: Path, monkeypatch: pytest.MonkeyPatch, run_git: Callable[..., str]
 ) -> None:
