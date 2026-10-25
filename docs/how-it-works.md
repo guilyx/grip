@@ -70,7 +70,7 @@ grip exits 0 without asking anything when:
 - `GRIP_SKIP` is set to a truthy value, or git runs with `--no-verify`;
 - `CI` is set (hooks in CI have nobody to answer);
 - there is no interactive terminal and `require_tty` is false (the default);
-- the diff is empty after exclusions;
+- the diff is empty after exclusions, or every changed file is binary;
 - the exact same diff passed within `remember_passes_hours`.
 
 Provider failures (no key, network down, model unavailable) **block** by default so a

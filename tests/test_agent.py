@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -13,7 +14,8 @@ from grip_hook import QUESTION_COUNT
 from grip_hook.agent import PendingStore, gated_mode, parse_answers
 from grip_hook.cli import cli
 from grip_hook.errors import GripError
-from grip_hook.models import Answer
+from grip_hook.models import Answer, Difficulty
+from grip_hook.providers.fake import FakeProvider
 
 GOOD = ["this is a long and specific answer because reasons"] * QUESTION_COUNT
 BAD = [""] * QUESTION_COUNT
@@ -112,6 +114,29 @@ def test_grade_pass_is_remembered(
 
     assert runner.invoke(cli, ["check"]).exit_code == 0
     assert _json(runner.invoke(cli, ["ask"]))["status"] == "already-passed"
+
+
+def test_grading_uses_the_difficulty_the_questions_were_written_at(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    assert runner.invoke(cli, ["ask", "--difficulty", "hard"]).exit_code == 0
+    pending = PendingStore(in_repo / ".git").load()
+    assert pending is not None and pending.difficulty is Difficulty.HARD
+    seen: list[Difficulty] = []
+    real = FakeProvider.grade
+
+    def grade(self: FakeProvider, *args: Any) -> Any:
+        seen.append(args[-1])
+        return real(self, *args)
+
+    monkeypatch.setattr(FakeProvider, "grade", grade)
+    result = runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD))
+    assert result.exit_code == 0, result.output
+    assert seen == [Difficulty.HARD]
 
 
 def test_grade_fail(

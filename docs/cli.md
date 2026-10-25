@@ -29,7 +29,11 @@ Answer each question on one line and press Enter. To answer in paragraphs, paste
 pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
 pasted line still answers the next question.)
 
-Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
+A change where every file is binary (images, archives) has nothing to ask about: the quiz
+and the hooks skip it with `grip: only binary files changed, nothing to quiz.`
+
+Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error, `130` stopped with
+Ctrl-C (nothing is recorded).
 
 ## `grip whiteboard`
 
@@ -72,7 +76,10 @@ The quiz in three non-interactive steps, for coding agents. `ask` prints the que
 JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of answers and
 remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
 `--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
-answer's JSON string are accepted and kept. See [Coding agents](agents.md).
+answer's JSON string are accepted and kept. `grade` takes `--passing-score`,
+`--provider`, `--model` and `--report`; the questions already exist, so it has no
+`--fresh` or `--difficulty`, and it grades at the difficulty `ask` wrote them at. See
+[Coding agents](agents.md).
 
 ```bash
 grip ask --unpushed
@@ -142,7 +149,8 @@ with a marker line so `uninstall` never touches a hook it does not own.
 
 ## `grip status`
 
-Shows which stages have grip installed, whether a foreign hook is in the way, the last
+Shows which stages have grip installed (hook paths relative to the repository root, such
+as `.git/hooks/pre-push`), whether a foreign hook is in the way, the last
 quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
 configuration, and for each of the staged changes, the unpushed commits and the branch
 against the default branch, where it stands:
@@ -161,7 +169,9 @@ they say. A branch whose commits are all on the remote can still be unquizzed:
 
 `GRIP_SKIP=1` is awkward from an IDE's push button. `grip skip` skips the next hook run
 once; `grip skip --hours 2` pauses every hook run for two hours; `grip resume` cancels.
-Only the hooks and the agent push gate look at it, a manual `grip quiz` never does.
+Only the hooks and the agent push gate look at it, a manual `grip quiz` never does. The end
+of a pause is shown in local time with the time zone, such as `paused until 2026-10-25
+18:40 CET`.
 
 ```bash
 grip skip && git push         # one push without the quiz
@@ -195,7 +205,8 @@ same payload as `grip grade` plus `summary`, `questions`, `answers` and `at`; th
 
 ## `grip forget`
 
-Clears remembered passes so the next commit or push is quizzed again.
+Clears remembered passes so the next commit or push is quizzed again, and says how many it
+cleared (`no remembered passes` when there were none).
 
 ## `grip study export` / `grip study status`
 

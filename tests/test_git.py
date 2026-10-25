@@ -188,6 +188,18 @@ def test_unpushed_base_without_remote_uses_empty_tree(
     assert set(git.push_diff(new_branch).files) == {"README.md", "a.txt"}
 
 
+def test_binary_only(git: Git, repo: Path, run_git: Callable[..., str]) -> None:
+    (repo / "blob.bin").write_bytes(b"\x00\x01\x02binary\x00")
+    run_git("add", "blob.bin")
+    diff = git.staged_diff()
+    assert diff.files == ("blob.bin",) and not diff.is_empty
+    assert diff.binary_only
+    (repo / "a.py").write_text("x = 1\n")
+    run_git("add", "a.py")
+    assert not git.staged_diff().binary_only
+    assert not Diff("x", "", "+a", ("a",)).binary_only
+
+
 def test_diff_properties() -> None:
     empty = Diff("x", "", "   \n", ())
     assert empty.is_empty

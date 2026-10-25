@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -322,3 +323,102 @@ def test_last_shows_the_graded_quiz(
     assert data["answers"] == GOOD and len(data["questions"]) == 5
     assert "summary" in data and "at" in data
     assert "rubric" not in json.dumps(data).lower()
+
+
+# -- paper cuts ----------------------------------------------------------------------------
+
+
+class InterruptingTerminal(FakeTerminalFactory):
+    """A terminal where the developer presses Ctrl-C at the first question."""
+
+    def __call__(self) -> Any:
+        term = super().__call__()
+
+        def interrupt(prompt: str = "") -> str:
+            raise KeyboardInterrupt
+
+        term.read_line = interrupt  # type: ignore[method-assign]
+        return term
+
+
+def test_ctrl_c_exits_130_and_records_nothing(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    monkeypatch.setattr(cli_module, "open_terminal", InterruptingTerminal([]))
+    for args in (["quiz"], ["hook", "pre-commit"]):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 130, result.output
+        assert "grip: stopped, nothing recorded." in result.output
+        assert "Aborted" not in result.output
+    assert not (in_repo / ".git" / "grip" / "last-report.json").exists()
+
+
+def test_forget_says_when_there_was_nothing(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    assert "no remembered passes" in runner.invoke(cli, ["forget"]).output
+    stage_change("a.py", "x = 1\n")
+    terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert "forgot 1 remembered pass." in runner.invoke(cli, ["forget"]).output
+    assert "no remembered passes" in runner.invoke(cli, ["forget"]).output
+
+
+def test_binary_only_changes_are_not_quizzed(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (in_repo / "blob.bin").write_bytes(b"\x00\x01\x02binary\x00")
+    run_git("add", "blob.bin")
+
+    def boom() -> None:
+        raise AssertionError("terminal should not be opened")
+
+    monkeypatch.setattr(cli_module, "open_terminal", boom)
+    for args in (["quiz"], ["hook", "pre-commit"]):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert "grip: only binary files changed, nothing to quiz." in result.output
+    assert runner.invoke(cli, ["check"]).exit_code == 0
+    payload = json.loads(runner.invoke(cli, ["ask"]).output)
+    assert payload["status"] == "nothing-to-quiz"
+
+    stage_change("a.py", "x = 1\n")  # with a text file alongside, the quiz runs
+    factory = terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert "PASS" in factory.text
+
+
+def test_hook_paths_are_relative_to_the_repo(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = runner.invoke(cli, ["install"])
+    assert "installed at .git/hooks/pre-push" in result.output
+    (in_repo / "sub").mkdir()
+    monkeypatch.chdir(in_repo / "sub")
+    result = runner.invoke(cli, ["status"])
+    assert result.exit_code == 0, result.output
+    assert ".git/hooks/pre-push" in result.output
+    assert ".git/hooks/pre-commit" in result.output
+    assert "…" not in result.output
+    assert "removed from .git/hooks/pre-push" in runner.invoke(cli, ["uninstall"]).output
+
+
+def test_grade_help_has_no_question_options(runner: CliRunner) -> None:
+    grade_help = runner.invoke(cli, ["grade", "--help"]).output
+    assert "--fresh" not in grade_help and "--difficulty" not in grade_help
+    assert "--passing-score" in grade_help and "--provider" in grade_help
+    assert "--report" in grade_help
+    quiz_help = runner.invoke(cli, ["quiz", "--help"]).output
+    assert "--fresh" in quiz_help and "--difficulty" in quiz_help
