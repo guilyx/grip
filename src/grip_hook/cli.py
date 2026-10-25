@@ -89,6 +89,7 @@ from grip_hook.whiteboard_server import IDLE_SECONDS, WhiteboardServer, render_p
 _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
 
+PATHS_SKIPPED = "every changed file matches a [[paths]] rule with skip = true"
 BINARY_ONLY = "only binary files changed, nothing to quiz."
 DEBUG_ENV = "GRIP_DEBUG"
 """When truthy, a failed git command also prints the full command line and git's output."""
@@ -324,9 +325,15 @@ def _run(
     report_path: Path | None,
 ) -> int:
     """Shared driver for ``quiz`` and ``hook``. Returns the process exit code."""
-    if diff.is_empty or diff.binary_only:
-        _skip(BINARY_ONLY if diff.binary_only else "nothing to quiz, no changes found.")
+    if diff.is_empty or diff.binary_only or cfg.skips(diff.files):
+        if diff.binary_only:
+            _skip(BINARY_ONLY)
+        elif diff.is_empty:
+            _skip("nothing to quiz, no changes found.")
+        else:
+            _skip(f"nothing to quiz, {escape(PATHS_SKIPPED)}.")
         return 0
+    cfg = cfg.for_files(diff.files)
 
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest, cfg):
@@ -761,6 +768,10 @@ def ask_cmd(
     if diff.binary_only:
         _emit({"status": "nothing-to-quiz", "message": "only binary files changed"})
         return
+    if cfg.skips(diff.files):
+        _emit({"status": "nothing-to-quiz", "message": PATHS_SKIPPED})
+        return
+    cfg = cfg.for_files(diff.files)
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest, cfg):
         _emit({"status": "already-passed", "message": "this exact diff passed recently"})
@@ -790,6 +801,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     pending = store.load()
     if pending is None:
         raise GripError("no pending quiz; run `grip ask` first")
+    cfg = cfg.for_files(pending.files)
     text = sys.stdin.read() if str(answers_path) == "-" else answers_path.read_text("utf-8")
     answers = parse_answers(text)
     report = grade(pending, answers, cfg, get_provider(cfg))
@@ -858,8 +870,12 @@ def whiteboard_cmd(
     if diff.binary_only:
         _skip("only binary files changed, nothing to draw.")
         return
-    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     defending = not interview and export_path is None
+    if defending and cfg.skips(diff.files):
+        _skip(escape(f"{PATHS_SKIPPED}; nothing to defend."))
+        return
+    cfg = cfg.for_files(diff.files)
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if defending and memory.has_passed(diff.digest, cfg):
         _skip("this exact diff already passed recently; nothing to defend.")
         return
@@ -1063,8 +1079,9 @@ def _scope_name(mode: str | None, rev_range: str | None) -> str:
 def _check(git: Git, cfg: Config, mode: str | None, rev_range: str | None) -> str | None:
     """``None`` when the diff may go through, otherwise why it may not."""
     diff = _select_diff(git, cfg, mode, rev_range)
-    if diff.is_empty or diff.binary_only:  # the hook does not quiz these either
+    if diff.is_empty or diff.binary_only or cfg.skips(diff.files):  # nor does the hook
         return None
+    cfg = cfg.for_files(diff.files)  # the pass mark the hook would ask for
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest, cfg):
         return None
     if rev_range:
@@ -1172,7 +1189,8 @@ def _nothing_pushed(git: Git, cfg: Config) -> str:
         return nothing
     if branch is None or branch.is_empty:
         return nothing
-    if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(branch.digest, cfg):
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    if memory.has_passed(branch.digest, cfg.for_files(branch.files)):
         return nothing
     upstream = git.run(
         "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
@@ -1635,8 +1653,10 @@ def _diff_state(git: Git, cfg: Config, mode: str) -> str:
         diff = _select_diff(git, cfg, mode, None)
     except GripError as exc:
         return f"[yellow]could not check[/yellow] ({escape(str(exc))})"
-    if diff.is_empty:
-        return "[dim]nothing[/dim]"
+    if diff.is_empty or cfg.skips(diff.files):
+        skipped = f"skipped by {escape('[[paths]]')} ({_files(diff)})"
+        return f"[dim]{'nothing' if diff.is_empty else skipped}[/dim]"
+    cfg = cfg.for_files(diff.files)
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     files = _files(diff)
     latest = memory.latest_for(diff.digest)

@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format follows
   fails, so the next try asks new ones. Grading feedback now says where to look again
   and what kind of point is missing, instead of naming the rubric point, so a failed
   quiz can no longer be passed by pasting its feedback back.
+- `[[paths]]` tables in `.grip.toml` (or `[[tool.grip.paths]]` in `pyproject.toml`) set
+  a `passing_score`, a `difficulty` or `skip = true` for the files that match their
+  `match` globs. A diff takes the strictest pass mark and the hardest difficulty of the
+  files it touches, and a diff made only of skipped files is not quizzed.
 
 ### Changed
 
