@@ -143,14 +143,15 @@ with a marker line so `uninstall` never touches a hook it does not own.
 ## `grip status`
 
 Shows which stages have grip installed, whether a foreign hook is in the way, the last
-quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
-configuration, and for each of the staged changes, the unpushed commits and the branch
-against the default branch, where it stands:
+quiz (score, pass or fail, how long ago), the average time and tokens per quiz over the
+last 20, whether hooks are paused, the effective configuration, and for each of the staged
+changes, the unpushed commits and the branch against the default branch, where it stands:
 
 ```text
-staged changes          nothing
-unpushed commits        nothing
-branch vs origin/main   not quizzed (4 files)
+time and tokens (last 20)  9.8 s and 3,140 tokens per quiz, over 12 quizzes
+staged changes             nothing
+unpushed commits           nothing
+branch vs origin/main      not quizzed (4 files)
 ```
 
 `passed 98/100 at 17:52, remembered`, `failed 40/100 at 17:40` and `not quizzed` read as
@@ -188,10 +189,15 @@ Prints the effective configuration after merging files, environment and defaults
 
 ## `grip last`
 
-Shows the last graded quiz in this repository: each question with its focus, your answer,
-the points and the feedback, then the verdict. Rubrics are not shown. `--json` prints the
-same payload as `grip grade` plus `summary`, `questions`, `answers` and `at`; the
-`/grip-explain` skill builds a commit message from it.
+Shows the last graded quiz in this repository: how long it took and how many tokens it
+used (`took 9.8 s · 3,140 tokens (questions 6.1 s, grading 3.7 s)`), each question with its
+focus, your answer, the points and the feedback, then the verdict. Rubrics are not shown.
+`--json` prints the same payload as `grip grade` (which includes `seconds` and `tokens`)
+plus `summary`, `questions`, `answers`, `calls` (each model request with its time and
+token counts) and `at`; the `/grip-explain` skill builds a commit message from it. Token
+counts are `null` for providers that do not report them, such as the coding-agent CLIs.
+See [the FAQ](faq.md#how-much-does-it-cost-and-how-long-does-it-take) to turn them into
+a cost.
 
 ## `grip forget`
 

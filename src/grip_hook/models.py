@@ -116,6 +116,27 @@ class GradeSheet(BaseModel):
         return min(sum(g.score for g in self.grades), MAX_SCORE)
 
 
+class ModelCall(BaseModel):
+    """One request to the model: what it was for, how long it took, what it used."""
+
+    kind: str
+    """``questions``, ``board`` or ``grade``."""
+    seconds: float
+    """Wall time of the request, retries included."""
+    input_tokens: int | None = None
+    """Tokens the model read, when the provider reports it (the APIs do; most coding-agent
+    CLIs do not)."""
+    output_tokens: int | None = None
+    """Tokens the model wrote, when the provider reports it."""
+
+    @property
+    def tokens(self) -> int | None:
+        """Input plus output tokens, or ``None`` when either is unknown."""
+        if self.input_tokens is None or self.output_tokens is None:
+            return None
+        return self.input_tokens + self.output_tokens
+
+
 class Report(BaseModel):
     """Everything about one quiz run, persisted as JSON for later inspection."""
 
@@ -133,8 +154,24 @@ class Report(BaseModel):
     answers: list[Answer]
     grades: list[QuestionGrade]
     verdict: str
+    calls: list[ModelCall] = Field(default_factory=list)
+    """The model requests behind this report, oldest first. Questions or a board reused
+    from the cache made none. Empty in reports from before grip measured them."""
 
     @property
     def max_score(self) -> int:
         """The maximum reachable score."""
         return MAX_SCORE
+
+    @property
+    def seconds(self) -> float | None:
+        """Time spent waiting for the model, or ``None`` when nothing was measured."""
+        return sum(c.seconds for c in self.calls) if self.calls else None
+
+    @property
+    def tokens(self) -> int | None:
+        """Tokens used by every request, or ``None`` when one of them did not say."""
+        counts = [c.tokens for c in self.calls]
+        if not counts or any(n is None for n in counts):
+            return None
+        return sum(n for n in counts if n is not None)

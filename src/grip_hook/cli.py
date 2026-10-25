@@ -68,8 +68,8 @@ from grip_hook.platform import (
     write_state,
 )
 from grip_hook.providers import REGISTRY, get_provider
-from grip_hook.providers.base import Provider
-from grip_hook.quiz import run_quiz
+from grip_hook.providers.base import Provider, calls_of
+from grip_hook.quiz import run_quiz, usage_line
 from grip_hook.study import (
     DEFAULT_SINCE_DAYS,
     EXCLUDED_FIELDS,
@@ -290,9 +290,16 @@ def _run_whiteboard(
         report = _defend_board(board, diff, cfg, provider, stage)
     except ProviderError as exc:
         return _provider_failed(cfg, exc)
+    _print_usage(report)
     code = _decide(git, memory, report, report_path, "The page shows what each answer missed.")
     _err.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
     return code
+
+
+def _print_usage(report: Report) -> None:
+    """The ``took 9.8 s · 3,140 tokens`` line, when the report measured anything."""
+    if footer := usage_line(report):
+        _err.print(f"[dim]grip: {escape(footer)}[/dim]")
 
 
 def _record(git: Git, memory: PassMemory, report: Report) -> Path:
@@ -540,6 +547,7 @@ def whiteboard_cmd(
     report = _defend_board(
         board, diff, cfg, provider, Stage.MANUAL, port=port, open_browser=not no_open, page=page
     )
+    _print_usage(report)
     _decide(git, memory, report, report_path, "The page shows what each answer missed.")
     _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
 
@@ -602,6 +610,7 @@ def _defend_board(
         files=list(diff.files),
         truncated=diff.truncated,
         question_set=QuestionSet(summary=board.summary, questions=board.questions()),
+        calls=calls_of(provider),
     )
     graded: list[Report] = []
 
@@ -1193,6 +1202,26 @@ def _diff_state(git: Git, cfg: Config, mode: str) -> str:
     return f"[red]failed[/red] {score} ({files}); `grip last` shows why"
 
 
+RECENT_QUIZZES = 20
+"""How many recent quizzes ``grip status`` averages time and tokens over."""
+
+
+def _usage_state(git: Git, cfg: Config) -> str:
+    """``9.8 s and 3,140 tokens per quiz, over 12 quizzes`` from the recent history."""
+    recent = PassMemory(git.git_dir(), cfg.remember_passes_hours).recent(RECENT_QUIZZES)
+    timed = [r.seconds for r in recent if r.seconds is not None]
+    if not timed:
+        return "[dim]not measured yet[/dim]"
+    counted = [r.tokens for r in recent if r.tokens is not None]
+    text = f"{sum(timed) / len(timed):.1f} s"
+    if counted:
+        text += f" and {round(sum(counted) / len(counted)):,} tokens"
+    text += f" per quiz, over {len(timed)} quiz{'' if len(timed) == 1 else 'zes'}"
+    if len(counted) < len(timed):
+        text += f" ({len(timed) - len(counted)} without token counts)"
+    return text
+
+
 def _print_activity(git: Git, cfg: Config) -> None:
     table = Table(title="activity", show_header=False, box=None, pad_edge=False)
     table.add_column(style="bold")
@@ -1204,6 +1233,7 @@ def _print_activity(git: Git, cfg: Config) -> None:
         verdict = "[green]PASS[/green]" if report.passed else "[red]FAIL[/red]"
         when = f"{_ago(report.created_at)} ({report.stage.value})"
         table.add_row("last quiz", f"{report.score}/{MAX_SCORE} {verdict}, {when}")
+    table.add_row(f"time and tokens (last {RECENT_QUIZZES})", _usage_state(git, cfg))
     table.add_row("staged changes", _diff_state(git, cfg, "staged"))
     table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
     default = git.default_branch()
@@ -1344,6 +1374,7 @@ def last_cmd(as_json: bool) -> None:
             a.text for a in sorted(report.answers, key=lambda a: a.question_index)
         ]
         payload["questions"] = [q.question for q in report.questions]
+        payload["calls"] = [c.model_dump() for c in report.calls]
         payload["at"] = report.created_at.isoformat()
         _emit(payload)
         return
@@ -1352,6 +1383,10 @@ def last_cmd(as_json: bool) -> None:
         f"[bold]Grip Score {report.score}/{MAX_SCORE}[/bold] {verdict}, "
         f"{_ago(report.created_at)} ({report.stage.value}, {report.provider})"
     )
+    if footer := usage_line(report):
+        labels = {"grade": "grading"}
+        parts = ", ".join(f"{labels.get(c.kind, c.kind)} {c.seconds:.1f} s" for c in report.calls)
+        _out.print(f"[dim]{escape(footer)} ({escape(parts)})[/dim]")
     _out.print(f"[dim]{report.summary}[/dim]\n")
     by_index = {a.question_index: a.text for a in report.answers}
     for grade_ in report.grades:

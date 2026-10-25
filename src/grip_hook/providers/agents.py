@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
 
@@ -37,6 +38,7 @@ from grip_hook.prompts import (
     grading_prompt,
     question_prompt,
 )
+from grip_hook.providers.base import CallLog
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -85,8 +87,12 @@ def extract_json(text: str) -> Any:
         raise ProviderError(f"the agent returned invalid JSON: {exc}") from exc
 
 
-class AgentCLIProvider:
-    """Common machinery: build a command, run it, validate the JSON it returns."""
+class AgentCLIProvider(CallLog):
+    """Common machinery: build a command, run it, validate the JSON it returns.
+
+    Requests are timed; the CLIs do not report token usage in a form grip relies on, so
+    their calls carry none.
+    """
 
     name: str = "agent"
     executable: ClassVar[str] = ""
@@ -100,6 +106,7 @@ class AgentCLIProvider:
         self.model = cfg.model
         self._timeout = cfg.timeout
         self._binary = shutil.which(self.executable)
+        self.model_calls = []
 
     # -- to implement per agent -------------------------------------------------------
 
@@ -127,6 +134,7 @@ class AgentCLIProvider:
             )
         schema = _schema(output)
         prompt = self._prompt(system, user, schema)
+        started = time.perf_counter()
         with tempfile.TemporaryDirectory(prefix="grip-agent-") as tmp:
             workdir = Path(tmp)
             cmd = [self._binary, *self.command(schema, workdir)]
@@ -157,11 +165,13 @@ class AgentCLIProvider:
                 raise ProviderError(f"{self.executable} exited with {proc.returncode}: {detail}")
             payload = self.parse_output(proc.stdout, workdir)
         try:
-            return output.model_validate(payload)
+            result = output.model_validate(payload)
         except ValidationError as exc:
             raise ProviderError(
                 f"{self.executable} returned output that does not match the schema: {exc}"
             ) from exc
+        self._log_call(output, started)
+        return result
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """Write the question set for ``diff``."""

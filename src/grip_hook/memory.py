@@ -103,6 +103,24 @@ class PassMemory:
                 return report
         return None
 
+    def recent(self, count: int) -> list[Report]:
+        """The last ``count`` graded quizzes in the history, oldest first."""
+        try:
+            lines = self.history_path.read_text("utf-8").splitlines()
+        except OSError:
+            return []
+        reports: list[Report] = []
+        for line in reversed(lines):
+            if len(reports) == count:
+                break
+            if not line.strip():
+                continue
+            try:
+                reports.append(Report.model_validate_json(line))
+            except ValidationError:
+                continue
+        return reports[::-1]
+
     def save_report(self, report: Report) -> Path:
         """Write the last report as JSON and return its path."""
         self.dir.mkdir(parents=True, exist_ok=True)

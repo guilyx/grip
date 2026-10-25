@@ -15,7 +15,7 @@ from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, GradeSheet, QuestionSet, Report, Stage
-from grip_hook.providers.base import Provider
+from grip_hook.providers.base import Provider, calls_of
 from grip_hook.terminal import Terminal
 
 
@@ -135,6 +135,18 @@ def render_result(
     console.print(Panel(Text.from_markup(f"{headline}\n\n{escape(sheet.verdict)}"), expand=False))
 
 
+def usage_line(report: Report) -> str | None:
+    """``took 9.8 s · 3,140 tokens`` for ``report``, or ``None`` when nothing was measured."""
+    seconds = report.seconds
+    if seconds is None:
+        return None
+    took = f"took {seconds:.1f} s"
+    tokens = report.tokens
+    if tokens is None:
+        return f"{took} · tokens not reported by {report.provider}"
+    return f"{took} · {tokens:,} tokens"
+
+
 def run_quiz(
     *,
     diff: Diff,
@@ -179,8 +191,18 @@ def run_quiz(
         answers=answers,
         grades=sheet.grades,
         verdict=sheet.verdict,
+        calls=calls_of(provider),
     )
+    if footer := usage_line(report):
+        term.console.print(f"[dim]{escape(footer)}[/dim]")
     return QuizOutcome(report=report)
 
 
-__all__ = ["QuizOutcome", "ask_questions", "render_intro", "render_result", "run_quiz"]
+__all__ = [
+    "QuizOutcome",
+    "ask_questions",
+    "render_intro",
+    "render_result",
+    "run_quiz",
+    "usage_line",
+]

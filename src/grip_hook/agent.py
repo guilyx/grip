@@ -23,8 +23,8 @@ from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT
 from grip_hook.config import Config
 from grip_hook.errors import GripError, ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, QuestionSet, Report, Stage
-from grip_hook.providers.base import Provider
+from grip_hook.models import Answer, ModelCall, QuestionSet, Report, Stage
+from grip_hook.providers.base import Provider, calls_of
 
 Gate = Literal["push", "commit", "both"]
 
@@ -47,6 +47,8 @@ class PendingQuiz(BaseModel):
     files: list[str]
     truncated: bool
     question_set: QuestionSet
+    calls: list[ModelCall] = Field(default_factory=list)
+    """The model requests that wrote the questions (or drew the board), for the report."""
 
     @property
     def diff(self) -> Diff:
@@ -96,6 +98,7 @@ def ask(diff: Diff, cfg: Config, provider: Provider, stage: Stage) -> PendingQui
         files=list(diff.files),
         truncated=diff.truncated,
         question_set=question_set,
+        calls=calls_of(provider),
     )
 
 
@@ -142,7 +145,9 @@ def grade(pending: PendingQuiz, answers: list[str], cfg: Config, provider: Provi
     """Grade ``answers`` against the pending questions and build the report."""
     answer_models = [Answer(question_index=i, text=a) for i, a in enumerate(answers)]
     diff = pending.diff
+    before = len(calls_of(provider))
     sheet = provider.grade(diff, pending.question_set.questions, answer_models, cfg.difficulty)
+    graded = calls_of(provider)[before:]
     if len(sheet.grades) != QUESTION_COUNT:
         raise ProviderError(
             f"provider returned {len(sheet.grades)} grades, expected {QUESTION_COUNT}"
@@ -162,6 +167,7 @@ def grade(pending: PendingQuiz, answers: list[str], cfg: Config, provider: Provi
         answers=answer_models,
         grades=sheet.grades,
         verdict=sheet.verdict,
+        calls=[*pending.calls, *graded],
     )
 
 
@@ -183,6 +189,8 @@ def report_payload(report: Report, report_path: Path) -> dict[str, Any]:
             for g in report.grades
         ],
         "verdict": report.verdict,
+        "seconds": report.seconds,
+        "tokens": report.tokens,
         "report": str(report_path),
     }
 

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- grip measures what a quiz costs. Each graded quiz records the wall time of every model
+  request and, where the provider reports it (the Anthropic and OpenAI-compatible APIs,
+  not the coding-agent CLIs), the tokens used; the result ends with
+  `took 9.8 s · 3,140 tokens`, `grip last` shows it per request, `grip status` averages the
+  last 20 quizzes, and `grip grade` and `grip last --json` include it. The FAQ explains how
+  to turn tokens into a cost with your provider's prices.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
