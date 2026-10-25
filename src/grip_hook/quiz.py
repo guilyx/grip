@@ -81,19 +81,18 @@ def read_answer(term: Terminal, prompt: str) -> str:
     """One answer: the line typed, or every line of a paste, line breaks kept.
 
     A paste arrives faster than anyone types, so the lines already waiting after the first
-    belong to the same answer, blank lines between paragraphs included. A paste can stop
-    mid-line and leave its last line waiting for Enter, so a pasted answer runs on to the
-    next empty line.
+    belong to the same answer. An empty line ends it unless more of the paste is waiting
+    right behind it: then it separates two paragraphs. So a paste that ends with an empty
+    line ends the answer there, and a paste that stops mid-line (its last line waiting for
+    Enter) runs on to the next empty line.
     """
     lines = [term.read_line(prompt)]
     if not term.pending():
         return lines[0]
     try:
         while True:
-            while term.pending():
-                lines.append(term.read_line())
             line = term.read_line()
-            if not line.strip():
+            if not line.strip() and not term.pending():
                 break
             lines.append(line)
     except EOFError:

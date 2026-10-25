@@ -100,7 +100,8 @@ checks, in this order, and stops at the first that applies:
 6. **This exact diff passed recently**: skip, with
    `this exact diff already passed recently, skipping the quiz.`
 7. **No interactive terminal** can be found: skip, unless `require_tty = true`, which
-   turns this into a failure.
+   turns this into a failure. A `grip quiz` typed by hand always fails here (exit 2),
+   since skipping would look like a pass.
 8. Run the quiz. If the provider fails (no key, network down, malformed reply) the push is
    **blocked** with the error and the two ways around it, unless `fail_open = true`.
 
@@ -286,7 +287,8 @@ receives the ref list there, and the pre-commit framework captures output. `term
 uses standard input and output when both are interactive. Otherwise it opens the
 controlling terminal directly: `/dev/tty`, or `CONIN$` and `CONOUT$` on Windows. That is
 why the quiz works inside `git push` and under pre-commit. When neither exists (an IDE
-running git headlessly, a script), grip skips, or fails when `require_tty = true`.
+running git headlessly, a script), the hook skips, or fails when `require_tty = true`;
+`grip quiz` fails.
 
 ## Coding agents
 

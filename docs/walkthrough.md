@@ -46,13 +46,13 @@ It is a reasonable change with real trade-offs, which is exactly what grip asks 
 ## Set up
 
 grip was installed with `pipx install grip-hook` and the repository set up with
-`grip init`. It found Claude Code on the machine and picked it as the model; these are the
-settings in the `.grip.toml` it wrote that matter here:
+`grip init`. It wrote `provider = "auto"`, which picks Claude Code on this machine; these
+are the settings in the `.grip.toml` it wrote that matter here:
 
 ```toml title=".grip.toml"
 passing_score = 70
 difficulty = "normal"
-provider = "claude-code"
+provider = "auto"
 ```
 
 `grip init` also installed the pre-push hook at `.git/hooks/pre-push`. Both were committed

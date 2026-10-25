@@ -27,6 +27,12 @@ EMPTY_TREES = frozenset(
 """The empty tree in SHA-1 and SHA-256 repositories: the base for a root commit."""
 SINCE_FIRST_COMMIT = "everything since the first commit"
 
+NOT_A_REPOSITORY = "not inside a git repository (run grip from your project)"
+NO_COMMITS = "this repository has no commits yet"
+_UNKNOWN_REVISION = re.compile(
+    r"(?:ambiguous argument|bad revision) '([^']+)'|(?:Not a valid object name|bad object) (\S+)"
+)
+
 
 def _short(rev: str) -> str:
     """A full hash shortened to 12 characters; a branch name or other spelling as is."""
@@ -127,13 +133,38 @@ class Git:
             raise GitError("git executable not found on PATH") from exc
         if check and proc.returncode != 0:
             detail = proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}"
-            raise GitError(f"git {' '.join(args)} failed: {detail}")
+            raise GitError(self._plain(args, detail), f"$ git {' '.join(args)}\n{detail}")
         return proc.stdout
+
+    def _plain(self, args: tuple[str, ...], detail: str) -> str:
+        """One line for a failed ``git <args>``, instead of its command line and stderr.
+
+        The common failures (outside a repository, no commits yet, a revision that does
+        not exist) get a sentence of their own; anything else keeps git's message but not
+        the command line, whose pathspecs alone run to hundreds of bytes.
+        """
+        if "dubious ownership" in detail:
+            # git's own text names the safe.directory command that fixes it.
+            return f"git {args[0]} failed: {detail}"
+        if "not a git repository" in detail or not self.ok("rev-parse", "--git-dir"):
+            return NOT_A_REPOSITORY
+        if found := _UNKNOWN_REVISION.search(detail):
+            rev = found.group(1) or found.group(2)
+            if rev.startswith("HEAD") and not self.has_commits():
+                return NO_COMMITS
+            return f"unknown revision '{rev}'"
+        if "HEAD" in args and not self.has_commits():
+            return NO_COMMITS
+        return f"git {args[0]} failed: {detail}"
 
     def ok(self, *args: str) -> bool:
         """Return ``True`` when ``git <args>`` exits successfully."""
         proc = subprocess.run(["git", *args], cwd=self.cwd, capture_output=True, check=False)
         return proc.returncode == 0
+
+    def has_commits(self) -> bool:
+        """``False`` in a repository whose current branch has no commit yet."""
+        return self.ok("rev-parse", "--verify", "--quiet", "HEAD^{commit}")
 
     def root(self) -> Path:
         """Top-level directory of the working tree."""
@@ -327,6 +358,27 @@ class Git:
             truncated = True
         return Diff(description, stat, patch, files, truncated, size=len(encoded))
 
+    def _names(self, args: list[str], exclude: tuple[str, ...]) -> tuple[str, ...]:
+        out = self.run(*args, *self._pathspec(exclude), check=False)
+        return tuple(n for n in out.split("\n") if n)
+
+    def staged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths with changes staged for the next commit."""
+        return self._names(["diff", "--cached", "--name-only", "--no-renames"], exclude)
+
+    def unstaged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Tracked paths changed in the working tree but not staged."""
+        return self._names(["diff", "--name-only", "--no-renames"], exclude)
+
+    def untracked_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths git does not track yet, leaving out what ``.gitignore`` ignores."""
+        return self._names(["ls-files", "--others", "--exclude-standard"], exclude)
+
+    def count_commits(self, *revs: str) -> int:
+        """``git rev-list --count <revs>``; 0 when a revision does not resolve (no commits)."""
+        out = self.run("rev-list", "--count", *revs, check=False).strip()
+        return int(out) if out.isdigit() else 0
+
     def staged_diff(self, exclude: tuple[str, ...] = (), max_bytes: int = 200_000) -> Diff:
         """Changes staged for the next commit."""
         return self._collect("staged changes", ["--cached"], exclude, max_bytes)
@@ -347,6 +399,29 @@ class Git:
                 else f"{_short(base)}..{_short(head)}"
             )
         return self._collect(description, [base, head], exclude, max_bytes)
+
+    def merge_base_diff(
+        self,
+        base: str,
+        head: str,
+        exclude: tuple[str, ...] = (),
+        max_bytes: int = 200_000,
+    ) -> Diff:
+        """Changes on ``head`` since it forked from ``base``: what git means by ``base...head``.
+
+        Raises :class:`GitError` when a revision is unknown or the two share no history.
+        """
+        for rev in (base, head):
+            if not self.rev_exists(rev):
+                raise GitError(f"unknown revision '{rev}'")
+        fork = self.run("merge-base", base, head, check=False).strip()
+        if not fork:
+            raise GitError(
+                f"{base} and {head} share no history, so {base}...{head} has no merge base; "
+                f"use {base}..{head}"
+            )
+        description = f"{_short(base)}...{_short(head)}"
+        return self.range_diff(fork, head, exclude, max_bytes, description=description)
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
@@ -399,4 +474,13 @@ class Git:
         return Diff(description, stat, patch, files, truncated, size=size)
 
 
-__all__ = ["EMPTY_TREES", "SINCE_FIRST_COMMIT", "ZERO_SHA", "Diff", "Git", "PushedRef"]
+__all__ = [
+    "EMPTY_TREES",
+    "NOT_A_REPOSITORY",
+    "NO_COMMITS",
+    "SINCE_FIRST_COMMIT",
+    "ZERO_SHA",
+    "Diff",
+    "Git",
+    "PushedRef",
+]
