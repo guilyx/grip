@@ -74,6 +74,11 @@ remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
 `--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
 answer's JSON string are accepted and kept. See [Coding agents](agents.md).
 
+`grade` always uses the configured pass mark: it takes no `--passing-score`. A pass only
+counts for the hooks and `check` if its score reaches the current pass mark and, unless
+`fake` is the configured provider, it was not graded by `fake`. See
+[Remembering passes](internals.md#remembering-passes-and-getting-out-of-the-way).
+
 ```bash
 grip ask --unpushed
 grip grade --answers - <<'EOF'

@@ -97,7 +97,7 @@ checks, in this order, and stops at the first that applies:
    one-off skip, `grip skip --hours N` a deadline; both live in `.git/grip/skip.json`.
 4. Load the configuration and **collect the diff** (next section).
 5. **The diff is empty** after exclusions: skip.
-6. **This exact diff passed recently**: skip, with
+6. **This exact diff passed recently**, and that pass still counts (see below): skip, with
    `this exact diff already passed recently, skipping the quiz.`
 7. **No interactive terminal** can be found: skip, unless `require_tty = true`, which
    turns this into a failure.
@@ -247,10 +247,24 @@ same points would be expected.
 
 ## Remembering passes, and getting out of the way
 
-`.git/grip/passed.json` maps diff digests to the time they passed. On every check, entries
-older than `remember_passes_hours` (24 by default; 0 turns remembering off) are dropped.
-A pass is recorded only when a quiz, a whiteboard defense or an agent-driven quiz scores
-at or above the pass mark.
+`.git/grip/passed.json` maps diff digests to the pass: when it happened, the score, the
+pass mark it was graded against, and the provider and model that graded it. On every
+check, entries older than `remember_passes_hours` (24 by default; 0 turns remembering off)
+are dropped. A pass is recorded only when a quiz, a whiteboard defense or an agent-driven
+quiz scores at or above the pass mark.
+
+A remembered pass is checked again against the settings in force when it is read, by the
+hooks, `grip check`, the agent push gate and `grip status`:
+
+- the score must reach the **current** pass mark. `grip quiz --passing-score 0` can pass
+  blank answers, but that pass does not open a hook that expects 70. `grip grade`, the
+  command a coding agent runs, has no `--passing-score` at all;
+- a pass graded by the `fake` provider counts only while `fake` is the configured
+  provider. It is there for demos and tests, and scores by answer length.
+
+`grip status` says when a remembered pass does not count, and why. Entries written by
+grip 0.4.1 and older hold only a time, so they cannot be checked and do not count: those
+diffs are asked once more.
 
 Because the key is the digest of the patch, a pass carries across ways of asking. Defend
 the unpushed commits at the whiteboard and the next `git push` of the same commits skips
@@ -392,7 +406,7 @@ with no rubrics and no grading, for sharing a board.
 | Your answers | Sent to the provider for grading | Yes, to the same provider |
 | The latest report: questions, rubrics, answers, grades | `.git/grip/last-report.json` | No |
 | Every graded quiz | `.git/grip/history.jsonl` | No |
-| Passed digests | `.git/grip/passed.json` | No |
+| Passed digests, with score, pass mark and grader | `.git/grip/passed.json` | No |
 | A quiz waiting for an agent | `.git/grip/pending.json` | No |
 | Skips and pauses | `.git/grip/skip.json` | No |
 | Questions and boards kept for a retry | `.git/grip/cache/` | No |

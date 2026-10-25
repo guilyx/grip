@@ -10,6 +10,7 @@ from click.testing import CliRunner
 
 from grip_hook import cli as cli_module
 from grip_hook.cli import cli
+from grip_hook.config import load_config
 from grip_hook.errors import NoTerminalError
 from grip_hook.git import ZERO_SHA, Git
 from tests.conftest import FakeTerminalFactory
@@ -110,6 +111,50 @@ def test_flags_override_config(
     result = runner.invoke(cli, ["quiz", "--passing-score", "50", "--difficulty", "easy"])
     assert result.exit_code == 0, result.output
     assert "Grip Score: 50/100" in factory.text
+
+
+def _staged_state(root: Path) -> str:
+    """The `grip status` row for staged changes, without the table wrapping it."""
+    return cli_module._diff_state(Git(root), load_config(root), "staged")
+
+
+def test_pass_below_the_configured_mark_does_not_open_the_hook(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    terminal(BAD)
+    result = runner.invoke(cli, ["quiz", "--passing-score", "0"])
+    assert result.exit_code == 0, result.output  # blank answers "pass" a mark of 0
+    assert "does not count (below the pass mark of 70)" in " ".join(result.output.split())
+    assert (in_repo / ".git" / "grip" / "passed.json").exists()
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+    assert "does not count (below the pass mark of 70)" in _staged_state(in_repo)
+    # A real pass on the same diff replaces it.
+    terminal(GOOD)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert runner.invoke(cli, ["check"]).exit_code == 0
+
+
+def test_fake_pass_does_not_count_for_a_real_provider(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    (in_repo / ".grip.toml").write_text('provider = "anthropic"\n')
+    stage_change("a.py", "x = 1\n")
+    terminal(GOOD)
+    result = runner.invoke(cli, ["quiz", "--provider", "fake"])
+    assert result.exit_code == 0, result.output
+    assert "does not count (graded by fake)" in " ".join(result.output.split())
+    assert runner.invoke(cli, ["check"]).exit_code == 1
+    assert "does not count (graded by fake)" in _staged_state(in_repo)
+    # With fake configured (demos, tests), the same pass counts.
+    (in_repo / ".grip.toml").write_text('provider = "fake"\n')
+    assert runner.invoke(cli, ["check"]).exit_code == 0
 
 
 def test_no_terminal_skips_or_fails(

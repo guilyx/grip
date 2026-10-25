@@ -268,7 +268,7 @@ Everything grip keeps is inside the repository's `.git` directory, never committ
 .git/grip/
 ├── last-report.json   the latest graded quiz: questions, rubrics, answers, grades
 ├── history.jsonl      one line per graded quiz (here: the 1/100, then the 80/100)
-└── passed.json        fingerprints of passed diffs, with the time they passed
+└── passed.json        fingerprints of passed diffs: when, the score, the pass mark, the grader
 ```
 
 The diff and the answers went to the model (Claude Code, here). Nothing else left the
