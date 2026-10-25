@@ -26,6 +26,10 @@ All notable changes to this project are documented here. The format follows
   option (e.g. `["docs/**", "*.md"]`), or fewer added and removed lines than the new
   `min_changed_lines` option (off by default). `grip check`, the agent push gate and
   `grip status` agree with the hook; `grip quiz --force` quizzes such a diff anyway.
+- The model reads the messages of the commits being quizzed (pushes, `--unpushed`,
+  `--branch`, `--range`), up to 4 KB, as delimited data next to the diff, so questions can
+  ask why and grading can weigh what the developer said they meant. Rewording a commit gets
+  new questions. `include_commit_messages = false` sends the diff alone.
 
 ### Changed
 

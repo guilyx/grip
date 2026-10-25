@@ -10,7 +10,7 @@ mode, sends the same prompts the API providers use, and asks for JSON back.
 
 Every agent runs with tools disabled where the CLI allows it, in an empty scratch
 directory, so it cannot read the repository, run commands, or pick up project-level
-instructions and hooks. It only ever sees the diff and the answers.
+instructions and hooks. It only ever sees the diff, its commit messages and the answers.
 """
 
 from __future__ import annotations

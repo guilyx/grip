@@ -7,7 +7,7 @@ import hashlib
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from grip_hook.errors import GitError
@@ -16,6 +16,10 @@ ZERO_SHA = "0" * 40
 LS_REMOTE_TIMEOUT = 15.0
 """Seconds to wait for ``git ls-remote`` before trusting the local remote-tracking refs."""
 _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...]\n"
+COMMITS_MAX_BYTES = 4096
+"""Commit messages beyond this many bytes are cut before they reach the model."""
+_COMMITS_NOTE = "\n[... older commit messages omitted by grip ...]"
+_COMMIT_SEPARATOR = "\n\n---\n\n"
 
 
 _HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
@@ -184,6 +188,11 @@ class Diff:
 
     context: str = ""
     """Optional text about the task the diff solves, shown to the model as data."""
+
+    commits: str = ""
+    """The messages of the commits being quizzed, newest first and capped at
+    :data:`COMMITS_MAX_BYTES`, shown to the model as data. Not part of :attr:`digest`:
+    rewording a commit does not change what passed."""
 
     stats: DiffStats | None = None
     """Line counts, when git measured them. ``None`` is unknown, and never trivial."""
@@ -386,6 +395,18 @@ class Git:
         parent = self.run("rev-parse", "--verify", "--quiet", f"{commits[0]}^", check=False)
         return parent.strip() or self.empty_tree()
 
+    def commit_messages(self, base: str, head: str, max_bytes: int = COMMITS_MAX_BYTES) -> str:
+        """The messages of the commits in ``base..head``, newest first, merges left out.
+
+        ``base`` may be the empty tree, for a range that starts at the root commit. The
+        text is cut at ``max_bytes``, keeping the newest commits. Empty when git cannot
+        list the range.
+        """
+        spec = f"{base}..{head}" if self.rev_exists(base) else head
+        out = self.run("log", "--no-merges", "--format=%s%n%n%b%x00", spec, "--", check=False)
+        messages = [m.strip() for m in out.split("\0")]
+        return _cap(_COMMIT_SEPARATOR.join(m for m in messages if m), max_bytes)
+
     def current_branch(self) -> str | None:
         """The checked-out branch's short name; ``None`` on a detached HEAD."""
         name = self.run("rev-parse", "--abbrev-ref", "HEAD", check=False).strip()
@@ -509,15 +530,24 @@ class Git:
         exclude: tuple[str, ...] = (),
         max_bytes: int = 200_000,
         description: str | None = None,
+        *,
+        commits: bool = False,
     ) -> Diff:
-        """Changes between two revisions (``base`` may be the empty tree)."""
+        """Changes between two revisions (``base`` may be the empty tree).
+
+        With ``commits``, the messages of the commits in the range come along
+        (:meth:`commit_messages`).
+        """
         if description is None:
             description = (
                 f"{SINCE_FIRST_COMMIT}, up to {_short(head)}"
                 if base in EMPTY_TREES
                 else f"{_short(base)}..{_short(head)}"
             )
-        return self._collect(description, [base, head], exclude, max_bytes)
+        diff = self._collect(description, [base, head], exclude, max_bytes)
+        if commits and not diff.is_empty:
+            diff = replace(diff, commits=self.commit_messages(base, head))
+        return diff
 
     def merge_base_diff(
         self,
@@ -525,10 +555,13 @@ class Git:
         head: str,
         exclude: tuple[str, ...] = (),
         max_bytes: int = 200_000,
+        *,
+        commits: bool = False,
     ) -> Diff:
         """Changes on ``head`` since it forked from ``base``: what git means by ``base...head``.
 
-        Raises :class:`GitError` when a revision is unknown or the two share no history.
+        With ``commits``, the messages of the commits since the fork come along. Raises
+        :class:`GitError` when a revision is unknown or the two share no history.
         """
         for rev in (base, head):
             if not self.rev_exists(rev):
@@ -540,7 +573,9 @@ class Git:
                 f"use {base}..{head}"
             )
         description = f"{_short(base)}...{_short(head)}"
-        return self.range_diff(fork, head, exclude, max_bytes, description=description)
+        return self.range_diff(
+            fork, head, exclude, max_bytes, description=description, commits=commits
+        )
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
@@ -555,6 +590,8 @@ class Git:
         remote: str | None = None,
         exclude: tuple[str, ...] = (),
         max_bytes: int = 200_000,
+        *,
+        commits: bool = False,
     ) -> Diff:
         """Combined diff of everything a ``git push`` would send upstream."""
         parts: list[Diff] = []
@@ -574,7 +611,9 @@ class Git:
                 continue
             branch = _ref_name(ref.remote_ref if ref.local_ref == "HEAD" else ref.local_ref)
             description = self.describe_commits(base, ref.local_sha, branch=branch, remote=remote)
-            part = self.range_diff(base, ref.local_sha, exclude, max_bytes, description)
+            part = self.range_diff(
+                base, ref.local_sha, exclude, max_bytes, description, commits=commits
+            )
             if not part.is_empty:
                 parts.append(part)
         if not parts:
@@ -593,16 +632,26 @@ class Git:
         size = sum(p.size for p in parts)
         measured = [p.stats for p in parts if p.stats is not None]
         stats = sum(measured[1:], measured[0]) if len(measured) == len(parts) else None
+        messages = _cap(_COMMIT_SEPARATOR.join(p.commits for p in parts if p.commits))
         return Diff(
             description,
             stat,
             patch,
             files,
             truncated,
+            commits=messages,
             binary_only=binary_only,
             size=size,
             stats=stats,
         )
+
+
+def _cap(text: str, max_bytes: int = COMMITS_MAX_BYTES) -> str:
+    """``text`` cut to ``max_bytes`` of UTF-8, with a note saying so when it was."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", "ignore").rstrip() + _COMMITS_NOTE
 
 
 def matches_path(path: str, patterns: tuple[str, ...]) -> bool:
@@ -653,6 +702,7 @@ def _glob_regex(pattern: str) -> str:
 
 
 __all__ = [
+    "COMMITS_MAX_BYTES",
     "EMPTY_TREES",
     "NOT_A_REPOSITORY",
     "NO_COMMITS",

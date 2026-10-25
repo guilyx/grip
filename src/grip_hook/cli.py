@@ -640,7 +640,12 @@ def _branch_diff(git: Git, cfg: Config) -> Diff | None:
     default, base = found
     branch = git.run("rev-parse", "--abbrev-ref", "HEAD", check=False).strip() or "HEAD"
     return git.range_diff(
-        base, "HEAD", cfg.exclude, cfg.max_diff_bytes, description=f"{branch} vs {default}"
+        base,
+        "HEAD",
+        cfg.exclude,
+        cfg.max_diff_bytes,
+        description=f"{branch} vs {default}",
+        commits=cfg.include_commit_messages,
     )
 
 
@@ -664,11 +669,17 @@ def _select_diff(git: Git, cfg: Config, mode: str | None, rev_range: str | None)
     """The diff for ``--staged`` (default), ``--unpushed``, ``--branch`` or ``--range``."""
     if rev_range:
         base, head, three_dot = _parse_range(rev_range)
+        commits = cfg.include_commit_messages
         if three_dot:
-            return git.merge_base_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
+            return git.merge_base_diff(base, head, cfg.exclude, cfg.max_diff_bytes, commits=commits)
         # The refs as typed: the header reads main..HEAD, not two hashes.
         return git.range_diff(
-            base, head, cfg.exclude, cfg.max_diff_bytes, description=f"{base}..{head}"
+            base,
+            head,
+            cfg.exclude,
+            cfg.max_diff_bytes,
+            description=f"{base}..{head}",
+            commits=commits,
         )
     if mode == "unpushed":
         head_sha = git.run("rev-parse", "HEAD").strip()
@@ -678,7 +689,14 @@ def _select_diff(git: Git, cfg: Config, mode: str | None, rev_range: str | None)
         description = git.describe_commits(
             base_sha, head_sha, branch=git.current_branch(), unpushed=True
         )
-        return git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes, description)
+        return git.range_diff(
+            base_sha,
+            head_sha,
+            cfg.exclude,
+            cfg.max_diff_bytes,
+            description,
+            commits=cfg.include_commit_messages,
+        )
     if mode == "branch":
         diff = _branch_diff(git, cfg)
         if diff is None:
@@ -1021,6 +1039,7 @@ def _defend_board(
         patch=diff.patch,
         files=list(diff.files),
         truncated=diff.truncated,
+        commits=diff.commits,
         question_set=QuestionSet(summary=board.summary, questions=board.questions()),
     )
     graded: list[Report] = []
@@ -1256,6 +1275,7 @@ def _nothing_pushed(git: Git, cfg: Config) -> str:
 def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
     from_ref = os.environ.get("PRE_COMMIT_FROM_REF")
     to_ref = os.environ.get("PRE_COMMIT_TO_REF")
+    commits = cfg.include_commit_messages
     if from_ref and to_ref:
         local = os.environ.get("PRE_COMMIT_LOCAL_BRANCH", "").removeprefix("refs/heads/")
         description = git.describe_commits(
@@ -1264,7 +1284,9 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
             branch=local or git.current_branch(),
             remote=os.environ.get("PRE_COMMIT_REMOTE_NAME") or None,
         )
-        return git.range_diff(from_ref, to_ref, cfg.exclude, cfg.max_diff_bytes, description)
+        return git.range_diff(
+            from_ref, to_ref, cfg.exclude, cfg.max_diff_bytes, description, commits=commits
+        )
 
     remote = hook_args[0] if hook_args else None
     refs: list[PushedRef] = []
@@ -1279,8 +1301,10 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
         if base is None:
             return Diff("push", "", "", ())
         description = git.describe_commits(base, head, branch=git.current_branch(), remote=remote)
-        return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes, description)
-    return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
+        return git.range_diff(
+            base, head, cfg.exclude, cfg.max_diff_bytes, description, commits=commits
+        )
+    return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes, commits=commits)
 
 
 _PROVIDER_HINTS = {

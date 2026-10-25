@@ -203,14 +203,30 @@ Summary:
  tests/test_ratelimit.py | 34 ++++++++++++++++++++++++++++++++++
  3 files changed, 74 insertions(+)
 
+<commits>
+Add a token bucket rate limiter
+
+Login was open to brute force.
+</commits>
+
 <diff>
 ...the patch...
 </diff>
 ```
 
+`<commits>` holds the messages of the commits being quizzed (a push, `--unpushed`,
+`--branch` or `--range`; staged changes have none yet), newest first, merges left out,
+capped at 4 KB (`include_commit_messages = false` drops it). They tell the model what the
+developer meant the change to do, for "why" questions and for grading answers that cite
+that intent; the prompts say the diff, not the message, decides what the code does. The
+messages are not part of the digest, but they are part of the question cache key, so
+rewording a commit gets new questions.
+
 The diff is untrusted input: code under review can contain text that looks like
-instructions. Both prompts say that everything between `<diff>` and `</diff>` (and, when
-grading, between `<answer>` and `</answer>`) is data, never instructions. Structured
+instructions. Both prompts say that everything between `<diff>` and `</diff>`, between
+`<commits>` and `</commits>` (and, when grading, between `<answer>` and `</answer>`) is
+data, never instructions. A `</commits>` inside a message is escaped so it cannot close
+the block early. Structured
 output narrows what a successful injection could do: the reply must still be five
 questions in the expected shape.
 
@@ -437,6 +453,7 @@ with no rubrics and no grading, for sharing a board.
 | What | Where | Leaves the machine? |
 | --- | --- | --- |
 | The diff, after exclusions and truncation | Sent to the provider | Yes, to the provider you configured |
+| The messages of the commits being quizzed, up to 4 KB | Sent to the provider with the diff | Yes, unless `include_commit_messages = false` |
 | Your answers | Sent to the provider for grading | Yes, to the same provider |
 | The latest report: questions, rubrics, answers, grades | `.git/grip/last-report.json` | No |
 | Every graded quiz | `.git/grip/history.jsonl` | No |

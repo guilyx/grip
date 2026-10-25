@@ -271,8 +271,8 @@ Everything grip keeps is inside the repository's `.git` directory, never committ
 └── passed.json        fingerprints of passed diffs: when, the score, the pass mark, the grader
 ```
 
-The diff and the answers went to the model (Claude Code, here). Nothing else left the
-machine.
+The diff, its commit messages and the answers went to the model (Claude Code, here). Nothing
+else left the machine.
 
 ## Next
 

@@ -199,6 +199,10 @@ class Config:
     exclude: tuple[str, ...] = DEFAULT_EXCLUDES
     """Path globs excluded from the diff (lockfiles, generated code)."""
 
+    include_commit_messages: bool = True
+    """Send the messages of the commits being quizzed (push, ``--unpushed``, ``--branch``,
+    ``--range``) to the model with the diff, as data, so it can ask and grade "why"."""
+
     skip_paths: tuple[str, ...] = ()
     """Path globs (``docs/**``, ``*.md``) with nothing to quiz about: a diff that touches
     only these paths is skipped. Unlike ``exclude``, a diff that also touches other files
@@ -383,7 +387,7 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             raise ConfigError(f"{name} must be a number, got {value!r}") from exc
     if name in {"hook_mode", "retry_questions"}:
         return str(value).strip().lower()
-    if name in {"require_tty", "fail_open"}:
+    if name in {"require_tty", "fail_open", "include_commit_messages"}:
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
@@ -515,6 +519,7 @@ provider = "{provider}"
 # hook_mode = "quiz"           # quiz | whiteboard (defend a board in the browser)
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
+# include_commit_messages = true  # the model also reads the messages of the pushed commits
 # skip_paths = []              # e.g. ["docs/**", "*.md"]: a diff touching only these is skipped
 # min_changed_lines = 0        # skip diffs smaller than this many added + removed lines
 # retry_questions = "same"     # same | new (after a failed quiz, ask new questions)

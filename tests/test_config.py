@@ -75,6 +75,14 @@ def test_invalid_config(tmp_path: Path, content: str) -> None:
         load_config(tmp_path, env={})
 
 
+def test_include_commit_messages(tmp_path: Path) -> None:
+    assert Config().include_commit_messages is True
+    (tmp_path / ".grip.toml").write_text("include_commit_messages = false\n")
+    assert load_config(tmp_path, env={}).include_commit_messages is False
+    env = {"GRIP_INCLUDE_COMMIT_MESSAGES": "1"}
+    assert load_config(tmp_path, env=env).include_commit_messages is True
+
+
 def test_skip_paths_and_min_changed_lines(tmp_path: Path) -> None:
     assert Config().skip_paths == () and Config().min_changed_lines == 0
     (tmp_path / ".grip.toml").write_text(

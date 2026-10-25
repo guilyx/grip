@@ -74,6 +74,7 @@ def test_a_retry_reuses_the_questions_but_grades_again(
     [
         lambda d: Diff(d.description, d.stat, d.patch + "+y = 2\n", d.files),
         lambda d: Diff(d.description, d.stat, d.patch, d.files, context="a task"),
+        lambda d: Diff(d.description, d.stat, d.patch, d.files, commits="Reworded"),
     ],
 )
 def test_another_diff_or_context_asks_again(
