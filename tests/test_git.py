@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from grip_hook.errors import GitError
-from grip_hook.git import ZERO_SHA, Diff, Git, PushedRef
+from grip_hook.git import NO_COMMITS, NOT_A_REPOSITORY, ZERO_SHA, Diff, Git, PushedRef
 
 
 def test_root_and_git_dir(git: Git, repo: Path) -> None:
@@ -19,13 +19,38 @@ def test_hooks_path_config(git: Git, repo: Path, run_git: Callable[..., str]) ->
 
 
 def test_run_failure_raises(git: Git) -> None:
-    with pytest.raises(GitError, match="rev-parse"):
+    # A failure without a plainer wording keeps git's message, not the command line.
+    with pytest.raises(GitError, match=r"^git rev-parse failed: fatal:"):
         git.run("rev-parse", "--verify", "does-not-exist")
 
 
 def test_not_a_repo(tmp_path: Path) -> None:
-    with pytest.raises(GitError):
+    with pytest.raises(GitError) as exc:
         Git(tmp_path).root()
+    assert str(exc.value) == NOT_A_REPOSITORY
+    # The raw command and git's own words stay available for GRIP_DEBUG.
+    assert "$ git rev-parse --show-toplevel" in exc.value.detail
+    assert "not a git repository" in exc.value.detail
+
+
+def test_no_commits_yet(empty_repo: Path) -> None:
+    git = Git(empty_repo)
+    assert not git.has_commits()
+    with pytest.raises(GitError) as exc:
+        git.run("rev-parse", "HEAD")
+    assert str(exc.value) == NO_COMMITS
+    assert "unknown revision" in exc.value.detail
+
+
+def test_unknown_revision_is_one_line(git: Git) -> None:
+    assert git.has_commits()
+    for base, head in (("nope", "HEAD"), ("HEAD", "nope")):
+        with pytest.raises(GitError) as exc:
+            git.range_diff(base, head, exclude=("*.lock", "*.min.js"))
+        assert str(exc.value) == "unknown revision 'nope'"
+        assert ":(exclude,glob)" in exc.value.detail
+    with pytest.raises(GitError, match=r"^unknown revision 'nope'$"):
+        git.run("merge-base", "nope", "HEAD")
 
 
 def test_staged_diff_empty(git: Git) -> None:

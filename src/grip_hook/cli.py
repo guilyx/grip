@@ -44,8 +44,8 @@ from grip_hook.config import (
     load_config,
     render_template,
 )
-from grip_hook.errors import GripError, NoTerminalError, ProviderError, QuizFailed
-from grip_hook.git import Diff, Git, PushedRef
+from grip_hook.errors import GitError, GripError, NoTerminalError, ProviderError, QuizFailed
+from grip_hook.git import NO_COMMITS, Diff, Git, PushedRef
 from grip_hook.hooks import INSTALLABLE_STAGES, install, status, uninstall
 from grip_hook.integrations import AGENTS, Action, agent, apply, detect
 from grip_hook.memory import PassMemory, SkipState
@@ -85,6 +85,8 @@ _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
 
 SKIP_ENV = "GRIP_SKIP"
+DEBUG_ENV = "GRIP_DEBUG"
+"""When truthy, a failed git command also prints the full command line and git's output."""
 
 
 class _Failure(click.ClickException):
@@ -94,9 +96,12 @@ class _Failure(click.ClickException):
         super().__init__(str(error))
         self.exit_code = error.exit_code  # type: ignore[misc]
         self.prefix = "grip" if isinstance(error, QuizFailed) else "grip error"
+        self.detail = error.detail if isinstance(error, GitError) else ""
 
     def show(self, file: Any = None) -> None:
         _err.print(f"[bold red]{self.prefix}:[/bold red] {self.format_message()}")
+        if self.detail and _truthy(os.environ.get(DEBUG_ENV)):
+            _err.print(escape(self.detail), style="dim")
 
 
 class _Group(click.Group):
@@ -395,6 +400,8 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
     if mode == "branch":
         diff = _branch_diff(git, cfg)
         if diff is None:
+            if not git.has_commits():
+                raise GitError(NO_COMMITS)
             raise GripError(
                 "no default branch to compare with (no origin/HEAD, main or master); "
                 "use --range BASE..HEAD"
@@ -1231,7 +1238,10 @@ def _print_activity(git: Git, cfg: Config) -> None:
         when = f"{_ago(report.created_at)} ({report.stage.value})"
         table.add_row("last quiz", f"{report.score}/{MAX_SCORE} {verdict}, {when}")
     table.add_row("staged changes", _diff_state(git, cfg, "staged"))
-    table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    if git.has_commits():
+        table.add_row("unpushed commits", _diff_state(git, cfg, "unpushed"))
+    else:
+        table.add_row("unpushed commits", "[dim]none, no commits yet[/dim]")
     default = git.default_branch()
     if default is not None:
         table.add_row(f"branch vs {default}", _diff_state(git, cfg, "branch"))
