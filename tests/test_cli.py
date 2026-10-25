@@ -124,11 +124,35 @@ def test_no_terminal_skips_or_fails(
         raise NoTerminalError("no tty")
 
     monkeypatch.setattr(cli_module, "open_terminal", no_tty)
-    result = runner.invoke(cli, ["quiz"])
+    # A hook steps aside (a GUI client pushing), unless require_tty says to block.
+    result = runner.invoke(cli, ["hook", "pre-commit"])
     assert result.exit_code == 0
+    assert "Skipping the quiz" in result.output
     monkeypatch.setenv("GRIP_REQUIRE_TTY", "1")
+    result = runner.invoke(cli, ["hook", "pre-commit"])
+    assert result.exit_code == 2
+
+
+def test_explicit_quiz_without_terminal_fails(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+
+    def no_tty() -> None:
+        raise NoTerminalError("no interactive terminal is available to ask questions.")
+
+    monkeypatch.setattr(cli_module, "open_terminal", no_tty)
+    # Typed by hand: an exit 0 would read as a pass, so it fails whatever require_tty says.
     result = runner.invoke(cli, ["quiz"])
     assert result.exit_code == 2
+    output = " ".join(result.output.split())
+    assert "grip error: no interactive terminal" in output
+    assert "grip ask" in output and "grip grade" in output and "grip whiteboard" in output
+    assert "Skipping" not in output
+    assert not (in_repo / ".git" / "grip" / "passed.json").exists()
 
 
 def test_provider_error_blocks_unless_fail_open(

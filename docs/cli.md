@@ -31,6 +31,11 @@ pasted line still answers the next question.)
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error.
 
+`grip quiz` needs an interactive terminal. Without one (stdin redirected, a script, an IDE
+task) it exits `2` rather than skipping, and points to `grip ask` / `grip grade` (JSON in,
+JSON out) or `grip whiteboard`. The hooks still skip in that case unless `require_tty` is
+set.
+
 ## `grip whiteboard`
 
 Draw the change as a whiteboard and defend it in the browser. The parts of the change, how

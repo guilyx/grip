@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `grip quiz` without an interactive terminal (`grip quiz </dev/null`, a script) exits 2
+  and points to `grip ask` / `grip grade` or `grip whiteboard`, instead of skipping with
+  exit 0. Hooks still skip unless `require_tty` is set, and the notice no longer reads
+  "grip: grip needs".
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
