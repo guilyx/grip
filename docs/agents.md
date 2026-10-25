@@ -183,5 +183,7 @@ quizzed recently. `grip grade` prints `status` (`pass` or `fail`), `score`, per-
 ## Honour system
 
 The agent could answer for you. The skill and the snippet above tell it not to, and the
-rubrics never reach it, but grip cannot stop a determined cheat any more than a terminal
-hook can stop `--no-verify`. It is a forcing function for people who want one.
+questions it relays carry no rubrics. The rubrics are still on disk, in
+`.git/grip/pending.json` until grading and in `.git/grip/last-report.json` after it, so an
+agent that reads files could find them. grip cannot stop a determined cheat any more than
+a terminal hook can stop `--no-verify`. It is a forcing function for people who want one.

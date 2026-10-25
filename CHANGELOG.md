@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: new pages on cost and privacy per provider, rolling grip out to a team, removing
+  it, and a glossary. The FAQ, honest numbers and home page no longer say that every run
+  asks new questions or that `anthropic` is the default provider, the README says the
+  offline `fake` grader only checks answer length, and the Mitchell Hashimoto quote links
+  to his post.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

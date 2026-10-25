@@ -122,6 +122,6 @@ Two environment variables shape it:
 
 ## Writing your own
 
-Implement the `Provider` protocol (two methods) and register a factory in
-`grip_hook.providers.REGISTRY`. See the [API reference](reference/providers.md) and
+Implement the `Provider` protocol (`generate_questions`, `generate_board` and `grade`)
+and register a factory in `grip_hook.providers.REGISTRY`. See the [API reference](reference/providers.md) and
 `tests/test_providers.py` for the testing pattern.
