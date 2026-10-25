@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0          # the merge base must be in the clone
-      - uses: guilyx/grip@main    # pin a release tag or a commit SHA in real use
+      - uses: guilyx/grip@v0.5.0  # a release tag or a commit SHA
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -45,7 +45,7 @@ written to the job summary, so they are visible even when no comment is posted.
 ### With the whiteboard
 
 ```yaml
-      - uses: guilyx/grip@main
+      - uses: guilyx/grip@v0.5.0
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           export-board: true
@@ -58,7 +58,7 @@ export it shows the board and the questions, no rubrics, and grades nothing.
 ### Another provider
 
 ```yaml
-      - uses: guilyx/grip@main
+      - uses: guilyx/grip@v0.5.0
         with:
           provider: openai
           model: gpt-5

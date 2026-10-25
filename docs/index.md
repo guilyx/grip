@@ -163,7 +163,7 @@ get per-question feedback on what to re-read.
 
     `/grip-review main..feature` checks that the person approving understands it too.
 
-    [:octicons-arrow-right-24: Review skill](agents.md#two-more-skills)
+    [:octicons-arrow-right-24: Review skill](agents.md#more-skills)
 
 -   :material-pause-circle-outline:{ .lg } __Skip without hacks__
 
