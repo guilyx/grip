@@ -53,6 +53,11 @@ All notable changes to this project are documented here. The format follows
   staged changes", and writes "1 file". Two scope flags at once (`--branch --unpushed`, `--range` with
   `--staged`) are a usage error in `grip quiz`, `ask`, `check` and `whiteboard` instead of
   the last one silently winning.
+- The installed hook runs grip by the absolute path of the grip that ran `grip install`,
+  then falls back to `PATH`, so a push from an IDE or GUI client whose `PATH` lacks grip is
+  quizzed instead of skipped with "grip: not installed". When that path is gone, the hook
+  says so and suggests `grip install` again, and `grip status` shows `grip missing`.
+  Re-running `grip install --append` refreshes the appended block.
 
 ## [0.4.1] - 2026-10-21
 

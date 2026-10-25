@@ -60,20 +60,33 @@ agent relaying them.
 ```sh
 #!/bin/sh
 # managed-by: grip-hook
+grip_bin='/home/you/.local/bin/grip'
+if [ -x "$grip_bin" ]; then
+  exec "$grip_bin" hook pre-push "$@"
+fi
 if command -v grip >/dev/null 2>&1; then
   exec grip hook pre-push "$@"
 fi
 if command -v python3 >/dev/null 2>&1 && python3 -c "import grip_hook" >/dev/null 2>&1; then
   exec python3 -m grip_hook hook pre-push "$@"
 fi
-echo "grip: not installed (pipx install grip-hook), skipping quiz" >&2
+echo "grip: not installed (pipx install grip-hook), skipping the quiz." >&2
 exit 0
 ```
 
+`grip_bin` is the absolute path of the grip that ran `grip install` (or of its Python,
+run as `python -m grip_hook`, when grip was started that way). It comes first because IDEs
+and GUI git clients often run hooks with a `PATH` that does not have grip on it; `PATH` and
+`python3` are the fallbacks. Paths are single-quoted and written with forward slashes,
+which git-bash on Windows reads as well. When that path is gone (a deleted virtualenv, a
+moved install) and no fallback works, the hook says so, suggests running `grip install`
+again, and lets the push through; `grip status` flags such a hook as `grip missing`.
+
 The marker line is how `grip install` and `grip uninstall` recognise their own file and
 leave anyone else's alone. With `--append`, grip adds a guarded block to an existing hook
-instead of replacing it. When grip is not installed on a machine, the hook says so and
-lets the push through: a teammate without grip is never locked out of the repository.
+instead of replacing it; running `grip install --append` again rewrites that block with
+the current path. When grip is not installed on a machine, the hook says so and lets the
+push through: a teammate without grip is never locked out of the repository.
 
 Under the [pre-commit framework](getting-started.md#3-wire-it-into-git), pre-commit calls
 `grip hook` itself and passes the pushed range in `PRE_COMMIT_FROM_REF` and
