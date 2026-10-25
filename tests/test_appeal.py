@@ -12,7 +12,7 @@ from click.testing import CliRunner
 
 from grip_hook import cli as cli_module
 from grip_hook.cli import cli
-from grip_hook.config import Config
+from grip_hook.config import Config, load_config
 from grip_hook.git import Diff
 from grip_hook.memory import PassMemory
 from grip_hook.models import Answer, Difficulty, Question, QuestionGrade, Report
@@ -85,7 +85,7 @@ def test_an_upheld_appeal_that_reaches_the_pass_mark_records_a_pass(
     assert appeal.question_index == 1
     assert (appeal.old_score, appeal.new_score) == (10, 20)
     assert appeal.justification == WHY
-    assert _memory(in_repo).has_passed(report.diff_digest)
+    assert _memory(in_repo).has_passed(report.diff_digest, load_config(in_repo, env={}))
     assert runner.invoke(cli, ["check"]).exit_code == 0
 
     history = _history(in_repo)

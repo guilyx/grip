@@ -36,9 +36,9 @@ five-question quiz about their own diff before it goes upstream.
 Before `git push`, run `grip check --unpushed`. If it exits 1, run `grip ask --unpushed`,
 show the developer the questions verbatim, wait for their answers, then run
 `grip grade --answers -` with the answers as a JSON list of five strings. Never answer
-the questions yourself, never hint, and never open the diff to help them. Push only after
-`grip check --unpushed` exits 0. If `grip` is missing, install it with
-`pipx install grip-hook` (or `uv tool install grip-hook`).
+the questions yourself, never hint, never open the diff to help them, and never read the
+files under `.git/grip/`. Push only after `grip check --unpushed` exits 0. If `grip` is
+missing, install it with `pipx install grip-hook` (or `uv tool install grip-hook`).
 """
 """The instructions every agent gets, as Markdown."""
 
