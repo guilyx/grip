@@ -85,6 +85,7 @@ _err = Console(stderr=True, highlight=False)
 _out = Console(highlight=False)
 
 SKIP_ENV = "GRIP_SKIP"
+PATHS_SKIPPED = "every changed file matches a [[paths]] rule with skip = true"
 
 
 class _Failure(click.ClickException):
@@ -195,9 +196,11 @@ def _run(
     report_path: Path | None,
 ) -> int:
     """Shared driver for ``quiz`` and ``hook``. Returns the process exit code."""
-    if diff.is_empty:
-        _skip("nothing to quiz, no changes found.")
+    if diff.is_empty or cfg.skips(diff.files):
+        reason = "no changes found" if diff.is_empty else escape(PATHS_SKIPPED)
+        _skip(f"nothing to quiz, {reason}.")
         return 0
+    cfg = cfg.for_files(diff.files)
 
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest):
@@ -416,6 +419,10 @@ def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overri
     if diff.is_empty:
         _emit({"status": "nothing-to-quiz", "message": "no changes found"})
         return
+    if cfg.skips(diff.files):
+        _emit({"status": "nothing-to-quiz", "message": PATHS_SKIPPED})
+        return
+    cfg = cfg.for_files(diff.files)
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if memory.has_passed(diff.digest):
         _emit({"status": "already-passed", "message": "this exact diff passed recently"})
@@ -442,6 +449,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     pending = store.load()
     if pending is None:
         raise GripError("no pending quiz; run `grip ask` first")
+    cfg = cfg.for_files(pending.files)
     text = sys.stdin.read() if str(answers_path) == "-" else answers_path.read_text("utf-8")
     answers = parse_answers(text)
     report = grade(pending, answers, cfg, get_provider(cfg))
@@ -505,8 +513,12 @@ def whiteboard_cmd(
     if diff.is_empty:
         _skip("nothing to draw, no changes found.")
         return
-    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     defending = not interview and export_path is None
+    if defending and cfg.skips(diff.files):
+        _skip(escape(f"{PATHS_SKIPPED}; nothing to defend."))
+        return
+    cfg = cfg.for_files(diff.files)
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     if defending and memory.has_passed(diff.digest):
         _skip("this exact diff already passed recently; nothing to defend.")
         return
@@ -678,7 +690,7 @@ def check_cmd(mode: str, rev_range: str | None) -> None:
 def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | None:
     """``None`` when the diff may go through, otherwise why it may not."""
     diff = _select_diff(git, cfg, mode, rev_range)
-    if diff.is_empty:
+    if diff.is_empty or cfg.skips(diff.files):
         return None
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
         return None
@@ -1178,8 +1190,9 @@ def _diff_state(git: Git, cfg: Config, mode: str) -> str:
         diff = _select_diff(git, cfg, mode, None)
     except GripError as exc:
         return f"[yellow]could not check[/yellow] ({escape(str(exc))})"
-    if diff.is_empty:
-        return "[dim]nothing[/dim]"
+    if diff.is_empty or cfg.skips(diff.files):
+        skipped = f"skipped by {escape('[[paths]]')} ({_files(diff)})"
+        return f"[dim]{'nothing' if diff.is_empty else skipped}[/dim]"
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
     files = _files(diff)
     latest = memory.latest_for(diff.digest)
@@ -1225,7 +1238,7 @@ def _print_config(cfg: Config) -> None:
     table.add_column("option")
     table.add_column("value")
     for name, value in describe(cfg):
-        table.add_row(name, value)
+        table.add_row(name, escape(value))  # globs such as test_[ab].py are not markup
     _out.print(table)
 
 

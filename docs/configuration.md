@@ -28,6 +28,7 @@ grip reads configuration from four places. Higher in the list wins.
 | `require_tty` | `false` | Fail (exit 2) instead of skipping when no interactive terminal is available. |
 | `fail_open` | `false` | Let the commit or push through when the provider errors out. |
 | `timeout` | `120` | Per-request timeout for provider calls, in seconds. |
+| `paths` | none | `[[paths]]` tables: a different pass mark or difficulty, or no quiz, for part of the repository. See [Per-path rules](#per-path-rules). Read from the files only, not from the environment. |
 
 The default `exclude` list is:
 
@@ -82,6 +83,63 @@ Per-developer overrides without touching the shared file:
 export GRIP_DIFFICULTY=easy      # while onboarding
 export GRIP_MODEL=claude-sonnet-5
 ```
+
+## Per-path rules
+
+A monorepo, or a repository that mixes customer-facing code with docs and prototypes,
+rarely wants one bar for everything. Each `[[paths]]` table names some files and changes
+what a diff that touches them is asked:
+
+| Key | Description |
+| --- | --- |
+| `match` | A glob or a list of globs, read like `exclude`: `*` stays inside one directory, `**` crosses directories, a pattern without `/` matches at any depth, and a directory covers every file under it. Required. |
+| `passing_score` | The pass mark for these files. |
+| `difficulty` | `easy`, `normal` or `hard` for these files. |
+| `skip` | `true`: these files need no quiz. |
+
+How a diff is judged:
+
+- Each file takes the strictest `passing_score` and the hardest `difficulty` of the rules
+  it matches. A file no rule sets them for keeps the repository's own.
+- The diff takes the strictest over all its files. A rule that lowers the bar for
+  `prototypes/` lowers it only for a diff that touches nothing else.
+- Files that match a `skip = true` rule do not count. A diff made only of them is not
+  quizzed: the hook lets it through with a message and `grip check` exits 0.
+- The quiz shows the pass mark that applies, and `grip ask` and `grip grade` use the
+  same one.
+
+A monorepo where payments code gets the hardest quiz, docs need none, and spikes get an
+easy one:
+
+```toml
+# .grip.toml
+passing_score = 70
+difficulty = "normal"
+
+[[paths]]
+match = ["services/payments/**", "services/auth/**"]
+passing_score = 90
+difficulty = "hard"
+
+[[paths]]
+match = ["docs/**", "*.md"]
+skip = true
+
+[[paths]]
+match = "prototypes"
+passing_score = 40
+difficulty = "easy"
+```
+
+A change to `services/payments/` and `prototypes/` together is quizzed at 90, hard. A
+change to `docs/` and `README.md` only is not quizzed. A change to `prototypes/` and
+`docs/` is quizzed at 40, easy.
+
+!!! note "Put `[[paths]]` last"
+    In TOML every key after a `[[paths]]` header belongs to that table, so keep the
+    top-level options above the first `[[paths]]`. In `pyproject.toml` the tables are
+    `[[tool.grip.paths]]`. Rules in `.grip.toml` replace the ones in `pyproject.toml`
+    rather than adding to them. `grip config` lists the rules in effect.
 
 ## Environment variables that are not options
 

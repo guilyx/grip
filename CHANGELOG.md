@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `[[paths]]` tables in `.grip.toml` (or `[[tool.grip.paths]]` in `pyproject.toml`) set
+  a `passing_score`, a `difficulty` or `skip = true` for the files that match their
+  `match` globs. A diff takes the strictest pass mark and the hardest difficulty of the
+  files it touches, and a diff made only of skipped files is not quizzed.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
