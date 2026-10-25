@@ -18,6 +18,14 @@ _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...
 
 
 _HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+EMPTY_TREES = frozenset(
+    {
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+    }
+)
+"""The empty tree in SHA-1 and SHA-256 repositories: the base for a root commit."""
+SINCE_FIRST_COMMIT = "everything since the first commit"
 
 NOT_A_REPOSITORY = "not inside a git repository (run grip from your project)"
 NO_COMMITS = "this repository has no commits yet"
@@ -29,6 +37,14 @@ _UNKNOWN_REVISION = re.compile(
 def _short(rev: str) -> str:
     """A full hash shortened to 12 characters; a branch name or other spelling as is."""
     return rev[:12] if _HASH.fullmatch(rev) else rev
+
+
+def _ref_name(ref: str) -> str:
+    """``refs/heads/feat/x`` as ``feat/x``, ``refs/tags/v1`` as ``tag v1``."""
+    for prefix, label in (("refs/heads/", ""), ("refs/tags/", "tag ")):
+        if ref.startswith(prefix):
+            return label + ref.removeprefix(prefix)
+    return _short(ref)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +95,9 @@ class Diff:
 
     context: str = ""
     """Optional text about the task the diff solves, shown to the model as data."""
+
+    size: int = 0
+    """Bytes in the whole patch before truncation; ``0`` when not known."""
 
     @property
     def is_empty(self) -> bool:
@@ -272,6 +291,37 @@ class Git:
         parent = self.run("rev-parse", "--verify", "--quiet", f"{commits[0]}^", check=False)
         return parent.strip() or self.empty_tree()
 
+    def current_branch(self) -> str | None:
+        """The checked-out branch's short name; ``None`` on a detached HEAD."""
+        name = self.run("rev-parse", "--abbrev-ref", "HEAD", check=False).strip()
+        return name if name and name != "HEAD" else None
+
+    def describe_commits(
+        self,
+        base: str,
+        head: str,
+        *,
+        branch: str | None = None,
+        remote: str | None = None,
+        unpushed: bool = False,
+    ) -> str:
+        """``3 commits on feat/x → origin``: what ``base..head`` holds, said for people.
+
+        When ``base`` is the empty tree (a root commit) the count is the whole history and
+        the text says so instead of showing the tree's hash.
+        """
+        root = base in EMPTY_TREES or not self.rev_exists(base)
+        counted = self.run("rev-list", "--count", head if root else f"{base}..{head}", check=False)
+        count = int(counted.strip()) if counted.strip().isdigit() else 0
+        text = f"{count} {'unpushed ' if unpushed else ''}commit{'' if count == 1 else 's'}"
+        if branch:
+            text += f" on {branch}"
+        if remote:
+            text += f" → {remote}"
+        if root:
+            text += f", {SINCE_FIRST_COMMIT}"
+        return text
+
     # -- diff collection ------------------------------------------------------------------
 
     @staticmethod
@@ -300,13 +350,13 @@ class Git:
             return Diff(description, "", "", ())
         stat = self.run(*common, "--stat=100", *spec).rstrip()
         patch = self.run(*common, "--unified=3", "--diff-filter=ACDMRT", *spec)
+        encoded = patch.encode("utf-8")
         truncated = False
-        if len(patch.encode("utf-8")) > max_bytes:
-            encoded = patch.encode("utf-8")
+        if len(encoded) > max_bytes:
             keep = encoded[:max_bytes].decode("utf-8", "ignore")
             patch = keep + _TRUNCATION_NOTE.format(omitted=len(encoded) - max_bytes)
             truncated = True
-        return Diff(description, stat, patch, files, truncated)
+        return Diff(description, stat, patch, files, truncated, size=len(encoded))
 
     def _names(self, args: list[str], exclude: tuple[str, ...]) -> tuple[str, ...]:
         out = self.run(*args, *self._pathspec(exclude), check=False)
@@ -342,7 +392,12 @@ class Git:
         description: str | None = None,
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
-        description = description or f"{_short(base)}..{_short(head)}"
+        if description is None:
+            description = (
+                f"{SINCE_FIRST_COMMIT}, up to {_short(head)}"
+                if base in EMPTY_TREES
+                else f"{_short(base)}..{_short(head)}"
+            )
         return self._collect(description, [base, head], exclude, max_bytes)
 
     def merge_base_diff(
@@ -398,7 +453,9 @@ class Git:
                     base = self.unpushed_base_live(ref.local_sha, remote)
             if base is None:
                 continue
-            part = self.range_diff(base, ref.local_sha, exclude, max_bytes)
+            branch = _ref_name(ref.remote_ref if ref.local_ref == "HEAD" else ref.local_ref)
+            description = self.describe_commits(base, ref.local_sha, branch=branch, remote=remote)
+            part = self.range_diff(base, ref.local_sha, exclude, max_bytes, description)
             if not part.is_empty:
                 parts.append(part)
         if not parts:
@@ -412,8 +469,18 @@ class Git:
             truncated = True
         files = tuple(dict.fromkeys(f for p in parts for f in p.files))
         stat = "\n\n".join(p.stat for p in parts)
-        description = "push (" + ", ".join(p.description for p in parts) + ")"
-        return Diff(description, stat, patch, files, truncated)
+        description = "; ".join(p.description for p in parts)
+        size = sum(p.size for p in parts)
+        return Diff(description, stat, patch, files, truncated, size=size)
 
 
-__all__ = ["NOT_A_REPOSITORY", "NO_COMMITS", "ZERO_SHA", "Diff", "Git", "PushedRef"]
+__all__ = [
+    "EMPTY_TREES",
+    "NOT_A_REPOSITORY",
+    "NO_COMMITS",
+    "SINCE_FIRST_COMMIT",
+    "ZERO_SHA",
+    "Diff",
+    "Git",
+    "PushedRef",
+]

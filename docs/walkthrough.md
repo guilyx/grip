@@ -77,13 +77,13 @@ model:
 ```console
 ~/notes-api main ❯ git push
 
-╭────────────────────────────────────── grip ──────────────────────────────────────╮
-│ 5 questions about your b05e4728c893..e3c589438444 (pre-push). Pass mark: 70/100. │
-│                                                                                  │
-│ api/auth.py                                                                      │
-│ api/ratelimit.py                                                                 │
-│ tests/test_ratelimit.py                                                          │
-╰──────────────────────────── keep a grip on your code ────────────────────────────╯
+╭───────────────────────────────────── grip ──────────────────────────────────────╮
+│ 5 questions about your 1 commit on main → origin (pre-push). Pass mark: 70/100. │
+│                                                                                 │
+│ api/auth.py                                                                     │
+│ api/ratelimit.py                                                                │
+│ tests/test_ratelimit.py                                                         │
+╰─────────────────────────── keep a grip on your code ────────────────────────────╯
 
 Adds an in-process token-bucket RateLimiter and applies it to login, keyed by client IP at 5
 attempts/minute. Over-limit requests get a 429 with a Retry-After header. Unit tests cover

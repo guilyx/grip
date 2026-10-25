@@ -24,6 +24,11 @@ All notable changes to this project are documented here. The format follows
   fixes: set the key variable (`api_key_env`, `ANTHROPIC_API_KEY` by default), use a
   coding agent installed on the machine, or try `--provider fake`. The `openai` provider
   no longer asks for a key when `base_url` points at a server of your own.
+- The quiz header names what is being quizzed in words: `3 commits on feat/x → origin`
+  for a push, `main..HEAD` as typed for `--range`, `2 unpushed commits on main` for
+  `--unpushed`, and `everything since the first commit` instead of the empty tree's hash
+  for a first push. When the diff is over `max_diff_bytes` it also says how much the model
+  saw: `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
 
 ### Fixed
 
