@@ -5,6 +5,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -168,6 +169,54 @@ def test_quiz_range_and_unpushed(
     result = runner.invoke(cli, ["quiz", "--unpushed"])
     assert result.exit_code == 1
     assert "README.md" in factory.text
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("main..feat", ("main", "feat", False)),
+        ("main...feat", ("main", "feat", True)),
+        ("main..", ("main", "HEAD", False)),
+        ("main...", ("main", "HEAD", True)),
+        ("v1.2..v1.3", ("v1.2", "v1.3", False)),
+        ("origin/main...HEAD", ("origin/main", "HEAD", True)),
+    ],
+)
+def test_parse_range(given: str, expected: tuple[str, str, bool]) -> None:
+    assert cli_module._parse_range(given) == expected
+
+
+@pytest.mark.parametrize("given", ["main", "..HEAD", "...HEAD", "a....b", "a..b..c", "a...b...c"])
+def test_parse_range_rejects_malformed(given: str) -> None:
+    with pytest.raises(click.BadParameter, match=r"BASE\.\.\.HEAD"):
+        cli_module._parse_range(given)
+
+
+def test_three_dot_range_diffs_from_the_merge_base(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+) -> None:
+    run_git("checkout", "-q", "-b", "feat")
+    stage_change("f.py", "f = 1\n")
+    run_git("commit", "-q", "-m", "f")
+    run_git("checkout", "-q", "main")
+    stage_change("m.py", "m = 1\n")
+    run_git("commit", "-q", "-m", "m")
+    run_git("checkout", "-q", "feat")
+    for rev_range in ("main...HEAD", "main..."):
+        result = runner.invoke(cli, ["ask", "--range", rev_range])
+        assert result.exit_code == 0, result.output
+        diff = json.loads(result.stdout)["diff"]
+        assert diff["files"] == ["f.py"]
+        assert diff["description"] == "main...HEAD"
+    two_dot = json.loads(runner.invoke(cli, ["ask", "--range", "main.."]).stdout)
+    assert set(two_dot["diff"]["files"]) == {"f.py", "m.py"}
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "main....HEAD"])
+        assert result.exit_code == 2
+        assert "expected BASE..HEAD or BASE...HEAD" in result.output
 
 
 def test_hook_skip_envs(
