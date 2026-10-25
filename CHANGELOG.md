@@ -47,6 +47,11 @@ All notable changes to this project are documented here. The format follows
   `--provider`, `--model`, `--passing-score` and `--difficulty` to preview a run with
   those flags. `grip status` shows a short summary instead of the full table: provider,
   pass mark, difficulty and hook mode.
+- Docs: new pages on cost and privacy per provider, rolling grip out to a team, removing
+  it, and a glossary. The FAQ, honest numbers and home page no longer say that every run
+  asks new questions or that `anthropic` is the default provider, the README says the
+  offline `fake` grader only checks answer length, and the Mitchell Hashimoto quote links
+  to his post.
 
 ### Fixed
 

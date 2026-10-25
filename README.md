@@ -16,15 +16,17 @@ In the terminal, or on a whiteboard of your change in the browser. A model grade
 answers out of 100. Below your team's pass mark, the push waits.
 
 It checks the developer, not the code. Let AI write it; just be able to defend it.
+**[Follow one real change from commit to push](https://guilyx.github.io/grip/walkthrough/)**
+to see what it asks and how it grades.
 
 > "If I ask 'why did you do X instead of Y?', 'what happens if this actor behaves
 > maliciously?' [...] you should be able to answer confidently."
-> Mitchell Hashimoto, on [the whiteboard defense](https://guilyx.github.io/grip/whiteboard-defense/)
-> (not affiliated with grip)
+> Mitchell Hashimoto, [on X](https://x.com/mitchellh/status/2100249348345057389), about
+> [the whiteboard defense](https://guilyx.github.io/grip/whiteboard-defense/) (not affiliated with grip)
 
 ## Try it in 30 seconds
 
-No hook, no account, no API key: the `fake` provider asks scripted questions offline.
+No hook, no account, no API key: the `fake` provider runs the whole flow offline.
 
 ```bash
 pipx install grip-hook                 # or: uv tool install grip-hook
@@ -33,6 +35,12 @@ echo 'def add(a, b): return a + b' > math.py && git add math.py
 grip quiz --provider fake              # five questions in your terminal
 grip whiteboard --provider fake        # the same, drawn in your browser
 ```
+
+The offline grader does not read your answers, it only checks their length: twenty
+characters, or the word "because", gets full marks. Any long answer passes and a row of
+"idk" fails, so this shows the flow, not the grading. For questions written from your diff
+and real grading, use a model you have (`--provider claude-code`, `codex`, `gemini` or
+`anthropic`), or read the [walkthrough](https://guilyx.github.io/grip/walkthrough/).
 
 Nothing is blocked until you install the hook with `grip init`.
 
@@ -80,7 +88,7 @@ Other commands you will use:
 grip quiz                  # quiz your staged changes now, no hook needed
 grip quiz --branch         # quiz the whole branch since main: your pull request
 grip whiteboard            # defend the change in the browser
-grip quiz --provider fake  # try it offline with a scripted grader
+grip quiz --provider fake  # try the flow offline (grades by length only)
 grip skip                  # let the next push through
 grip status                # hooks, last score, configuration
 ```

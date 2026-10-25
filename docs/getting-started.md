@@ -119,7 +119,7 @@ To do it by hand, choose one of the two approaches.
 
 ```bash
 git add .grip.toml          # the quiz covers staged changes; stage something first
-grip quiz --provider fake   # offline dry run with a dummy grader
+grip quiz --provider fake   # offline dry run; the dummy grader only checks length
 grip quiz                   # quiz your staged changes for real
 grip status                 # what is installed, effective configuration
 ```
@@ -133,4 +133,5 @@ difficulty = "normal"   # easy | normal | hard
 ```
 
 Commit that file so the whole team shares the same bar. Everything else is optional; see
-[Configuration](configuration.md).
+[Configuration](configuration.md). Bringing it to a whole team? Start with
+[Rolling out to a team](team-rollout.md).

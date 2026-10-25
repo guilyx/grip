@@ -58,6 +58,7 @@ ones is a design intent backed by the rubric prompt, not a measurement. The pass
   floor.
 - **Cost.** A quiz is two model calls over the diff. Tokens are not counted by the harness;
   with `provider = "claude-code"` the calls ride an existing subscription.
+  [Cost and privacy](cost-and-privacy.md) shows how to estimate them.
 - **Gaming by the agent.** Nothing stops a coding agent from answering for you if you tell
   it to. The skills forbid it. The rubrics are stored locally under `.git/grip/`; the
   skills never show them or point to them and tell the agent not to read those files, but
@@ -68,16 +69,18 @@ ones is a design intent backed by the rubric prompt, not a measurement. The pass
 
 Reports from use, not from the harness.
 
-- **Tiny changes.** A one-line fix gets five questions like any other diff. Use
-  `grip skip` for one push, or raise `max_diff_bytes` and `exclude` so generated files do
-  not count.
+- **Tiny changes.** A one-line fix gets five questions like any other diff, and no
+  option changes that. Use `grip skip` for one push. Add globs to `exclude` so changes
+  that are only generated files or lockfiles have nothing left to quiz.
 - **Renames and moves.** grip sees a large diff and asks about behaviour that did not
   change. The `rename-only` fixture is there to keep this visible.
 - **Documentation and configuration diffs.** Questions tend toward "why" and "how would
   you check", which is fine for a config change and tedious for a typo.
 - **Unfair questions.** The model sometimes asks about something the diff does not show,
-  or grades a correct answer down. The per-question feedback says what it wanted; `grip
-  quiz` gives a fresh set; `fail_open` and the pass mark are yours to set.
+  or grades a correct answer down. The per-question feedback says what it wanted. Running
+  `grip quiz` again on the same diff asks the same questions (they are cached for
+  `cache_hours`); `grip quiz --fresh` asks for a new set. `fail_open` and the pass mark
+  are yours to set.
 - **Latency.** Two model calls before every push. With a fast model it is a few seconds;
   with a large local model it can be a minute.
 - **No terminal.** Inside an IDE push button there is no tty, so grip skips unless
