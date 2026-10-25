@@ -41,8 +41,8 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
    Then the Grip Score against the pass mark and the verdict.
    - Exit code 0: they passed. The diff is remembered, so `git push` goes through.
    - Exit code 1: they failed. Suggest what to re-read from the feedback and offer to
-     run `/grip` again: the same diff gets the same questions, answered with the
-     feedback in mind (`grip ask --fresh` asks for new ones).
+     run `/grip` again once they have. The same diff gets the same questions, unless
+     `retry_questions = "new"` is set (`grip ask --fresh` asks for new ones).
 
 ## Notes
 

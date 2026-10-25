@@ -56,6 +56,7 @@ def test_dashed_keys_and_bools(tmp_path: Path) -> None:
         "exclude = 3\n",
         "timeout = 0\n",
         "hook_mode = 'slides'\n",
+        "retry_questions = 'fresh'\n",
         "this is not toml\n",
     ],
 )
@@ -63,6 +64,13 @@ def test_invalid_config(tmp_path: Path, content: str) -> None:
     (tmp_path / ".grip.toml").write_text(content)
     with pytest.raises(ConfigError):
         load_config(tmp_path, env={})
+
+
+def test_retry_questions(tmp_path: Path) -> None:
+    assert load_config(tmp_path, env={}).retry_questions == "same"
+    (tmp_path / ".grip.toml").write_text("retry_questions = 'New'\n")
+    assert load_config(tmp_path, env={}).retry_questions == "new"
+    assert load_config(tmp_path, env={"GRIP_RETRY_QUESTIONS": "same"}).retry_questions == "same"
 
 
 def test_no_root() -> None:

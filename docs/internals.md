@@ -233,7 +233,10 @@ question, its rubric and your answer, under these rules:
 - proportional partial credit for partial answers;
 - 0 for empty, "I don't know", off-topic or confidently wrong answers;
 - spelling, grammar and brevity are ignored: you are typing in a terminal;
-- one or two sentences of concrete feedback per answer, naming what was missing.
+- one or two sentences of feedback per answer: what was right and, when points were lost,
+  where in the change to look again and what *kind* of point is missing ("think about
+  what happens when two requests race"), never the missing rubric point itself. Feedback
+  that names the answer would let a retry pass by pasting it back.
 
 All five answers are graded in one call, so the grader sees them side by side. The Grip
 Score is the sum of the five grades, capped at 100; a score at or above `passing_score`
@@ -270,6 +273,14 @@ A board that failed validation is replaced by the corrected one, so a retry star
 board that passed the checks. Entries expire after `cache_hours` (24 by default; 0 turns
 the cache off), and `--fresh` skips it for one run. `grip submit` never uses it: a score
 reported to Keep A Grip comes from questions written for that attempt.
+
+Reusing the questions means the second attempt is on questions whose feedback the
+developer has just read. The feedback is written not to give the answers away (see
+[Rubrics and grading](#rubrics-and-grading)), and `retry_questions` decides the rest.
+`same`, the default, keeps the cache's saving. `new` deletes every entry stored for the
+diff when a quiz, a whiteboard defense or a `grip grade` fails, so the next try writes
+new questions (or draws a new board) at the cost of one more model call. Each entry
+records the digest of its diff for this.
 
 `grip skip` writes `{"once": true}` to `.git/grip/skip.json`, consumed by the next hook
 run; `grip skip --hours N` writes a deadline; `grip resume` clears both. Only hooks and

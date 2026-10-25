@@ -19,7 +19,9 @@ grip quiz --fresh               # new questions, even for a diff quizzed recentl
 
 Trying again on the same diff reuses the questions from the last attempt (see
 [`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for
-new ones. `grip whiteboard` reuses its board the same way.
+new ones. `grip whiteboard` reuses its board the same way. With
+[`retry_questions = "new"`](configuration.md), a failed attempt forgets them, so the next
+try gets new ones.
 
 `--branch` diffs from the merge base with the default branch: what `origin/HEAD` points
 at, else `origin/main` or `origin/master`, else a local `main` or `master`. It is the

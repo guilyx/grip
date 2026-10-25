@@ -27,9 +27,13 @@ No. When `CI` is set grip exits immediately. CI should run your tests, not quiz 
 
 ## Why do I keep getting the same questions?
 
-You do not: each run is a fresh request. But a diff that *passed* is remembered for
-`remember_passes_hours`, so an identical diff is not quizzed again. `grip forget` clears
-that memory.
+Because the diff is the same. The questions written for a diff are reused for
+`cache_hours` (24 by default), so a retry after a failed quiz costs one grading call. The
+feedback says where to look again, not what the answer was. To get new questions after a
+failed attempt, set `retry_questions = "new"`; `--fresh` asks for new ones once.
+
+A diff that *passed* is remembered for `remember_passes_hours`, so an identical diff is
+not quizzed again. `grip forget` clears that memory.
 
 ## Why did a failing provider block my commit?
 

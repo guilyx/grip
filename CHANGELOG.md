@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `retry_questions` option: `same` (the default) keeps reusing a diff's questions and
+  board on a retry; `new` forgets them when a quiz, a whiteboard defense or `grip grade`
+  fails, so the next try asks new ones. Grading feedback now says where to look again
+  and what kind of point is missing, instead of naming the rubric point, so a failed
+  quiz can no longer be passed by pasting its feedback back.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

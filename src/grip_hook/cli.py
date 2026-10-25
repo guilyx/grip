@@ -224,7 +224,9 @@ def _run(
         return _provider_failed(cfg, exc)
     finally:
         term.close()
-    return _decide(git, memory, outcome.report, report_path, "Re-read your change and try again.")
+    return _decide(
+        git, memory, outcome.report, report_path, "Re-read your change and try again.", cfg=cfg
+    )
 
 
 def _provider_failed(cfg: Config, exc: ProviderError) -> int:
@@ -239,7 +241,13 @@ def _provider_failed(cfg: Config, exc: ProviderError) -> int:
 
 
 def _decide(
-    git: Git, memory: PassMemory, report: Report, report_path: Path | None, retry_hint: str
+    git: Git,
+    memory: PassMemory,
+    report: Report,
+    report_path: Path | None,
+    retry_hint: str,
+    *,
+    cfg: Config,
 ) -> int:
     """Record a graded quiz; exit 0 on a pass, raise :class:`QuizFailed` below the mark."""
     saved = _record(git, memory, report)
@@ -249,11 +257,25 @@ def _decide(
     if report.passed:
         memory.record_pass(report.diff_digest)
         return 0
+    retry_hint += _after_failure(git, cfg, report.diff_digest)
     raise QuizFailed(
         f"Grip Score {report.score}/{MAX_SCORE} is below the pass mark of "
         f"{report.passing_score}. {retry_hint} `grip last` shows the feedback again "
         f"(report: {_pretty_path(saved)})."
     )
+
+
+def _after_failure(git: Git, cfg: Config, digest: str) -> str:
+    """Forget the questions just failed when ``retry_questions = "new"``; what to tell.
+
+    The questions and board written for the diff are dropped from the cache, so the next
+    try on the same diff asks the model for new ones instead of the ones whose feedback
+    the developer has just read. Returns a sentence for the failure message, or ``""``.
+    """
+    if cfg.retry_questions != "new":
+        return ""
+    GenerationCache(git.git_dir(), cfg.cache_hours).forget(digest)
+    return " The next try asks new questions."
 
 
 def _browser_available() -> bool:
@@ -290,7 +312,9 @@ def _run_whiteboard(
         report = _defend_board(board, diff, cfg, provider, stage)
     except ProviderError as exc:
         return _provider_failed(cfg, exc)
-    code = _decide(git, memory, report, report_path, "The page shows what each answer missed.")
+    code = _decide(
+        git, memory, report, report_path, "The page shows where each answer fell short.", cfg=cfg
+    )
     _err.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
     return code
 
@@ -455,6 +479,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     if report.passed:
         memory.record_pass(report.diff_digest)
         return
+    _after_failure(git, cfg, report.diff_digest)
     sys.exit(QuizFailed.exit_code)
 
 
@@ -540,7 +565,9 @@ def whiteboard_cmd(
     report = _defend_board(
         board, diff, cfg, provider, Stage.MANUAL, port=port, open_browser=not no_open, page=page
     )
-    _decide(git, memory, report, report_path, "The page shows what each answer missed.")
+    _decide(
+        git, memory, report, report_path, "The page shows where each answer fell short.", cfg=cfg
+    )
     _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
 
 
