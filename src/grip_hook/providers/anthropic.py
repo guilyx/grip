@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import TypeVar
 
 import anthropic
@@ -22,7 +23,7 @@ from grip_hook.prompts import (
     grading_prompt,
     question_prompt,
 )
-from grip_hook.providers.base import missing_credentials
+from grip_hook.providers.base import CallLog, missing_credentials, token_count
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -47,7 +48,7 @@ def _has_credentials(client: anthropic.Anthropic) -> bool:
     )
 
 
-class AnthropicProvider:
+class AnthropicProvider(CallLog):
     """Ask Claude for questions and grades using structured outputs."""
 
     name = "anthropic"
@@ -57,6 +58,7 @@ class AnthropicProvider:
         self._effort = cfg.effort.strip().lower()
         self._key_env = cfg.api_key_env or _KEY_ENV
         self._client = client or self._build_client(cfg)
+        self.model_calls = []
 
     @staticmethod
     def _build_client(cfg: Config) -> anthropic.Anthropic:
@@ -93,6 +95,7 @@ class AnthropicProvider:
         output_config = self._output_config()
         if output_config:
             kwargs["output_config"] = output_config
+        started = time.perf_counter()
         try:
             response = self._client.messages.parse(
                 model=self.model,
@@ -132,6 +135,13 @@ class AnthropicProvider:
         parsed = response.parsed_output
         if parsed is None:
             raise ProviderError("the model returned no structured output")
+        usage = getattr(response, "usage", None)
+        self._log_call(
+            schema,
+            started,
+            token_count(getattr(usage, "input_tokens", None)),
+            token_count(getattr(usage, "output_tokens", None)),
+        )
         return parsed
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:

@@ -26,8 +26,8 @@ from grip_hook import MAX_SCORE, POINTS_PER_QUESTION, QUESTION_COUNT
 from grip_hook.config import Config
 from grip_hook.errors import GripError, ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, QuestionSet, Report, Stage
-from grip_hook.providers.base import Provider
+from grip_hook.models import Answer, Difficulty, ModelCall, QuestionSet, Report, Stage
+from grip_hook.providers.base import Provider, calls_of
 
 Gate = Literal["push", "commit", "both"]
 
@@ -59,6 +59,9 @@ class PendingQuiz(BaseModel):
     commits: str = ""
     """The commit messages the model saw with the diff, so grading sees them too."""
     question_set: QuestionSet
+    calls: list[ModelCall] = Field(default_factory=list)
+    """The model requests that wrote the questions (or drew the board), for the report."""
+
     difficulty: Difficulty | None = None
     """The difficulty the questions were written at, so grading matches it. ``None`` in
     files written before it was stored: grading then uses the configured difficulty."""
@@ -119,6 +122,7 @@ def ask(diff: Diff, cfg: Config, provider: Provider, stage: Stage) -> PendingQui
         truncated=diff.truncated,
         commits=diff.commits,
         question_set=question_set,
+        calls=calls_of(provider),
         difficulty=cfg.difficulty,
     )
 
@@ -167,7 +171,9 @@ def grade(pending: PendingQuiz, answers: list[str], cfg: Config, provider: Provi
     answer_models = [Answer(question_index=i, text=a) for i, a in enumerate(answers)]
     diff = pending.diff
     difficulty = cfg.difficulty if pending.difficulty is None else pending.difficulty
+    before = len(calls_of(provider))
     sheet = provider.grade(diff, pending.question_set.questions, answer_models, difficulty)
+    graded = calls_of(provider)[before:]
     if len(sheet.grades) != QUESTION_COUNT:
         raise ProviderError(
             f"provider returned {len(sheet.grades)} grades, expected {QUESTION_COUNT}"
@@ -187,6 +193,7 @@ def grade(pending: PendingQuiz, answers: list[str], cfg: Config, provider: Provi
         answers=answer_models,
         grades=sheet.grades,
         verdict=sheet.verdict,
+        calls=[*pending.calls, *graded],
     )
 
 
@@ -208,6 +215,8 @@ def report_payload(report: Report, report_path: Path) -> dict[str, Any]:
             for g in report.grades
         ],
         "verdict": report.verdict,
+        "seconds": report.seconds,
+        "tokens": report.tokens,
         "report": str(report_path),
     }
 

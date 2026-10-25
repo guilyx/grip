@@ -13,7 +13,7 @@ from grip_hook import MAX_SCORE
 from grip_hook.errors import GripError
 from grip_hook.git import Diff
 from grip_hook.models import Answer, Appeal, Difficulty, Report
-from grip_hook.providers.base import Provider
+from grip_hook.providers.base import Provider, calls_of
 
 MAX_JUSTIFICATION = 4000
 """Characters, the same limit as one whiteboard answer."""
@@ -50,6 +50,7 @@ def appeal(
         (a for a in report.answers if a.question_index == index),
         Answer(question_index=index, text=""),
     )
+    before = len(calls_of(provider))
     regraded = provider.appeal(
         diff,
         report.questions[index],
@@ -58,6 +59,8 @@ def appeal(
         justification=justification,
         difficulty=difficulty,
     )
+    # The appeal's own request, timed like the quiz's: kind "appeal".
+    calls = [*report.calls, *calls_of(provider)[before:]]
     # The score is in range (``QuestionGrade`` checks it); its question_index is ignored.
     new_score = max(old.score, regraded.score)
     record = Appeal(
@@ -77,6 +80,7 @@ def appeal(
             "score": score,
             "passed": score >= report.passing_score,
             "appeals": [*report.appeals, record],
+            "calls": calls,
         }
     )
 

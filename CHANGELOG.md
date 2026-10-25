@@ -34,6 +34,13 @@ All notable changes to this project are documented here. The format follows
   quiz graded again by the same provider, with the justification as data. It never lowers
   a grade, allows one appeal per question per quiz, is saved in the report and the history
   and shown by `grip last`, and records a pass when the new score reaches the pass mark.
+- grip measures what a quiz costs. Each graded quiz records the wall time of every model
+  request and, where the provider reports it (the Anthropic and OpenAI-compatible APIs,
+  not the coding-agent CLIs), the tokens used; the result ends with
+  `took 9.8 s · 3,140 tokens`, `grip last` shows it per request, `grip status` averages the
+  last 20 quizzes (an appealed quiz counts once), and `grip grade` and `grip last --json`
+  include it. A `grip appeal` request is added to its quiz as an `appeal` call. The FAQ
+  explains how to turn tokens into a cost with your provider's prices.
 
 ### Changed
 

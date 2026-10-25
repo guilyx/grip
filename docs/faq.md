@@ -52,13 +52,37 @@ not quizzed again at all. `grip forget` clears that memory.
 Because a silently bypassed hook is worse than a loud one. Set `fail_open = true` if you
 prefer availability over strictness.
 
-## How much does it cost?
+## How much does it cost, and how long does it take?
 
-Two model calls per quiz: one writes the questions, one grades the answers, and the diff
-is sent with both. A retry on the same diff reuses the questions, so it is one call. With
-Claude Code, Codex or Gemini CLI the calls count against that subscription; with Ollama
-they cost nothing. [Cost and privacy](cost-and-privacy.md) shows how to estimate the
-tokens for your own diffs.
+Two requests per quiz: one writes the questions (or draws the whiteboard), one grades the
+answers. A retry on the same diff reuses the questions, so it costs only the grading.
+Input is dominated by the diff, sent with each request, plus a few hundred tokens of
+prompt; output is a few hundred tokens.
+
+grip measures it instead of guessing. After every graded quiz it prints one line:
+
+```text
+took 9.8 s · 3,140 tokens
+```
+
+`grip last` repeats it with the time of each request, and `grip status` shows the average
+over the last 20 quizzes. The Anthropic and OpenAI-compatible APIs report token counts;
+the coding-agent CLIs (`claude-code`, `codex`, `gemini`) do not, so for them grip shows
+the time only. `grip last --json` lists every request with its `input_tokens` and
+`output_tokens`.
+
+To turn tokens into money, use the price your provider publishes for the model, per
+million tokens, for input and output separately:
+
+```text
+cost ≈ input_tokens × input price / 1,000,000 + output_tokens × output price / 1,000,000
+```
+
+grip carries no price list: prices change, and a gateway or a plan may charge differently.
+With a coding agent the quiz counts against that agent's plan, and Ollama costs nothing.
+Use `exclude` and `max_diff_bytes` to keep large diffs in check, and see
+[Cost and privacy](cost-and-privacy.md) to estimate the tokens for your own diffs. A
+`grip appeal` is one more request, recorded with the quiz it regrades.
 
 ## Is my code sent anywhere else?
 

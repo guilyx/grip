@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import Any, TypeVar
@@ -30,7 +31,7 @@ from grip_hook.prompts import (
     grading_prompt,
     question_prompt,
 )
-from grip_hook.providers.base import missing_credentials
+from grip_hook.providers.base import CallLog, missing_credentials, token_count
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -39,7 +40,7 @@ OPENAI_URL = "https://api.openai.com/v1"
 OLLAMA_URL = "http://localhost:11434/v1"
 
 
-class OpenAICompatibleProvider:
+class OpenAICompatibleProvider(CallLog):
     """Talk to ``{base_url}/chat/completions``."""
 
     name = "openai"
@@ -61,6 +62,7 @@ class OpenAICompatibleProvider:
             raise ProviderError(missing_credentials(self.name, key_env))
         self._timeout = cfg.timeout
         self._opener = opener or urllib.request.urlopen
+        self.model_calls = []
 
     def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
@@ -99,6 +101,7 @@ class OpenAICompatibleProvider:
                 },
             },
         }
+        started = time.perf_counter()
         data = self._post(payload)
         try:
             content = data["choices"][0]["message"]["content"]
@@ -107,11 +110,20 @@ class OpenAICompatibleProvider:
                 f"unexpected response shape from {self.name}: {data!r}"[:500]
             ) from exc
         try:
-            return schema.model_validate_json(content)
+            result = schema.model_validate_json(content)
         except ValidationError as exc:
             raise ProviderError(
                 f"{self.name} returned output that does not match the schema: {exc}"
             ) from exc
+        usage = data.get("usage")
+        usage = usage if isinstance(usage, dict) else {}
+        self._log_call(
+            schema,
+            started,
+            token_count(usage.get("prompt_tokens")),
+            token_count(usage.get("completion_tokens")),
+        )
+        return result
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """Write the question set for ``diff``."""

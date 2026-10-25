@@ -27,7 +27,16 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
+from grip_hook.models import (
+    Answer,
+    Difficulty,
+    GradeSheet,
+    ModelCall,
+    Question,
+    QuestionGrade,
+    QuestionSet,
+)
+from grip_hook.providers.base import calls_of
 
 if TYPE_CHECKING:
     from grip_hook.providers.base import Provider
@@ -133,6 +142,11 @@ class CachedProvider:
         self.on_hit = on_hit
         self.name = inner.name
         self.model = inner.model
+
+    @property
+    def model_calls(self) -> list[ModelCall]:
+        """The requests the wrapped provider made; a cache hit is not one."""
+        return calls_of(self.inner)
 
     def _key(self, kind: Kind, diff: Diff, difficulty: Difficulty) -> str:
         return self.cache.key(kind, diff, difficulty, self.name, self.model)

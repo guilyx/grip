@@ -60,11 +60,12 @@ other files, no telemetry. The diff and the messages are wrapped in `<diff>` and
 `<commits>` delimiters and the model is told to treat anything inside as data, never as
 instructions.
 
-Reports (`questions`, `answers`, `grades`, `score`) are written to
-`.git/grip/last-report.json`, or to the path given with `--report`, and appended to
-`.git/grip/history.jsonl`. Passed digests live in `.git/grip/passed.json`. The history
-feeds [`grip study export`](cli.md#grip-study-export-grip-study-status), which is the
-only thing that reads it and only runs when you ask.
+Reports (`questions`, `answers`, `grades`, `score`, and `calls`: the time and token count
+of each model request) are written to `.git/grip/last-report.json`, or to the path given
+with `--report`, and appended to `.git/grip/history.jsonl`. Passed digests live in
+`.git/grip/passed.json`. `grip status` reads the history for its averages, and it feeds
+[`grip study export`](cli.md#grip-study-export-grip-study-status), which only runs when
+you ask.
 
 ## When grip steps aside
 
