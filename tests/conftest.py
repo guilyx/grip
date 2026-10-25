@@ -49,6 +49,15 @@ def repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def empty_repo(tmp_path: Path) -> Path:
+    """A git repository right after ``git init``: no commits."""
+    root = tmp_path / "empty"
+    root.mkdir()
+    _git(root, "init", "-q", "-b", "main")
+    return root
+
+
+@pytest.fixture
 def git(repo: Path) -> Git:
     return Git(repo)
 

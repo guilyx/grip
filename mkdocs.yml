@@ -85,6 +85,9 @@ nav:
       - Configuration: configuration.md
       - Providers: providers.md
       - Keep A Grip: keepagrip.md
+      - Rolling out to a team: team-rollout.md
+      - Cost and privacy: cost-and-privacy.md
+      - Removing grip: removing.md
   - Deep dive:
       - How it works: how-it-works.md
       - Inside grip: internals.md
@@ -106,6 +109,7 @@ nav:
           - platform: reference/platform.md
   - Project:
       - FAQ: faq.md
+      - Glossary: glossary.md
       - Brand: brand.md
       - Media: media.md
       - Contributing: contributing.md

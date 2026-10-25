@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import shutil
 import urllib.error
 from pathlib import Path
 from typing import Any
@@ -185,11 +187,23 @@ def test_ollama_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_openai_requires_key_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    with pytest.raises(ProviderError, match="OPENAI_API_KEY"):
+    with pytest.raises(ProviderError, match="OPENAI_API_KEY") as caught:
         OpenAICompatibleProvider(Config(provider="openai", model="gpt-x"))
+    assert "--provider fake" in str(caught.value)
     monkeypatch.setenv("OPENAI_API_KEY", "k")
     with pytest.raises(ProviderError, match="needs a model"):
         OpenAICompatibleProvider(Config(provider="openai"))
+
+
+def test_openai_at_a_base_url_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A self-hosted server (vLLM, LM Studio) often takes no key; grip must not demand one.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    opener = _opener_returning(_chat_payload("{}"))
+    cfg = Config(provider="openai", model="m", base_url="http://localhost:8000/v1")
+    provider = OpenAICompatibleProvider(cfg, opener=opener)
+    with pytest.raises(ProviderError, match="does not match the schema"):
+        provider.generate_questions(DIFF, Difficulty.NORMAL)
+    assert opener.calls[0].get_header("Authorization") is None
 
 
 def test_openai_errors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -363,11 +377,63 @@ def test_anthropic_board() -> None:
     assert "fix this" in call["messages"][0]["content"]
 
 
-def test_anthropic_without_credentials_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
-        monkeypatch.delenv(name, raising=False)
+@pytest.fixture
+def no_anthropic_login(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """No Anthropic key, token or `ant auth login` profile, whatever this machine has."""
+    for name in list(os.environ):
+        if name.startswith("ANTHROPIC_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path))  # where Windows keeps the profiles
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+
+
+@pytest.mark.usefixtures("no_anthropic_login")
+def test_anthropic_without_credentials_says_what_to_do() -> None:
     client = anthropic.Anthropic(api_key=None, auth_token=None)
     provider = AnthropicProvider(Config(provider="anthropic"), client=client)
     with pytest.raises(ProviderError, match="no credentials") as caught:
         provider.generate_questions(DIFF, Difficulty.NORMAL)
-    assert "claude-code" in str(caught.value)
+    assert "ANTHROPIC_API_KEY" in str(caught.value)
+
+
+@pytest.mark.usefixtures("no_anthropic_login")
+def test_anthropic_without_credentials_fails_before_any_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ProviderError, match="no credentials") as caught:
+        AnthropicProvider(Config(provider="anthropic"))  # no request: nothing to stub
+    message = str(caught.value)
+    assert "export ANTHROPIC_API_KEY=" in message
+    assert "install Claude Code, Codex or Gemini CLI" in message
+    assert "--provider fake" in message
+    assert "ant auth login" not in message
+
+    # An agent that is installed is named, since it needs no key at all.
+    monkeypatch.setattr(
+        shutil, "which", lambda name: f"/usr/bin/{name}" if name == "codex" else None
+    )
+    with pytest.raises(ProviderError) as caught:
+        AnthropicProvider(Config(provider="anthropic", api_key_env="TEAM_KEY"))
+    message = str(caught.value)
+    assert "export TEAM_KEY=" in message
+    assert "--provider codex" in message and "install Claude Code" not in message
+
+
+@pytest.mark.usefixtures("no_anthropic_login")
+@pytest.mark.parametrize(
+    ("env", "base_url"),
+    [
+        ({"ANTHROPIC_API_KEY": "sk-ant-test"}, ""),
+        ({"ANTHROPIC_AUTH_TOKEN": "token"}, ""),
+        ({"ANTHROPIC_CUSTOM_HEADERS": "Authorization: Bearer from-a-gateway"}, ""),
+        ({}, "https://gateway.example"),
+    ],
+)
+def test_anthropic_with_some_credential_is_built(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], base_url: str
+) -> None:
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    provider = AnthropicProvider(Config(provider="anthropic", base_url=base_url))
+    assert provider.model == "claude-opus-5"

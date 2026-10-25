@@ -230,30 +230,30 @@ def test_attempt_payload() -> None:
 
 
 def test_login_logout(runner: CliRunner, fake_platform: FakePlatform, data_home: Path) -> None:
-    result = runner.invoke(cli, ["login", "kag_good", "--url", "https://kag.test"])
+    result = runner.invoke(cli, ["platform", "login", "kag_good", "--url", "https://kag.test"])
     assert result.exit_code == 0, result.output
     assert "guilyx" in result.output
     creds = load_credentials()
     assert creds is not None
     assert creds.token == "kag_good"
 
-    result = runner.invoke(cli, ["whoami"])
+    result = runner.invoke(cli, ["platform", "whoami"])
     assert result.exit_code == 0
     assert "guilyx at https://kag.test" in result.output
 
-    result = runner.invoke(cli, ["login", "kag_bad", "--url", "https://kag.test"])
+    result = runner.invoke(cli, ["platform", "login", "kag_bad", "--url", "https://kag.test"])
     assert result.exit_code == 2
     assert "401" in result.output
 
-    assert runner.invoke(cli, ["logout"]).exit_code == 0
+    assert runner.invoke(cli, ["platform", "logout"]).exit_code == 0
     assert load_credentials() is None
-    result = runner.invoke(cli, ["whoami"])
+    result = runner.invoke(cli, ["platform", "whoami"])
     assert result.exit_code == 2
     assert "not logged in" in result.output
 
 
 def test_problems_list(runner: CliRunner, fake_platform: FakePlatform) -> None:
-    result = runner.invoke(cli, ["problems", "--category", "ros2"])
+    result = runner.invoke(cli, ["platform", "problems", "--category", "ros2"])
     assert result.exit_code == 0, result.output
     assert "cmd-vel-safety-filter" in result.output
     assert "easy" in result.output
@@ -261,9 +261,11 @@ def test_problems_list(runner: CliRunner, fake_platform: FakePlatform) -> None:
 
 def test_solve_sets_up_repo(runner: CliRunner, fake_platform: FakePlatform, tmp_path: Path) -> None:
     target = tmp_path / "work"
-    result = runner.invoke(cli, ["solve", "cmd-vel-safety-filter", "--dir", str(target)])
+    result = runner.invoke(
+        cli, ["platform", "solve", "cmd-vel-safety-filter", "--dir", str(target)]
+    )
     assert result.exit_code == 0, result.output
-    assert "grip submit" in result.output
+    assert "grip platform submit" in result.output
     git = Git(target)
     assert (target / "PROBLEM.md").read_text().startswith("# cmd_vel safety filter")
     assert "QoS choices" in (target / "PROBLEM.md").read_text()
@@ -274,7 +276,9 @@ def test_solve_sets_up_repo(runner: CliRunner, fake_platform: FakePlatform, tmp_
     assert state.base == git.run("rev-parse", "HEAD").strip()
     assert state.focus == ["QoS choices", "stale scans"]
 
-    result = runner.invoke(cli, ["solve", "cmd-vel-safety-filter", "--dir", str(target)])
+    result = runner.invoke(
+        cli, ["platform", "solve", "cmd-vel-safety-filter", "--dir", str(target)]
+    )
     assert result.exit_code == 2
     assert "not empty" in result.output
 
@@ -288,12 +292,15 @@ def test_submit_reports_attempt(
 ) -> None:
     target = tmp_path / "work"
     assert (
-        runner.invoke(cli, ["solve", "cmd-vel-safety-filter", "--dir", str(target)]).exit_code == 0
+        runner.invoke(
+            cli, ["platform", "solve", "cmd-vel-safety-filter", "--dir", str(target)]
+        ).exit_code
+        == 0
     )
     monkeypatch.chdir(target)
     (target / "filter.py").write_text("def clamp(v, lo, hi):\n    return max(lo, min(hi, v))\n")
 
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 2
     assert "not logged in" in result.output
     assert fake_platform.attempts == []
@@ -301,7 +308,7 @@ def test_submit_reports_attempt(
     save_credentials(Credentials(url="https://kag.test", token="kag_good"))
     factory = make_terminal(["because it clamps the velocity to the configured limits"] * 5)
     monkeypatch.setattr(cli_module, "open_terminal", factory)
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 0, result.output
     assert "solved" in result.output
     assert "https://kag.test/problems/cmd-vel-safety-filter" in result.output
@@ -326,25 +333,28 @@ def test_submit_fail_and_dry_run(
 ) -> None:
     target = tmp_path / "work"
     assert (
-        runner.invoke(cli, ["solve", "cmd-vel-safety-filter", "--dir", str(target)]).exit_code == 0
+        runner.invoke(
+            cli, ["platform", "solve", "cmd-vel-safety-filter", "--dir", str(target)]
+        ).exit_code
+        == 0
     )
     monkeypatch.chdir(target)
     save_credentials(Credentials(url="https://kag.test", token="kag_good"))
 
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 2
     assert "nothing has changed" in result.output
 
     (target / "filter.py").write_text("x = 1\n")
     monkeypatch.setattr(cli_module, "open_terminal", make_terminal(["", "", "", "", ""]))
-    result = runner.invoke(cli, ["submit", "--provider", "fake", "--dry-run"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake", "--dry-run"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output[result.output.index("{") :])
     assert payload["score"] == 0
     assert fake_platform.attempts == []
 
     monkeypatch.setattr(cli_module, "open_terminal", make_terminal(["", "", "", "", ""]))
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 1
     assert "not yet" in result.output
     assert fake_platform.attempts[-1]["score"] == 0
@@ -360,26 +370,29 @@ def test_submit_runs_tests(
     monkeypatch.setitem(PROBLEM, "tests_command", "test -f passes.txt")
     target = tmp_path / "work"
     assert (
-        runner.invoke(cli, ["solve", "cmd-vel-safety-filter", "--dir", str(target)]).exit_code == 0
+        runner.invoke(
+            cli, ["platform", "solve", "cmd-vel-safety-filter", "--dir", str(target)]
+        ).exit_code
+        == 0
     )
     monkeypatch.chdir(target)
     save_credentials(Credentials(url="https://kag.test", token="kag_good"))
     (target / "filter.py").write_text("x = 1\n")
     monkeypatch.setattr(cli_module, "open_terminal", make_terminal(["because " * 4] * 5))
 
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 1, result.output
     assert "tests failed" in result.output
     assert fake_platform.attempts[-1]["tests_passed"] is False
 
     (target / "passes.txt").write_text("ok")
     monkeypatch.setattr(cli_module, "open_terminal", make_terminal(["because " * 4] * 5))
-    result = runner.invoke(cli, ["submit", "--provider", "fake"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake"])
     assert result.exit_code == 0, result.output
     assert fake_platform.attempts[-1]["tests_passed"] is True
 
     monkeypatch.setattr(cli_module, "open_terminal", make_terminal(["because " * 4] * 5))
-    result = runner.invoke(cli, ["submit", "--provider", "fake", "--no-tests"])
+    result = runner.invoke(cli, ["platform", "submit", "--provider", "fake", "--no-tests"])
     assert result.exit_code == 0, result.output
     assert fake_platform.attempts[-1]["tests_passed"] is None
 
@@ -388,6 +401,6 @@ def test_submit_outside_solve_repo(
     runner: CliRunner, git: Git, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(git.cwd)
-    result = runner.invoke(cli, ["submit"])
+    result = runner.invoke(cli, ["platform", "submit"])
     assert result.exit_code == 2
-    assert "grip solve" in result.output
+    assert "grip platform solve" in result.output

@@ -18,11 +18,33 @@ _TRUNCATION_NOTE = "\n\n[... diff truncated by grip: {omitted} bytes omitted ...
 
 
 _HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+EMPTY_TREES = frozenset(
+    {
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+    }
+)
+"""The empty tree in SHA-1 and SHA-256 repositories: the base for a root commit."""
+SINCE_FIRST_COMMIT = "everything since the first commit"
+
+NOT_A_REPOSITORY = "not inside a git repository (run grip from your project)"
+NO_COMMITS = "this repository has no commits yet"
+_UNKNOWN_REVISION = re.compile(
+    r"(?:ambiguous argument|bad revision) '([^']+)'|(?:Not a valid object name|bad object) (\S+)"
+)
 
 
 def _short(rev: str) -> str:
     """A full hash shortened to 12 characters; a branch name or other spelling as is."""
     return rev[:12] if _HASH.fullmatch(rev) else rev
+
+
+def _ref_name(ref: str) -> str:
+    """``refs/heads/feat/x`` as ``feat/x``, ``refs/tags/v1`` as ``tag v1``."""
+    for prefix, label in (("refs/heads/", ""), ("refs/tags/", "tag ")):
+        if ref.startswith(prefix):
+            return label + ref.removeprefix(prefix)
+    return _short(ref)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +96,12 @@ class Diff:
     context: str = ""
     """Optional text about the task the diff solves, shown to the model as data."""
 
+    binary_only: bool = False
+    """``True`` when every changed file is binary: the patch has no lines to ask about."""
+
+    size: int = 0
+    """Bytes in the whole patch before truncation; ``0`` when not known."""
+
     @property
     def is_empty(self) -> bool:
         """``True`` when there is nothing to quiz about."""
@@ -108,13 +136,38 @@ class Git:
             raise GitError("git executable not found on PATH") from exc
         if check and proc.returncode != 0:
             detail = proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}"
-            raise GitError(f"git {' '.join(args)} failed: {detail}")
+            raise GitError(self._plain(args, detail), f"$ git {' '.join(args)}\n{detail}")
         return proc.stdout
+
+    def _plain(self, args: tuple[str, ...], detail: str) -> str:
+        """One line for a failed ``git <args>``, instead of its command line and stderr.
+
+        The common failures (outside a repository, no commits yet, a revision that does
+        not exist) get a sentence of their own; anything else keeps git's message but not
+        the command line, whose pathspecs alone run to hundreds of bytes.
+        """
+        if "dubious ownership" in detail:
+            # git's own text names the safe.directory command that fixes it.
+            return f"git {args[0]} failed: {detail}"
+        if "not a git repository" in detail or not self.ok("rev-parse", "--git-dir"):
+            return NOT_A_REPOSITORY
+        if found := _UNKNOWN_REVISION.search(detail):
+            rev = found.group(1) or found.group(2)
+            if rev.startswith("HEAD") and not self.has_commits():
+                return NO_COMMITS
+            return f"unknown revision '{rev}'"
+        if "HEAD" in args and not self.has_commits():
+            return NO_COMMITS
+        return f"git {args[0]} failed: {detail}"
 
     def ok(self, *args: str) -> bool:
         """Return ``True`` when ``git <args>`` exits successfully."""
         proc = subprocess.run(["git", *args], cwd=self.cwd, capture_output=True, check=False)
         return proc.returncode == 0
+
+    def has_commits(self) -> bool:
+        """``False`` in a repository whose current branch has no commit yet."""
+        return self.ok("rev-parse", "--verify", "--quiet", "HEAD^{commit}")
 
     def root(self) -> Path:
         """Top-level directory of the working tree."""
@@ -241,6 +294,37 @@ class Git:
         parent = self.run("rev-parse", "--verify", "--quiet", f"{commits[0]}^", check=False)
         return parent.strip() or self.empty_tree()
 
+    def current_branch(self) -> str | None:
+        """The checked-out branch's short name; ``None`` on a detached HEAD."""
+        name = self.run("rev-parse", "--abbrev-ref", "HEAD", check=False).strip()
+        return name if name and name != "HEAD" else None
+
+    def describe_commits(
+        self,
+        base: str,
+        head: str,
+        *,
+        branch: str | None = None,
+        remote: str | None = None,
+        unpushed: bool = False,
+    ) -> str:
+        """``3 commits on feat/x → origin``: what ``base..head`` holds, said for people.
+
+        When ``base`` is the empty tree (a root commit) the count is the whole history and
+        the text says so instead of showing the tree's hash.
+        """
+        root = base in EMPTY_TREES or not self.rev_exists(base)
+        counted = self.run("rev-list", "--count", head if root else f"{base}..{head}", check=False)
+        count = int(counted.strip()) if counted.strip().isdigit() else 0
+        text = f"{count} {'unpushed ' if unpushed else ''}commit{'' if count == 1 else 's'}"
+        if branch:
+            text += f" on {branch}"
+        if remote:
+            text += f" → {remote}"
+        if root:
+            text += f", {SINCE_FIRST_COMMIT}"
+        return text
+
     # -- diff collection ------------------------------------------------------------------
 
     @staticmethod
@@ -268,14 +352,40 @@ class Git:
         if not files:
             return Diff(description, "", "", ())
         stat = self.run(*common, "--stat=100", *spec).rstrip()
+        # ``--numstat`` counts a binary file's lines as ``-\t-``.
+        counts = self.run(*common, "--numstat", *spec).splitlines()
+        binary_only = bool(counts) and all(line.startswith("-\t-\t") for line in counts)
         patch = self.run(*common, "--unified=3", "--diff-filter=ACDMRT", *spec)
+        encoded = patch.encode("utf-8")
         truncated = False
-        if len(patch.encode("utf-8")) > max_bytes:
-            encoded = patch.encode("utf-8")
+        if len(encoded) > max_bytes:
             keep = encoded[:max_bytes].decode("utf-8", "ignore")
             patch = keep + _TRUNCATION_NOTE.format(omitted=len(encoded) - max_bytes)
             truncated = True
-        return Diff(description, stat, patch, files, truncated)
+        return Diff(
+            description, stat, patch, files, truncated, binary_only=binary_only, size=len(encoded)
+        )
+
+    def _names(self, args: list[str], exclude: tuple[str, ...]) -> tuple[str, ...]:
+        out = self.run(*args, *self._pathspec(exclude), check=False)
+        return tuple(n for n in out.split("\n") if n)
+
+    def staged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths with changes staged for the next commit."""
+        return self._names(["diff", "--cached", "--name-only", "--no-renames"], exclude)
+
+    def unstaged_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Tracked paths changed in the working tree but not staged."""
+        return self._names(["diff", "--name-only", "--no-renames"], exclude)
+
+    def untracked_files(self, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Paths git does not track yet, leaving out what ``.gitignore`` ignores."""
+        return self._names(["ls-files", "--others", "--exclude-standard"], exclude)
+
+    def count_commits(self, *revs: str) -> int:
+        """``git rev-list --count <revs>``; 0 when a revision does not resolve (no commits)."""
+        out = self.run("rev-list", "--count", *revs, check=False).strip()
+        return int(out) if out.isdigit() else 0
 
     def staged_diff(self, exclude: tuple[str, ...] = (), max_bytes: int = 200_000) -> Diff:
         """Changes staged for the next commit."""
@@ -290,8 +400,36 @@ class Git:
         description: str | None = None,
     ) -> Diff:
         """Changes between two revisions (``base`` may be the empty tree)."""
-        description = description or f"{_short(base)}..{_short(head)}"
+        if description is None:
+            description = (
+                f"{SINCE_FIRST_COMMIT}, up to {_short(head)}"
+                if base in EMPTY_TREES
+                else f"{_short(base)}..{_short(head)}"
+            )
         return self._collect(description, [base, head], exclude, max_bytes)
+
+    def merge_base_diff(
+        self,
+        base: str,
+        head: str,
+        exclude: tuple[str, ...] = (),
+        max_bytes: int = 200_000,
+    ) -> Diff:
+        """Changes on ``head`` since it forked from ``base``: what git means by ``base...head``.
+
+        Raises :class:`GitError` when a revision is unknown or the two share no history.
+        """
+        for rev in (base, head):
+            if not self.rev_exists(rev):
+                raise GitError(f"unknown revision '{rev}'")
+        fork = self.run("merge-base", base, head, check=False).strip()
+        if not fork:
+            raise GitError(
+                f"{base} and {head} share no history, so {base}...{head} has no merge base; "
+                f"use {base}..{head}"
+            )
+        description = f"{_short(base)}...{_short(head)}"
+        return self.range_diff(fork, head, exclude, max_bytes, description=description)
 
     def worktree_diff(
         self, base: str, exclude: tuple[str, ...] = (), max_bytes: int = 200_000
@@ -323,7 +461,9 @@ class Git:
                     base = self.unpushed_base_live(ref.local_sha, remote)
             if base is None:
                 continue
-            part = self.range_diff(base, ref.local_sha, exclude, max_bytes)
+            branch = _ref_name(ref.remote_ref if ref.local_ref == "HEAD" else ref.local_ref)
+            description = self.describe_commits(base, ref.local_sha, branch=branch, remote=remote)
+            part = self.range_diff(base, ref.local_sha, exclude, max_bytes, description)
             if not part.is_empty:
                 parts.append(part)
         if not parts:
@@ -337,8 +477,19 @@ class Git:
             truncated = True
         files = tuple(dict.fromkeys(f for p in parts for f in p.files))
         stat = "\n\n".join(p.stat for p in parts)
-        description = "push (" + ", ".join(p.description for p in parts) + ")"
-        return Diff(description, stat, patch, files, truncated)
+        description = "; ".join(p.description for p in parts)
+        binary_only = all(p.binary_only for p in parts)
+        size = sum(p.size for p in parts)
+        return Diff(description, stat, patch, files, truncated, binary_only=binary_only, size=size)
 
 
-__all__ = ["ZERO_SHA", "Diff", "Git", "PushedRef"]
+__all__ = [
+    "EMPTY_TREES",
+    "NOT_A_REPOSITORY",
+    "NO_COMMITS",
+    "SINCE_FIRST_COMMIT",
+    "ZERO_SHA",
+    "Diff",
+    "Git",
+    "PushedRef",
+]
