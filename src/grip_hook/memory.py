@@ -126,10 +126,12 @@ class PassMemory:
         )
         self._save(data)
 
-    def forget(self) -> None:
-        """Drop all remembered passes."""
+    def forget(self, now: datetime | None = None) -> int:
+        """Drop all remembered passes; return how many were still remembered."""
+        count = len(self._prune(self._load(), now or datetime.now(UTC))) if self.enabled else 0
         with contextlib.suppress(FileNotFoundError):
             self.path.unlink()
+        return count
 
     def last_report(self) -> Report | None:
         """The most recent graded quiz, or ``None`` when there is none or it is unreadable."""
@@ -168,6 +170,11 @@ class PassMemory:
         with self.history_path.open("a", encoding="utf-8") as fh:
             fh.write(line + "\n")
         return self.history_path
+
+
+def local_time(when: datetime) -> str:
+    """``2026-01-01 15:00 CET``: ``when`` in the local time zone, named."""
+    return f"{when.astimezone():%Y-%m-%d %H:%M %Z}".rstrip()
 
 
 def _parse(stamp: object) -> datetime | None:
@@ -226,7 +233,7 @@ class SkipState:
         now = now or datetime.now(UTC)
         until = _parse(data.get("until"))
         if until is not None and until > now:
-            return f"paused until {until:%Y-%m-%d %H:%M} UTC"
+            return f"paused until {local_time(until)}"
         if data.get("once"):
             return "the next hook run"
         return None
@@ -237,11 +244,11 @@ class SkipState:
         now = now or datetime.now(UTC)
         until = _parse(data.get("until"))
         if until is not None and until > now:
-            return f"paused by `grip skip` until {until:%Y-%m-%d %H:%M} UTC"
+            return f"paused by `grip skip` until {local_time(until)}"
         data.pop("until", None)  # expired
         once = bool(data.pop("once", False))
         self._save(data)
         return "`grip skip` was set for this run" if once else None
 
 
-__all__ = ["FAKE_PROVIDER", "PassMemory", "PassRecord", "SkipState"]
+__all__ = ["FAKE_PROVIDER", "PassMemory", "PassRecord", "SkipState", "local_time"]
