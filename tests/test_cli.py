@@ -5,6 +5,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -53,6 +54,19 @@ def test_version(runner: CliRunner) -> None:
 def test_quiz_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["quiz"])
     assert result.exit_code == 0
+
+
+def test_nothing_staged_says_what_to_add(runner: CliRunner, in_repo: Path) -> None:
+    # Right after `grip init` in a new repository: new files, nothing staged, no remote.
+    (in_repo / "app.py").write_text("x = 1\n")
+    (in_repo / "README.md").write_text("# changed\n")
+    (in_repo / "uv.lock").write_text("excluded, so not counted\n")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0
+    assert " ".join(result.output.split()) == (
+        "grip: nothing to quiz: nothing staged. 2 untracked files and 1 modified file: "
+        "`git add` them first; 1 unpushed commit: try `grip quiz --unpushed`."
+    )
 
 
 def test_quiz_pass_then_remembered(
@@ -194,6 +208,54 @@ def test_quiz_range_and_unpushed(
     assert "README.md" in factory.text
 
 
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("main..feat", ("main", "feat", False)),
+        ("main...feat", ("main", "feat", True)),
+        ("main..", ("main", "HEAD", False)),
+        ("main...", ("main", "HEAD", True)),
+        ("v1.2..v1.3", ("v1.2", "v1.3", False)),
+        ("origin/main...HEAD", ("origin/main", "HEAD", True)),
+    ],
+)
+def test_parse_range(given: str, expected: tuple[str, str, bool]) -> None:
+    assert cli_module._parse_range(given) == expected
+
+
+@pytest.mark.parametrize("given", ["main", "..HEAD", "...HEAD", "a....b", "a..b..c", "a...b...c"])
+def test_parse_range_rejects_malformed(given: str) -> None:
+    with pytest.raises(click.BadParameter, match=r"BASE\.\.\.HEAD"):
+        cli_module._parse_range(given)
+
+
+def test_three_dot_range_diffs_from_the_merge_base(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+) -> None:
+    run_git("checkout", "-q", "-b", "feat")
+    stage_change("f.py", "f = 1\n")
+    run_git("commit", "-q", "-m", "f")
+    run_git("checkout", "-q", "main")
+    stage_change("m.py", "m = 1\n")
+    run_git("commit", "-q", "-m", "m")
+    run_git("checkout", "-q", "feat")
+    for rev_range in ("main...HEAD", "main..."):
+        result = runner.invoke(cli, ["ask", "--range", rev_range])
+        assert result.exit_code == 0, result.output
+        diff = json.loads(result.stdout)["diff"]
+        assert diff["files"] == ["f.py"]
+        assert diff["description"] == "main...HEAD"
+    two_dot = json.loads(runner.invoke(cli, ["ask", "--range", "main.."]).stdout)
+    assert set(two_dot["diff"]["files"]) == {"f.py", "m.py"}
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "main....HEAD"])
+        assert result.exit_code == 2
+        assert "expected BASE..HEAD or BASE...HEAD" in result.output
+
+
 def test_hook_skip_envs(
     runner: CliRunner,
     in_repo: Path,
@@ -319,6 +381,57 @@ def test_main_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(SystemExit) as exc:
         cli_module.main(["status"])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("command", [["status"], ["quiz"], ["init", "--yes"], ["ask"]])
+def test_outside_a_repo_is_one_plain_line(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    result = runner.invoke(cli, command)
+    assert result.exit_code == 2
+    assert result.output == (
+        "grip error: not inside a git repository (run grip from your project)\n"
+    )
+
+
+def test_grip_debug_shows_the_git_command(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GRIP_DEBUG", "1")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 2
+    assert "not inside a git repository" in result.output
+    assert "$ git rev-parse --show-toplevel" in result.output
+    assert "fatal: not a git repository" in result.output
+
+
+def test_unknown_revision_in_a_range(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "nope..HEAD"])
+        assert result.exit_code == 2
+        assert result.output == "grip error: unknown revision 'nope'\n"
+
+
+def test_a_repository_with_no_commits(
+    runner: CliRunner, empty_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(empty_repo)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    (empty_repo / ".grip.toml").write_text('provider = "fake"\n')
+    for command in (["quiz", "--unpushed"], ["quiz", "--branch"], ["check", "--unpushed"]):
+        result = runner.invoke(cli, command)
+        assert result.exit_code == 2
+        assert result.output == "grip error: this repository has no commits yet\n"
+    status = runner.invoke(cli, ["status"])
+    assert status.exit_code == 0, status.output
+    assert "no commits yet" in status.output
+    assert "could not check" not in status.output
 
 
 def test_last_shows_the_graded_quiz(

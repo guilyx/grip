@@ -88,6 +88,7 @@ export GRIP_MODEL=claude-sonnet-5
 | Variable | Effect |
 | --- | --- |
 | `GRIP_SKIP=1` | Skip the quiz once. |
+| `GRIP_DEBUG=1` | When a git command fails, also print the full command and git's own output under grip's one-line error. |
 | `CI=true` | Skip the quiz (set by every CI provider). |
 | `PRE_COMMIT_FROM_REF` / `PRE_COMMIT_TO_REF` | Set by the pre-commit framework at pre-push; grip uses them as the diff range. |
 | `GRIP_FAKE_SCRIPT` / `GRIP_FAKE_DELAY` | Script file and artificial latency for the `fake` provider. See [Providers](providers.md#fake-offline). |
