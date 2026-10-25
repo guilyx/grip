@@ -11,13 +11,15 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
+from grip_hook import QUESTION_COUNT
 from grip_hook import cli as cli_module
 from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.cli import cli
 from grip_hook.config import Config
 from grip_hook.git import Diff
-from grip_hook.models import Difficulty
+from grip_hook.models import Difficulty, Stage
 from grip_hook.providers.fake import FakeProvider
+from grip_hook.quiz import run_quiz
 from tests.conftest import FakeTerminalFactory
 
 DIFF = Diff("staged changes", " a.py | 1 +", "+x = 1\n", ("a.py",))
@@ -238,3 +240,31 @@ def test_retry_after_a_failed_terminal_quiz(
     first, second = results
     assert ("next try asks new questions" in " ".join(first.output.split())) is not reused
     assert ("same diff as" in second.stderr) is reused
+
+
+def test_a_cached_quiz_does_not_claim_to_read_the_diff(
+    cached: tuple[CachedProvider, Counting, list[str]],
+) -> None:
+    provider, inner, _hits = cached
+    spinners: list[str] = []
+
+    def quiz() -> None:
+        term = FakeTerminalFactory(["an answer"] * QUESTION_COUNT)()
+        real = term.console.status
+
+        def status(text: Any, **kwargs: Any) -> Any:
+            spinners.append(str(text))
+            return real(text, **kwargs)
+
+        term.console.status = status  # type: ignore[method-assign]
+        run_quiz(
+            diff=DIFF, cfg=Config(provider="fake"), provider=provider, term=term, stage=Stage.MANUAL
+        )
+
+    quiz()
+    assert any("reading your diff" in s for s in spinners)
+    spinners.clear()
+    quiz()
+    assert inner.calls["questions"] == 1
+    assert not any("reading your diff" in s for s in spinners)
+    assert any("grading" in s for s in spinners)

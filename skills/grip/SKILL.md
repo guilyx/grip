@@ -16,7 +16,8 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
 ## Steps
 
 1. Run `grip ask $ARGUMENTS` and read the JSON.
-   - `"status": "nothing-to-quiz"`: say there is nothing to quiz and stop.
+   - `"status": "nothing-to-quiz"`: say there is nothing to quiz, pass on `message` (it
+     says what exists instead and what to run) and stop.
    - `"status": "already-passed"`: say this diff already passed recently and stop.
    - If the command fails because `grip` is missing, tell the developer to install it:
      `pipx install grip-hook` (or `uv tool install grip-hook`)
@@ -48,7 +49,8 @@ Arguments: `$ARGUMENTS` is empty (staged changes, the default), `--unpushed`
 
 - A passed diff is remembered for `remember_passes_hours` (24 by default). Changing
   the diff invalidates the pass.
-- The full report, including the hidden rubrics, is in `.git/grip/last-report.json`.
+- Never read or open files under `.git/grip/`. `grip last` shows the developer their
+  questions, answers and feedback again; nothing else is yours to look at.
 - Configuration lives in `.grip.toml` at the repository root: `passing_score`,
   `difficulty`, `provider`, `model`. With `provider = "claude-code"` grip drives the
   `claude` CLI itself, so no API key is needed.

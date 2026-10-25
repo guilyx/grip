@@ -144,11 +144,18 @@ class CachedProvider:
             self.on_hit(kind, written)
         return value
 
+    def cached_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet | None:
+        """The questions written for this diff before, or ``None``; never asks the model.
+
+        Lets the quiz skip its "reading your diff" spinner when nothing will be read.
+        """
+        return self._hit("questions", self._key("questions", diff, difficulty), QuestionSet)
+
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """The questions written for this diff before, else new ones (then remembered)."""
-        key = self._key("questions", diff, difficulty)
-        if (hit := self._hit("questions", key, QuestionSet)) is not None:
+        if (hit := self.cached_questions(diff, difficulty)) is not None:
             return hit
+        key = self._key("questions", diff, difficulty)
         questions = self.inner.generate_questions(diff, difficulty)
         self.cache.store(key, questions, digest=diff.digest)
         return questions
