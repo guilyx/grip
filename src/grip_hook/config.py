@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import shutil
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
@@ -208,6 +209,79 @@ def _read_toml(path: Path) -> dict[str, Any]:
         raise ConfigError(f"could not parse {path}: {exc}") from exc
 
 
+DEFAULT_SOURCE = "default"
+_FLAGS = {"cache_hours": "--fresh"}
+"""Options whose command-line flag is not ``--`` plus the dashed option name."""
+
+
+@dataclass(frozen=True, slots=True)
+class Resolved:
+    """The effective :class:`Config`, and where each of its values came from."""
+
+    config: Config
+    sources: dict[str, str]
+    """Option name to the layer that set it last: ``default``, ``pyproject.toml``,
+    ``.grip.toml``, ``env GRIP_<NAME>`` or ``flag --<name>``."""
+    files: tuple[Path, ...]
+    """The configuration files that were read, lowest precedence first."""
+
+
+def resolve_config(
+    root: Path | None,
+    *,
+    env: dict[str, str] | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> Resolved:
+    """Build the effective :class:`Config` for a repository and record each value's source.
+
+    Args:
+        root: Repository root (where ``.grip.toml`` / ``pyproject.toml`` live), or ``None``.
+        env: Environment mapping. Defaults to :data:`os.environ`.
+        overrides: Values from command-line flags. ``None`` entries are ignored.
+    """
+    cfg = Config()
+    sources = dict.fromkeys(_FIELD_NAMES, DEFAULT_SOURCE)
+    files: list[Path] = []
+
+    def layer(raw: dict[str, Any], where: str, label: Callable[[str], str]) -> None:
+        nonlocal cfg
+        cfg = _apply(cfg, raw, where)
+        for key in raw:
+            sources[key.replace("-", "_")] = label(key)
+
+    if root is not None:
+        pyproject = root / "pyproject.toml"
+        if pyproject.is_file():
+            tool = _read_toml(pyproject).get("tool", {})
+            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
+                files.append(pyproject)
+                layer(tool["grip"], str(pyproject), lambda _: "pyproject.toml")
+        grip_toml = root / ".grip.toml"
+        if grip_toml.is_file():
+            files.append(grip_toml)
+            layer(_read_toml(grip_toml), str(grip_toml), lambda _: ".grip.toml")
+
+    environ = os.environ if env is None else env
+    env_keys = {
+        key[len(ENV_PREFIX) :].lower(): key
+        for key in environ
+        if key.startswith(ENV_PREFIX) and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES
+    }
+    layer(
+        {name: environ[key] for name, key in env_keys.items()},
+        "environment",
+        lambda name: f"env {env_keys[name]}",
+    )
+
+    if overrides:
+        layer(
+            {k: v for k, v in overrides.items() if v is not None},
+            "command line",
+            lambda name: f"flag {_FLAGS.get(name, '--' + name.replace('_', '-'))}",
+        )
+    return Resolved(cfg.validate(), sources, tuple(files))
+
+
 def load_config(
     root: Path | None,
     *,
@@ -221,28 +295,7 @@ def load_config(
         env: Environment mapping. Defaults to :data:`os.environ`.
         overrides: Values from command-line flags. ``None`` entries are ignored.
     """
-    cfg = Config()
-    if root is not None:
-        pyproject = root / "pyproject.toml"
-        if pyproject.is_file():
-            tool = _read_toml(pyproject).get("tool", {})
-            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
-                cfg = _apply(cfg, tool["grip"], str(pyproject))
-        grip_toml = root / ".grip.toml"
-        if grip_toml.is_file():
-            cfg = _apply(cfg, _read_toml(grip_toml), str(grip_toml))
-
-    environ = os.environ if env is None else env
-    env_raw = {
-        key[len(ENV_PREFIX) :].lower(): value
-        for key, value in environ.items()
-        if key.startswith(ENV_PREFIX) and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES
-    }
-    cfg = _apply(cfg, env_raw, "environment")
-
-    if overrides:
-        cfg = _apply(cfg, {k: v for k, v in overrides.items() if v is not None}, "command line")
-    return cfg.validate()
+    return resolve_config(root, env=env, overrides=overrides).config
 
 
 TEMPLATE = """\
@@ -303,11 +356,14 @@ __all__ = [
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
+    "DEFAULT_SOURCE",
     "HOOK_MODES",
     "TEMPLATE",
     "Config",
+    "Resolved",
     "auto_provider",
     "describe",
     "load_config",
     "render_template",
+    "resolve_config",
 ]

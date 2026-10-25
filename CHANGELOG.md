@@ -34,6 +34,11 @@ All notable changes to this project are documented here. The format follows
   under `grip platform` (`grip platform login`, `solve`, `submit`, …); the old top-level
   names still work and print a one-line note that they moved. `hook`, `agent-hook`,
   `statusline`, `ask` and `grade` are no longer listed in the help but work as before.
+- `grip config` shows where each value comes from (`default`, `pyproject.toml`,
+  `.grip.toml`, `env GRIP_…` or a flag) and which configuration files it read, and takes
+  `--provider`, `--model`, `--passing-score` and `--difficulty` to preview a run with
+  those flags. `grip status` shows a short summary instead of the full table: provider,
+  pass mark, difficulty and hook mode.
 
 ### Fixed
 
