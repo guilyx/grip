@@ -11,12 +11,16 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
+from grip_hook import QUESTION_COUNT
+from grip_hook import cli as cli_module
 from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.cli import cli
 from grip_hook.config import Config
 from grip_hook.git import Diff
-from grip_hook.models import Difficulty
+from grip_hook.models import Difficulty, Stage
 from grip_hook.providers.fake import FakeProvider
+from grip_hook.quiz import run_quiz
+from tests.conftest import FakeTerminalFactory
 
 DIFF = Diff("staged changes", " a.py | 1 +", "+x = 1\n", ("a.py",))
 
@@ -122,13 +126,30 @@ def test_a_board_retry_asks_the_model_and_replaces_the_entry(
     assert hits == ["board"]
 
 
+def test_forget_drops_every_entry_for_one_diff(
+    cached: tuple[CachedProvider, Counting, list[str]],
+) -> None:
+    provider, inner, _ = cached
+    other = Diff(DIFF.description, DIFF.stat, DIFF.patch + "+y = 2\n", DIFF.files)
+    provider.generate_questions(DIFF, Difficulty.NORMAL)
+    provider.generate_questions(DIFF, Difficulty.HARD)
+    provider.generate_board(DIFF, Difficulty.NORMAL, ())
+    provider.generate_questions(other, Difficulty.NORMAL)
+    assert provider.cache.forget(DIFF.digest) == 3
+    provider.generate_questions(other, Difficulty.NORMAL)
+    assert inner.calls["questions"] == 3  # the other diff is still cached
+    provider.generate_questions(DIFF, Difficulty.NORMAL)
+    provider.generate_board(DIFF, Difficulty.NORMAL, ())
+    assert inner.calls == {"questions": 4, "board": 2, "grade": 0}
+
+
 # -- through the command line ------------------------------------------------------------
 
 
 @pytest.fixture
 def in_repo(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(repo)
-    for name in ("GRIP_SKIP", "CI", "GRIP_CACHE_HOURS"):
+    for name in ("GRIP_SKIP", "CI", "GRIP_CACHE_HOURS", "GRIP_RETRY_QUESTIONS"):
         monkeypatch.delenv(name, raising=False)
     (repo / ".grip.toml").write_text('provider = "fake"\nmodel = "fake"\n')
     return repo
@@ -163,3 +184,87 @@ def test_cache_hours_zero_turns_it_off(
     _, err = _ask()
     assert "same diff" not in err
     assert not (in_repo / ".git" / "grip" / "cache").exists()
+
+
+BLANK = json.dumps([""] * 5)
+GOOD = json.dumps(["this is a long and specific answer because reasons"] * 5)
+
+
+def _grade(answers: str) -> int:
+    return CliRunner().invoke(cli, ["grade", "--answers", "-"], input=answers).exit_code
+
+
+@pytest.mark.parametrize(("retry", "reused"), [("same", True), ("new", False)])
+def test_retry_after_a_failed_grade(
+    in_repo: Path, stage_change: Callable[[str, str], None], retry: str, reused: bool
+) -> None:
+    (in_repo / ".grip.toml").write_text(
+        f'provider = "fake"\nmodel = "fake"\nretry_questions = "{retry}"\n'
+    )
+    stage_change("a.py", "x = 1\n")
+    _ask()
+    assert _grade(BLANK) == 1
+    _, err = _ask()
+    assert ("same diff as" in err) is reused
+
+
+def test_new_questions_only_after_a_failure(
+    in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    (in_repo / ".grip.toml").write_text(
+        'provider = "fake"\nmodel = "fake"\nretry_questions = "new"\nremember_passes_hours = 0\n'
+    )
+    stage_change("a.py", "x = 1\n")
+    _ask()
+    assert _grade(GOOD) == 0
+    _, err = _ask()
+    assert "same diff as" in err  # a pass forgets nothing
+
+
+@pytest.mark.parametrize(("retry", "reused"), [("same", True), ("new", False)])
+def test_retry_after_a_failed_terminal_quiz(
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+    retry: str,
+    reused: bool,
+) -> None:
+    monkeypatch.setenv("GRIP_RETRY_QUESTIONS", retry)
+    stage_change("a.py", "x = 1\n")
+    results = []
+    for _ in range(2):
+        monkeypatch.setattr(cli_module, "open_terminal", FakeTerminalFactory([""] * 5))
+        result = CliRunner().invoke(cli, ["quiz"])
+        assert result.exit_code == 1, result.output
+        results.append(result)
+    first, second = results
+    assert ("next try asks new questions" in " ".join(first.output.split())) is not reused
+    assert ("same diff as" in second.stderr) is reused
+
+
+def test_a_cached_quiz_does_not_claim_to_read_the_diff(
+    cached: tuple[CachedProvider, Counting, list[str]],
+) -> None:
+    provider, inner, _hits = cached
+    spinners: list[str] = []
+
+    def quiz() -> None:
+        term = FakeTerminalFactory(["an answer"] * QUESTION_COUNT)()
+        real = term.console.status
+
+        def status(text: Any, **kwargs: Any) -> Any:
+            spinners.append(str(text))
+            return real(text, **kwargs)
+
+        term.console.status = status  # type: ignore[method-assign]
+        run_quiz(
+            diff=DIFF, cfg=Config(provider="fake"), provider=provider, term=term, stage=Stage.MANUAL
+        )
+
+    quiz()
+    assert any("reading your diff" in s for s in spinners)
+    spinners.clear()
+    quiz()
+    assert inner.calls["questions"] == 1
+    assert not any("reading your diff" in s for s in spinners)
+    assert any("grading" in s for s in spinners)

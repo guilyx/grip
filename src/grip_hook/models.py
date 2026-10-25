@@ -90,8 +90,9 @@ class QuestionGrade(BaseModel):
     )
     feedback: str = Field(
         description=(
-            "One or two sentences: what was right, what was missing or wrong. "
-            "Be concrete and refer to the code."
+            "One or two sentences: what was right and, when points were lost, where in "
+            "the code to look again and what kind of point is missing or wrong. Never "
+            "state the missing rubric point itself."
         )
     )
 
