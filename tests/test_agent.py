@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -13,7 +14,8 @@ from grip_hook import QUESTION_COUNT
 from grip_hook.agent import PendingStore, gated_mode, parse_answers
 from grip_hook.cli import cli
 from grip_hook.errors import GripError
-from grip_hook.models import Answer
+from grip_hook.models import Answer, Difficulty
+from grip_hook.providers.fake import FakeProvider
 
 GOOD = ["this is a long and specific answer because reasons"] * QUESTION_COUNT
 BAD = [""] * QUESTION_COUNT
@@ -55,7 +57,18 @@ def _hook_payload(command: str, cwd: Path) -> str:
 def test_ask_nothing_staged(runner: CliRunner, in_repo: Path) -> None:
     result = runner.invoke(cli, ["ask"])
     assert result.exit_code == 0, result.output
-    assert _json(result)["status"] == "nothing-to-quiz"
+    payload = _json(result)
+    assert payload["status"] == "nothing-to-quiz"
+    assert "`git add` it first" in str(payload["message"])
+    # .grip.toml is untracked and the one commit is on no remote.
+    assert payload["hint"] == {
+        "staged_files": 0,
+        "modified_files": 0,
+        "untracked_files": 1,
+        "unpushed_commits": 1,
+        "branch_commits": 0,
+        "try": ["git add", "grip ask --unpushed"],
+    }
     assert not (in_repo / ".git" / "grip" / "pending.json").exists()
 
 
@@ -112,6 +125,29 @@ def test_grade_pass_is_remembered(
 
     assert runner.invoke(cli, ["check"]).exit_code == 0
     assert _json(runner.invoke(cli, ["ask"]))["status"] == "already-passed"
+
+
+def test_grading_uses_the_difficulty_the_questions_were_written_at(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    assert runner.invoke(cli, ["ask", "--difficulty", "hard"]).exit_code == 0
+    pending = PendingStore(in_repo / ".git").load()
+    assert pending is not None and pending.difficulty is Difficulty.HARD
+    seen: list[Difficulty] = []
+    real = FakeProvider.grade
+
+    def grade(self: FakeProvider, *args: Any) -> Any:
+        seen.append(args[-1])
+        return real(self, *args)
+
+    monkeypatch.setattr(FakeProvider, "grade", grade)
+    result = runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD))
+    assert result.exit_code == 0, result.output
+    assert seen == [Difficulty.HARD]
 
 
 def test_grade_fail(
@@ -193,6 +229,86 @@ def test_check_unpushed(
     stage_change("b.py", "y = 2\n")
     run_git("commit", "-q", "-m", "b")
     assert runner.invoke(cli, ["check", "--unpushed"]).exit_code == 1
+
+
+def test_check_without_a_hook_checks_staged_changes(runner: CliRunner, in_repo: Path) -> None:
+    # Nothing staged; the unpushed root commit does not count without a pre-push hook.
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (staged changes)" in result.output
+
+
+def test_check_follows_the_installed_pre_push_hook(runner: CliRunner, in_repo: Path) -> None:
+    assert runner.invoke(cli, ["install"]).exit_code == 0
+    # Nothing staged, but the push would send an unquizzed commit: the hook would block.
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 1
+    assert "unpushed commits have not passed a grip quiz yet (1 file)." in result.output
+    assert runner.invoke(cli, ["ask", "--unpushed"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (unpushed commits)" in result.output
+    # An explicit flag still wins over the hook.
+    assert "grip: ok (staged changes)" in runner.invoke(cli, ["check", "--staged"]).output
+
+
+def test_check_with_both_hooks_checks_both_scopes(
+    runner: CliRunner, in_repo: Path, stage_change: Callable[[str, str], None]
+) -> None:
+    args = ["install", "--stage", "pre-commit", "--stage", "pre-push"]
+    assert runner.invoke(cli, args).exit_code == 0
+    assert runner.invoke(cli, ["ask", "--unpushed"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (staged changes and unpushed commits)" in result.output
+
+    stage_change("a.py", "x = 1\n")
+    result = runner.invoke(cli, ["check"])
+    assert result.exit_code == 1
+    assert "the staged changes have not passed" in result.output
+    assert "unpushed commits have not" not in result.output
+
+
+def test_check_range_names_the_range(
+    runner: CliRunner,
+    in_repo: Path,
+    run_git: Callable[..., str],
+    stage_change: Callable[[str, str], None],
+) -> None:
+    stage_change("a.py", "x = 1\n")
+    stage_change("b.py", "y = 2\n")
+    run_git("commit", "-q", "-m", "ab")
+    result = runner.invoke(cli, ["check", "--range", "main~1..main"])
+    assert result.exit_code == 1
+    assert "the range main~1..main has not passed a grip quiz yet (2 files)." in result.output
+    assert "staged" not in result.output
+    assert runner.invoke(cli, ["ask", "--range", "main~1..main"]).exit_code == 0
+    assert runner.invoke(cli, ["grade", "--answers", "-"], input=json.dumps(GOOD)).exit_code == 0
+    result = runner.invoke(cli, ["check", "--range", "main~1..main"])
+    assert result.exit_code == 0, result.output
+    assert "grip: ok (main~1..main)" in result.output
+
+
+@pytest.mark.parametrize("command", ["quiz", "ask", "check", "whiteboard"])
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--branch", "--unpushed"],
+        ["--staged", "--unpushed"],
+        ["--range", "main~1..main", "--branch"],
+        ["--staged", "--range", "main~1..main"],
+    ],
+)
+def test_scope_flags_are_mutually_exclusive(
+    runner: CliRunner, in_repo: Path, command: str, flags: list[str]
+) -> None:
+    result = runner.invoke(cli, [command, *flags])
+    assert result.exit_code == 2
+    assert "cannot be used together" in result.output
+    for flag in (f for f in flags if f.startswith("--")):
+        assert flag in result.output
 
 
 @pytest.mark.parametrize(

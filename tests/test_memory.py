@@ -35,10 +35,12 @@ def test_corrupt_file_is_ignored(tmp_path: Path) -> None:
 
 def test_forget_and_report(tmp_path: Path) -> None:
     mem = PassMemory(tmp_path, ttl_hours=1)
-    mem.forget()  # no file yet: fine
+    assert mem.forget() == 0  # no file yet: fine
     mem.record_pass("abc")
-    mem.forget()
+    mem.record_pass("old", now=datetime.now(UTC) - timedelta(hours=2))
+    assert mem.forget() == 1  # the expired one was not remembered any more
     assert not mem.has_passed("abc")
+    assert mem.forget() == 0
 
     report = Report(
         stage=Stage.MANUAL,

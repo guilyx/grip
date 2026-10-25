@@ -21,11 +21,11 @@ grip reads configuration from four places. Higher in the list wins.
 | `api_key_env` | provider default | Name of the environment variable holding the API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY`). |
 | `base_url` | provider default | Override the API base URL, for proxies or self-hosted servers. |
 | `exclude` | lockfiles and generated files | Globs removed from the diff. Patterns without `/` match at any depth. |
-| `max_diff_bytes` | `200000` | Larger patches are truncated before being sent. |
+| `max_diff_bytes` | `200000` | Larger patches are truncated before being sent, and the quiz says how much the model saw. |
 | `remember_passes_hours` | `24` | How long a passed diff is remembered. `0` disables. |
 | `cache_hours` | `24` | How long the questions (and the whiteboard) written for a diff are reused when the same diff is quizzed again, so a retry after a failed quiz costs one grading call instead of two. `0` asks the model every time; `--fresh` does so once. |
 | `hook_mode` | `"quiz"` | What the git hook asks for. `quiz`: questions in the terminal. `whiteboard`: the [whiteboard](whiteboard.md) opens in your browser and you defend the change there. With no browser to open (over SSH, no display), the hook falls back to the terminal quiz. `grip quiz` always asks in the terminal. |
-| `require_tty` | `false` | Fail (exit 2) instead of skipping when no interactive terminal is available. |
+| `require_tty` | `false` | Hooks fail (exit 2) instead of skipping when no interactive terminal is available. `grip quiz` always fails then. |
 | `fail_open` | `false` | Let the commit or push through when the provider errors out. |
 | `timeout` | `120` | Per-request timeout for provider calls, in seconds. |
 
@@ -88,6 +88,7 @@ export GRIP_MODEL=claude-sonnet-5
 | Variable | Effect |
 | --- | --- |
 | `GRIP_SKIP=1` | Skip the quiz once. |
+| `GRIP_DEBUG=1` | When a git command fails, also print the full command and git's own output under grip's one-line error. |
 | `CI=true` | Skip the quiz (set by every CI provider). |
 | `PRE_COMMIT_FROM_REF` / `PRE_COMMIT_TO_REF` | Set by the pre-commit framework at pre-push; grip uses them as the diff range. |
 | `GRIP_FAKE_SCRIPT` / `GRIP_FAKE_DELAY` | Script file and artificial latency for the `fake` provider. See [Providers](providers.md#fake-offline). |
