@@ -15,9 +15,9 @@ from grip_hook.cli import cli
 from grip_hook.config import Config
 from grip_hook.git import Diff
 from grip_hook.memory import PassMemory
-from grip_hook.models import Difficulty, ModelCall, QuestionSet, Report
+from grip_hook.models import Answer, Difficulty, ModelCall, QuestionGrade, QuestionSet, Report
 from grip_hook.providers.anthropic import AnthropicProvider
-from grip_hook.providers.base import calls_of, token_count
+from grip_hook.providers.base import call_kind, calls_of, token_count
 from grip_hook.providers.fake import FAKE_USAGE, FakeProvider
 from grip_hook.providers.openai_compat import OpenAICompatibleProvider
 from grip_hook.quiz import usage_line
@@ -284,8 +284,77 @@ def test_recent_reads_the_tail_of_the_history(in_repo: Path) -> None:
         "verdict": "",
     }
     for i in range(25):
-        memory.append_history(Report.model_validate({**template, "diff_digest": "d", "score": i}))
+        memory.append_history(
+            Report.model_validate({**template, "diff_digest": f"d{i}", "score": i})
+        )
     with memory.history_path.open("a", encoding="utf-8") as fh:
         fh.write("not json\n\n")
     recent = memory.recent(20)
     assert [r.score for r in recent] == list(range(5, 25))
+
+
+# -- appeals ----------------------------------------------------------------------------
+
+APPEAL_TOKENS = sum(FAKE_USAGE["appeal"])
+WHY = "because the loop is bounded by max_attempts"
+
+
+def _failed_then_appealed(
+    in_repo: Path,
+    runner: CliRunner,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Report:
+    (in_repo / ".grip.toml").write_text('provider = "fake"\nmodel = "fake"\npassing_score = 60\n')
+    stage_change("a.py", "x = 1\n")
+    monkeypatch.setattr(cli_module, "open_terminal", FakeTerminalFactory(["short"] * 5))
+    assert runner.invoke(cli, ["quiz"]).exit_code == 1  # 50/100
+    result = runner.invoke(cli, ["appeal", "1", WHY])
+    assert result.exit_code == 0, result.output  # 60/100 on appeal
+    return _report(in_repo)
+
+
+def test_the_appeal_call_is_recorded_as_an_appeal(
+    in_repo: Path,
+    runner: CliRunner,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = _failed_then_appealed(in_repo, runner, stage_change, monkeypatch)
+    assert [c.kind for c in report.calls] == ["questions", "grade", "appeal"]
+    assert report.tokens == QUIZ_TOKENS + APPEAL_TOKENS
+    payload = json.loads(runner.invoke(cli, ["last", "--json"]).output)
+    assert [c["kind"] for c in payload["calls"]] == ["questions", "grade", "appeal"]
+
+
+def test_status_counts_an_appealed_quiz_once(
+    in_repo: Path,
+    runner: CliRunner,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _failed_then_appealed(in_repo, runner, stage_change, monkeypatch)
+    lines = (in_repo / ".git" / "grip" / "history.jsonl").read_text().splitlines()
+    assert len(lines) == 2  # the quiz, then the same quiz again after the appeal
+    assert len(PassMemory(in_repo / ".git", 24).recent(20)) == 1
+    result = runner.invoke(cli, ["status"])
+    assert result.exit_code == 0, result.output
+    text = " ".join(result.output.split())
+    assert f"{QUIZ_TOKENS + APPEAL_TOKENS:,} tokens per quiz, over 1 quiz" in text
+
+
+def test_api_providers_record_an_appeal_as_an_appeal() -> None:
+    grade = QuestionGrade(question_index=0, score=10, feedback="f")
+    client = _Client(_Parsed(grade, _Usage()))
+    provider = AnthropicProvider(Config(model="claude-opus-5"), client=client)  # type: ignore[arg-type]
+    provider.appeal(
+        DIFF,
+        QUESTION_SET.questions[0],
+        Answer(question_index=0, text="a"),
+        grade,
+        justification=WHY,
+        difficulty=Difficulty.NORMAL,
+    )
+    (call,) = calls_of(provider)
+    assert call.kind == "appeal"
+    assert call_kind(QuestionGrade) == "appeal"

@@ -66,11 +66,16 @@ class Provider(Protocol):
         ...
 
 
-_KINDS = {"QuestionSet": "questions", "Board": "board", "GradeSheet": "grade"}
+_KINDS = {
+    "QuestionSet": "questions",
+    "Board": "board",
+    "GradeSheet": "grade",
+    "QuestionGrade": "appeal",  # one answer graded again: only `grip appeal` asks for it
+}
 
 
 def call_kind(schema: type) -> str:
-    """What a request for ``schema`` is for: ``questions``, ``board`` or ``grade``."""
+    """What a request for ``schema`` is for: ``questions``, ``board``, ``grade``, ``appeal``."""
     return _KINDS.get(schema.__name__, schema.__name__.lower())
 
 

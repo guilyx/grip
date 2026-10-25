@@ -121,7 +121,7 @@ class ModelCall(BaseModel):
     """One request to the model: what it was for, how long it took, what it used."""
 
     kind: str
-    """``questions``, ``board`` or ``grade``."""
+    """``questions``, ``board``, ``grade`` or ``appeal``."""
     seconds: float
     """Wall time of the request, retries included."""
     input_tokens: int | None = None

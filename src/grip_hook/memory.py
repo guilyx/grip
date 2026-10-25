@@ -161,21 +161,31 @@ class PassMemory:
         return None
 
     def recent(self, count: int) -> list[Report]:
-        """The last ``count`` graded quizzes in the history, oldest first."""
+        """The last ``count`` graded quizzes in the history, oldest first, each once.
+
+        An appeal appends its quiz again with the new score, so a quiz (its diff digest and
+        the time it was taken) can have several lines: the last one wins, as in
+        ``grip study export``.
+        """
         try:
             lines = self.history_path.read_text("utf-8").splitlines()
         except OSError:
             return []
         reports: list[Report] = []
+        seen: set[tuple[str, datetime]] = set()
         for line in reversed(lines):
             if len(reports) == count:
                 break
             if not line.strip():
                 continue
             try:
-                reports.append(Report.model_validate_json(line))
+                report = Report.model_validate_json(line)
             except ValidationError:
                 continue
+            quiz = (report.diff_digest, report.created_at)
+            if quiz not in seen:
+                seen.add(quiz)
+                reports.append(report)
         return reports[::-1]
 
     def save_report(self, report: Report) -> Path:

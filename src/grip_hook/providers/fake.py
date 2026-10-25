@@ -48,6 +48,7 @@ FAKE_USAGE: dict[str, tuple[int, int]] = {
     "questions": (1200, 400),
     "board": (1500, 700),
     "grade": (1400, 300),
+    "appeal": (900, 100),
 }
 """``(input, output)`` tokens the fake provider reports for each kind of request."""
 
@@ -220,7 +221,7 @@ class FakeProvider(CallLog):
         difficulty: Difficulty,
     ) -> QuestionGrade:
         """Uphold an appeal that says ``because`` (or matches a scripted rule), else keep it."""
-        self._pause()
+        self._done(QuestionGrade, self._pause())
         index = answer.question_index
         score, feedback = grade.score, "Appeal not upheld: the first grade stands."
         if self.script is not None:

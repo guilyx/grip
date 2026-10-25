@@ -38,8 +38,9 @@ All notable changes to this project are documented here. The format follows
   request and, where the provider reports it (the Anthropic and OpenAI-compatible APIs,
   not the coding-agent CLIs), the tokens used; the result ends with
   `took 9.8 s · 3,140 tokens`, `grip last` shows it per request, `grip status` averages the
-  last 20 quizzes, and `grip grade` and `grip last --json` include it. The FAQ explains how
-  to turn tokens into a cost with your provider's prices.
+  last 20 quizzes (an appealed quiz counts once), and `grip grade` and `grip last --json`
+  include it. A `grip appeal` request is added to its quiz as an `appeal` call. The FAQ
+  explains how to turn tokens into a cost with your provider's prices.
 
 ### Changed
 
