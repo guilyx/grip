@@ -66,6 +66,15 @@ timeout; only a closed tab does. If grip stops anyway (Ctrl-C, a crash), the pag
 "grip stopped: your answers are below, copy them" and gives you a **Copy answers** button,
 so you can keep them before running `grip whiteboard` again.
 
+## Keyboard
+
+Everything works without a mouse. Tab reaches the boxes and pins in turn, and a skip link
+jumps straight to the questions. On a pin, the arrow keys move to the next or previous
+pin; Enter opens it. Keys `1` to `5` open a question from anywhere except an answer box,
+and Esc goes back to the list. Focus stays where you were when the page redraws, and a
+screen reader hears each pin's state (not answered, answered, scored 14 of 20) and the
+score once it is graded.
+
 ## Interview mode
 
 ```bash

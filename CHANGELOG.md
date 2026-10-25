@@ -132,6 +132,11 @@ All notable changes to this project are documented here. The format follows
   minute, so a long think no longer hits the 20-minute idle timeout; answers are kept as
   a draft in the tab and survive a reload; and if grip is gone at hand-in, the page says
   "grip stopped: your answers are below, copy them" with a Copy answers button.
+- The whiteboard works from the keyboard and with a screen reader. Boxes, pins and
+  buttons show a focus ring, focus no longer drops to the top of the page when it
+  redraws, arrow keys move between pins, `1` to `5` open a question and Esc goes back,
+  and a skip link jumps to the questions. Pins say whether they are answered or how they
+  scored, the score is announced, and the panel no longer re-reads itself on every click.
 
 ## [0.4.1] - 2026-10-21
 
