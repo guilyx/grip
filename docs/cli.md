@@ -11,11 +11,15 @@ grip quiz                       # staged changes
 grip quiz --unpushed            # commits not on any remote
 grip quiz --branch              # the branch since it left main: its pull request
 grip quiz --range main..HEAD    # explicit range
+grip quiz --range main...HEAD   # HEAD since it forked from main (merge base), like a PR
 grip quiz --passing-score 90 --difficulty hard
 grip quiz --provider fake       # offline dry run
 grip quiz --report out.json     # also write the report here
 grip quiz --fresh               # new questions, even for a diff quizzed recently
 ```
+
+`--staged`, `--unpushed`, `--branch` and `--range` pick one scope; giving two of them is a
+usage error (exit 2). The same goes for `grip ask`, `grip check` and `grip whiteboard`.
 
 Trying again on the same diff reuses the questions from the last attempt (see
 [`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for
@@ -25,15 +29,33 @@ new ones. `grip whiteboard` reuses its board the same way.
 at, else `origin/main` or `origin/master`, else a local `main` or `master`. It is the
 "quiz my PR" command, whatever has or has not been pushed yet.
 
+`--range` takes git's two spellings. `BASE..HEAD` compares the two tips, so whatever `BASE`
+gained after `HEAD` forked from it shows up too, as if reverted. `BASE...HEAD` diffs from
+their merge base, so only `HEAD`'s side counts, as in a pull request. A missing `HEAD`
+(`main..`, `main...`) means `HEAD`.
+
+When the diff is empty, grip says what there is instead and what to run, and exits 0:
+
+```text
+grip: nothing to quiz: nothing staged. 3 untracked files and 1 modified file: `git add`
+them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`.
+```
+
 Answer each question on one line and press Enter. To answer in paragraphs, paste them: a
-pasted answer keeps its line breaks and ends at the next empty line. (On Windows each
-pasted line still answers the next question.)
+pasted answer keeps its line breaks and ends at the next empty line, or at the empty line
+the paste itself ends with. (On Windows each pasted line still answers the next
+question.)
 
 A change where every file is binary (images, archives) has nothing to ask about: the quiz
 and the hooks skip it with `grip: only binary files changed, nothing to quiz.`
 
 Exit codes: `0` passed or skipped, `1` failed the quiz, `2` error, `130` stopped with
 Ctrl-C (nothing is recorded).
+
+`grip quiz` needs an interactive terminal. Without one (stdin redirected, a script, an IDE
+task) it exits `2` rather than skipping, and points to `grip ask` / `grip grade` (JSON in,
+JSON out) or `grip whiteboard`. The hooks still skip in that case unless `require_tty` is
+set.
 
 ## `grip whiteboard`
 
@@ -46,6 +68,7 @@ grip whiteboard                         # staged changes
 grip whiteboard --unpushed              # commits not on any remote
 grip whiteboard --branch                # the whole branch since main
 grip whiteboard --range main..HEAD      # explicit range
+grip whiteboard --range main...HEAD     # HEAD since it forked from main (merge base)
 grip whiteboard --interview             # rubrics visible to the person asking; nothing recorded
 grip whiteboard --export board.html     # standalone page, no rubrics, nothing graded
 grip whiteboard --no-open --port 8765   # print the address instead of opening a browser
@@ -81,6 +104,12 @@ answer's JSON string are accepted and kept. `grade` takes `--passing-score`,
 `--fresh` or `--difficulty`, and it grades at the difficulty `ask` wrote them at. See
 [Coding agents](agents.md).
 
+`ask` uses the staged changes when no selector is given. `check` without a selector checks
+what the installed hooks quiz: the unpushed commits for the pre-push hook (the default
+`grip install`), the staged changes for a pre-commit hook, both when both are installed,
+and the staged changes when no hook is installed. It says what it checked:
+`grip: ok (unpushed commits)`.
+
 ```bash
 grip ask --unpushed
 grip grade --answers - <<'EOF'
@@ -101,12 +130,17 @@ Sets a repository up in one go: writes a commented `.grip.toml`, installs the pr
 (chaining after an existing hook rather than failing) and runs `grip agents` for the
 coding agents it detects.
 
-In a terminal it asks three questions, each with a default picked for this machine: which
-model writes and grades the questions (an installed coding agent first, else
-`anthropic`), the pass mark, and whether to quiz before pushes, commits or both. Press
-Enter to keep a default. A flag answers its question up front, `--yes` takes every
-default without asking, and outside a terminal (scripts, CI) nothing is asked. It then
-says what is still missing for the chosen provider, such as `ANTHROPIC_API_KEY`.
+In a terminal it asks four questions: which model writes and grades the questions, the
+pass mark, the difficulty (`easy`, `normal` or `hard`), and whether to quiz before
+pushes, commits or both. Press Enter to keep a default. A flag answers its question up
+front, `--yes` takes every default without asking, and outside a terminal (scripts, CI)
+nothing is asked.
+
+The provider defaults to `auto`, and `.grip.toml` is meant to be committed, so each
+teammate gets the coding agent they have installed (Claude Code, Codex or Gemini CLI),
+else `anthropic`. `grip init` prints what `auto` resolves to on your machine. It writes a
+concrete provider only when you pick one in the menu or pass `--provider`. It then says
+what is still missing for that provider, such as `ANTHROPIC_API_KEY`.
 
 ```bash
 grip init                                   # ask, write, install
@@ -145,12 +179,16 @@ grip uninstall                                 # remove from every stage
 ```
 
 Hooks go to `.git/hooks/` or to `core.hooksPath` when it is set. Files grip wrote start
-with a marker line so `uninstall` never touches a hook it does not own.
+with a marker line so `uninstall` never touches a hook it does not own. The hook runs the
+grip that installed it by absolute path, so it works from IDEs and GUI clients whose `PATH`
+lacks grip, and falls back to `PATH` when that grip is gone. After moving or reinstalling
+grip, run `grip install` again to update the path.
 
 ## `grip status`
 
 Shows which stages have grip installed (hook paths relative to the repository root, such
-as `.git/hooks/pre-push`), whether a foreign hook is in the way, the last
+as `.git/hooks/pre-push`; `grip missing` when the grip a hook was installed with no
+longer exists), whether a foreign hook is in the way, the last
 quiz (score, pass or fail, how long ago), whether hooks are paused, the effective
 configuration, and for each of the staged changes, the unpushed commits and the branch
 against the default branch, where it stands:
