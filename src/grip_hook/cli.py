@@ -218,9 +218,15 @@ def _run(
     try:
         term = open_terminal()
     except NoTerminalError as exc:
+        if stage is Stage.MANUAL:
+            # Typed by hand, so skipping would only hide that nothing was asked.
+            raise NoTerminalError(
+                f"{exc} Without one, `grip ask` and `grip grade` run the quiz as JSON, "
+                "and `grip whiteboard` asks in the browser."
+            ) from exc
         if cfg.require_tty:
             raise
-        _skip(f"{exc} Skipping. Set require_tty = true to fail instead.")
+        _skip(f"{exc} Skipping the quiz. Set require_tty = true to fail instead.")
         return 0
 
     try:

@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows
   git repository (run grip from your project)", "this repository has no commits yet",
   "unknown revision 'nope'". `GRIP_DEBUG=1` also prints the full git command and output.
   `grip status` works in a repository with no commits yet.
+- `grip quiz` without an interactive terminal (`grip quiz </dev/null`, a script) exits 2
+  and points to `grip ask` / `grip grade` or `grip whiteboard`, instead of skipping with
+  exit 0. Hooks still skip unless `require_tty` is set, and the notice no longer reads
+  "grip: grip needs".
 
 ## [0.4.1] - 2026-10-21
 
