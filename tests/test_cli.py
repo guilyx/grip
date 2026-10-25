@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -160,14 +161,34 @@ def test_quiz_range_and_unpushed(
     base = run_git("rev-parse", "HEAD").strip()
     stage_change("a.py", "x = 1\n")
     run_git("commit", "-q", "-m", "a")
-    terminal(GOOD)
-    assert runner.invoke(cli, ["quiz", "--range", f"{base}..HEAD"]).exit_code == 0
+    factory = terminal(GOOD)
+    assert runner.invoke(cli, ["quiz", "--range", "main~1.."]).exit_code == 0
+    assert "questions about your main~1..HEAD (manual)" in factory.text
     assert runner.invoke(cli, ["quiz", "--range", "nonsense"]).exit_code == 2
     # No remotes at all: everything since the root commit is unpushed.
     factory = terminal(BAD)
     result = runner.invoke(cli, ["quiz", "--unpushed"])
     assert result.exit_code == 1
     assert "README.md" in factory.text
+    text = " ".join(factory.text.split())
+    assert "2 unpushed commits on main, everything since the first commit" in text
+    assert base[:12] not in text
+
+
+def test_quiz_says_when_the_diff_was_truncated(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    stage_change("big.txt", "line\n" * 5000)
+    factory = terminal(GOOD)
+    (in_repo / ".grip.toml").write_text('provider = "fake"\nmax_diff_bytes = 1000\n')
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 0, result.output
+    text = " ".join(factory.text.split())
+    # 30 KB with LF line endings; a Windows checkout may store CRLF.
+    assert re.search(r"grip saw the first 1 KB of a (30|35) KB change \(max_diff_bytes\)\.", text)
 
 
 def test_hook_skip_envs(
@@ -223,6 +244,7 @@ def test_hook_pre_push_stdin_and_pre_commit_env(
     result = runner.invoke(cli, ["hook", "pre-push", "origin", str(bare)], input=stdin)
     assert result.exit_code == 0, result.output
     assert "a.py" in factory.text
+    assert "questions about your 1 commit on main → origin (pre-push)" in factory.text
 
     # Nothing to push (delete only) -> skip
     result = runner.invoke(

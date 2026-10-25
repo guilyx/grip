@@ -364,13 +364,20 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
         base, sep, head = rev_range.partition("..")
         if not sep or not base:
             raise click.BadParameter("expected BASE..HEAD", param_hint="--range")
-        return git.range_diff(base, head or "HEAD", cfg.exclude, cfg.max_diff_bytes)
+        head = head or "HEAD"
+        # The refs as typed: the header reads main..HEAD, not two hashes.
+        return git.range_diff(
+            base, head, cfg.exclude, cfg.max_diff_bytes, description=f"{base}..{head}"
+        )
     if mode == "unpushed":
         head_sha = git.run("rev-parse", "HEAD").strip()
         base_sha = git.unpushed_base(head_sha)
         if base_sha is None:
             return Diff("unpushed commits", "", "", ())
-        return git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes)
+        description = git.describe_commits(
+            base_sha, head_sha, branch=git.current_branch(), unpushed=True
+        )
+        return git.range_diff(base_sha, head_sha, cfg.exclude, cfg.max_diff_bytes, description)
     if mode == "branch":
         diff = _branch_diff(git, cfg)
         if diff is None:
@@ -795,7 +802,14 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
     from_ref = os.environ.get("PRE_COMMIT_FROM_REF")
     to_ref = os.environ.get("PRE_COMMIT_TO_REF")
     if from_ref and to_ref:
-        return git.range_diff(from_ref, to_ref, cfg.exclude, cfg.max_diff_bytes)
+        local = os.environ.get("PRE_COMMIT_LOCAL_BRANCH", "").removeprefix("refs/heads/")
+        description = git.describe_commits(
+            from_ref,
+            to_ref,
+            branch=local or git.current_branch(),
+            remote=os.environ.get("PRE_COMMIT_REMOTE_NAME") or None,
+        )
+        return git.range_diff(from_ref, to_ref, cfg.exclude, cfg.max_diff_bytes, description)
 
     remote = hook_args[0] if hook_args else None
     refs: list[PushedRef] = []
@@ -809,7 +823,8 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
         base = git.unpushed_base(head, remote)
         if base is None:
             return Diff("push", "", "", ())
-        return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes)
+        description = git.describe_commits(base, head, branch=git.current_branch(), remote=remote)
+        return git.range_diff(base, head, cfg.exclude, cfg.max_diff_bytes, description)
     return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
 
 

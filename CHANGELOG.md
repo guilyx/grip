@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The quiz header names what is being quizzed in words: `3 commits on feat/x → origin`
+  for a push, `main..HEAD` as typed for `--range`, `2 unpushed commits on main` for
+  `--unpushed`, and `everything since the first commit` instead of the empty tree's hash
+  for a first push. When the diff is over `max_diff_bytes` it also says how much the model
+  saw: `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

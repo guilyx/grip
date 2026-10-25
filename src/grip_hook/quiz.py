@@ -39,15 +39,39 @@ def _score_style(score: int, passing: int) -> str:
     return "bold red"
 
 
+def _size(count: int) -> str:
+    """``790 KB``: a byte count the way people say it (1 KB = 1000 bytes)."""
+    if count < 1000:
+        return f"{count} bytes"
+    if count < 1_000_000:
+        return f"{round(count / 1000)} KB"
+    return f"{count / 1_000_000:.1f} MB"
+
+
+def truncation_note(diff: Diff, max_bytes: int) -> str | None:
+    """What part of a truncated diff the model sees, or ``None`` when it sees all of it."""
+    if not diff.truncated:
+        return None
+    if diff.size > max_bytes:
+        return (
+            f"grip saw the first {_size(max_bytes)} of a {_size(diff.size)} change "
+            "(max_diff_bytes)."
+        )
+    return f"grip saw only the first {_size(max_bytes)} of this change (max_diff_bytes)."
+
+
 def render_intro(term: Terminal, diff: Diff, cfg: Config, stage: Stage) -> None:
-    """Show what is about to be quizzed."""
+    """Show what is about to be quizzed, and how much of it the model sees."""
     files = "\n".join(escape(f) for f in diff.files[:12])
     if len(diff.files) > 12:
         files += f"\n… and {len(diff.files) - 12} more"
+    note = truncation_note(diff, cfg.max_diff_bytes)
     body = Text.from_markup(
         f"[bold]{QUESTION_COUNT} questions[/bold] about your "
         f"[bold]{escape(diff.description)}[/bold] ({stage.value}). "
-        f"Pass mark: [bold]{cfg.passing_score}/{MAX_SCORE}[/bold].\n\n{files}"
+        f"Pass mark: [bold]{cfg.passing_score}/{MAX_SCORE}[/bold]."
+        + (f"\n[yellow]{escape(note)}[/yellow]" if note else "")
+        + f"\n\n{files}"
     )
     term.console.print()  # pre-commit prints its own status on the current line
     term.console.print(Panel(body, title="grip", subtitle="keep a grip on your code", expand=False))
@@ -183,4 +207,11 @@ def run_quiz(
     return QuizOutcome(report=report)
 
 
-__all__ = ["QuizOutcome", "ask_questions", "render_intro", "render_result", "run_quiz"]
+__all__ = [
+    "QuizOutcome",
+    "ask_questions",
+    "render_intro",
+    "render_result",
+    "run_quiz",
+    "truncation_note",
+]

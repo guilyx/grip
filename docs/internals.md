@@ -145,11 +145,15 @@ The patch is then shaped for a model:
 - **Format.** `--find-renames`, three lines of context, and only added, copied, deleted,
   modified, renamed or type-changed files.
 - **Size.** A patch over `max_diff_bytes` (200 kB by default) is cut, and the model is
-  told it was cut and to ask only about what it can see.
+  told it was cut and to ask only about what it can see. The terminal quiz says so too:
+  `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
 
-The result is a `Diff`: a description (`staged changes`, `b05e4728c893..e3c589438444`),
-the `--stat` summary, the patch, the file list, and a **digest**: the SHA-256 of the patch
-text. The digest is how grip recognises "this exact diff" later.
+The result is a `Diff`: a description for people (`staged changes`,
+`3 commits on feat/x → origin`, `main..HEAD` as typed, and for a push that starts at the
+first commit, `everything since the first commit` rather than the empty tree's hash),
+the `--stat` summary, the patch, the file list, the size before any cut, and a
+**digest**: the SHA-256 of the patch text alone. The digest is how grip recognises "this
+exact diff" later, so a friendlier description never makes it forget a pass.
 
 ## Talking to the model
 
@@ -176,7 +180,7 @@ The `difficulty` setting adds one paragraph:
 **The user message** carries the change:
 
 ```text
-Scope: b05e4728c893..e3c589438444
+Scope: 1 commit on main → origin
 
 Summary:
  api/auth.py             | 13 +++++++++++++
