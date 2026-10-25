@@ -146,7 +146,7 @@ The skill is a thin wrapper over three commands that any agent can call:
 | --- | --- |
 | `grip ask [--unpushed \| --range A..B]` | Prints the summary and five questions as JSON. Rubrics stay in `.git/grip/pending.json`. |
 | `grip grade --answers FILE` | Grades a JSON list of answers, prints the scores, remembers a pass. Exit 1 on fail. |
-| `grip check [--unpushed]` | Exit 0 when the diff already passed (or is empty), 1 otherwise. |
+| `grip check [--unpushed \| --range A..B]` | Exit 0 when the diff already passed (or is empty), 1 otherwise. Without a flag it checks what the installed hook quizzes. |
 
 For an agent without skill support, paste this into `AGENTS.md`, `CLAUDE.md` or
 `GEMINI.md`:

@@ -17,6 +17,9 @@ grip quiz --report out.json     # also write the report here
 grip quiz --fresh               # new questions, even for a diff quizzed recently
 ```
 
+`--staged`, `--unpushed`, `--branch` and `--range` pick one scope; giving two of them is a
+usage error (exit 2). The same goes for `grip ask`, `grip check` and `grip whiteboard`.
+
 Trying again on the same diff reuses the questions from the last attempt (see
 [`cache_hours`](configuration.md)), so only the grading calls the model. `--fresh` asks for
 new ones. `grip whiteboard` reuses its board the same way.
@@ -73,6 +76,12 @@ JSON (rubrics stay in `.git/grip/pending.json`), `grade` scores a JSON list of a
 remembers a pass, `check` exits 0 when the diff already passed. Same `--staged`,
 `--unpushed`, `--branch` and `--range` selectors as `grip quiz`. Raw line breaks inside an
 answer's JSON string are accepted and kept. See [Coding agents](agents.md).
+
+`ask` uses the staged changes when no selector is given. `check` without a selector checks
+what the installed hooks quiz: the unpushed commits for the pre-push hook (the default
+`grip install`), the staged changes for a pre-commit hook, both when both are installed,
+and the staged changes when no hook is installed. It says what it checked:
+`grip: ok (unpushed commits)`.
 
 ```bash
 grip ask --unpushed

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 import json
 import os
 import shutil
@@ -322,21 +323,65 @@ def cli() -> None:
     """Keep a grip on your code: a quiz before every commit or push."""
 
 
+_SCOPES = ("staged", "unpushed", "branch")
+
+
+def _diff_options(
+    staged_help: str = "Staged changes (the default).",
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """``--staged``, ``--unpushed``, ``--branch`` and ``--range``, at most one of them.
+
+    The command receives ``mode`` (``None`` when no scope flag was given; most commands
+    then use the staged changes) and ``rev_range``. Two scope flags at once are a usage
+    error rather than the last one silently winning.
+    """
+
+    def decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(fn)
+        def wrapper(
+            *args: Any,
+            staged: bool,
+            unpushed: bool,
+            branch: bool,
+            rev_range: str | None,
+            **kwargs: Any,
+        ) -> Any:
+            given = (staged, unpushed, branch)
+            chosen = [name for name, on in zip(_SCOPES, given, strict=True) if on]
+            flags = [f"--{name}" for name in chosen] + (["--range"] if rev_range else [])
+            if len(flags) > 1:
+                raise click.UsageError(
+                    f"{' and '.join(flags)} cannot be used together; pick one scope.",
+                    ctx=click.get_current_context(silent=True),
+                )
+            mode = chosen[0] if chosen else None
+            return fn(*args, mode=mode, rev_range=rev_range, **kwargs)
+
+        decorators = [
+            click.option("--staged", is_flag=True, help=staged_help),
+            click.option("--unpushed", is_flag=True, help="Commits not on any remote."),
+            click.option("--branch", is_flag=True, help="The branch since it left main: its PR."),
+            click.option(
+                "--range", "rev_range", default=None, help="An explicit BASE..HEAD range."
+            ),
+        ]
+        for decorator in reversed(decorators):
+            wrapper = decorator(wrapper)
+        return wrapper
+
+    return decorate
+
+
 @cli.command()
-@click.option("--staged", "mode", flag_value="staged", default=True, help="Quiz staged changes.")
-@click.option("--unpushed", "mode", flag_value="unpushed", help="Quiz commits not on any remote.")
-@click.option(
-    "--branch", "mode", flag_value="branch", help="Quiz the branch since it left main: its PR."
-)
-@click.option("--range", "rev_range", default=None, help="Quiz an explicit BASE..HEAD range.")
+@_diff_options()
 @quiz_options
 def quiz(
-    mode: str,
+    mode: str | None,
     rev_range: str | None,
     report_path: Path | None,
     **overrides: Any,
 ) -> None:
-    """Run the quiz now, without a hook."""
+    """Run the quiz now, without a hook. Quizzes the staged changes unless told otherwise."""
     git = Git()
     cfg = _config(git, **overrides)
     diff = _select_diff(git, cfg, mode, rev_range)
@@ -358,7 +403,7 @@ def _branch_diff(git: Git, cfg: Config) -> Diff | None:
     )
 
 
-def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Diff:
+def _select_diff(git: Git, cfg: Config, mode: str | None, rev_range: str | None) -> Diff:
     """The diff for ``--staged`` (default), ``--unpushed``, ``--branch`` or ``--range``."""
     if rev_range:
         base, sep, head = rev_range.partition("..")
@@ -382,32 +427,19 @@ def _select_diff(git: Git, cfg: Config, mode: str, rev_range: str | None) -> Dif
     return git.staged_diff(cfg.exclude, cfg.max_diff_bytes)
 
 
-def _diff_options(fn: Callable[..., Any]) -> Callable[..., Any]:
-    decorators = [
-        click.option("--staged", "mode", flag_value="staged", default=True, help="Staged changes."),
-        click.option(
-            "--unpushed", "mode", flag_value="unpushed", help="Commits not on any remote."
-        ),
-        click.option(
-            "--branch", "mode", flag_value="branch", help="The branch since it left main."
-        ),
-        click.option("--range", "rev_range", default=None, help="An explicit BASE..HEAD range."),
-    ]
-    for decorator in reversed(decorators):
-        fn = decorator(fn)
-    return fn
-
-
 def _emit(payload: dict[str, Any]) -> None:
     click.echo(json.dumps(payload, indent=2))
 
 
 @cli.command(name="ask")
-@_diff_options
+@_diff_options()
 @quiz_options
-def ask_cmd(mode: str, rev_range: str | None, report_path: Path | None, **overrides: Any) -> None:
+def ask_cmd(
+    mode: str | None, rev_range: str | None, report_path: Path | None, **overrides: Any
+) -> None:
     """Write the questions as JSON for a coding agent to relay (no terminal needed).
 
+    Asks about the staged changes unless a scope flag says otherwise.
     The rubrics stay in .git/grip/pending.json. Follow up with `grip grade`.
     """
     git = Git()
@@ -462,7 +494,7 @@ MAX_ANSWER = 4000
 
 
 @cli.command(name="whiteboard")
-@_diff_options
+@_diff_options()
 @click.option(
     "--interview",
     is_flag=True,
@@ -485,7 +517,7 @@ MAX_ANSWER = 4000
 @quiz_options
 def whiteboard_cmd(
     *,
-    mode: str,
+    mode: str | None,
     rev_range: str | None,
     interview: bool,
     export_path: Path | None,
@@ -497,7 +529,8 @@ def whiteboard_cmd(
     """Draw the change as a whiteboard and defend it in the browser.
 
     The parts of the change, how they connect and five questions pinned to them come from
-    your diff. Answers are graded like `grip quiz`, and a pass counts for the push hook.
+    your diff (the staged changes unless a scope flag says otherwise). Answers are graded
+    like `grip quiz`, and a pass counts for the push hook.
     """
     git = Git()
     cfg = _config(git, **overrides)
@@ -662,30 +695,64 @@ def _interview_result(board: Board, payload: dict[str, Any], passing_score: int)
 
 
 @cli.command(name="check")
-@_diff_options
-def check_cmd(mode: str, rev_range: str | None) -> None:
-    """Exit 0 when the diff already passed a quiz (or there is nothing to quiz), else 1."""
+@_diff_options("Staged changes. The default is what the installed hook quizzes.")
+def check_cmd(mode: str | None, rev_range: str | None) -> None:
+    """Exit 0 when the diff already passed a quiz (or there is nothing to quiz), else 1.
+
+    Without a scope flag it checks what the installed hooks quiz: the unpushed commits for
+    a pre-push hook, the staged changes for a pre-commit hook, both for both. With no hook
+    installed it checks the staged changes.
+    """
     git = Git()
     cfg = _config(git)
-    verdict = _check(git, cfg, mode, rev_range)
-    if verdict is None:
-        _out.print("[green]grip:[/green] ok")
+    modes: list[str | None] = [mode] if mode or rev_range else list(_hook_scopes(git))
+    verdicts = [v for m in modes if (v := _check(git, cfg, m, rev_range)) is not None]
+    if not verdicts:
+        checked = " and ".join(_scope_name(m, rev_range) for m in modes)
+        _out.print(f"[green]grip:[/green] ok ({escape(checked)})")
         return
-    _err.print(f"[bold red]grip:[/bold red] {verdict}")
+    for verdict in verdicts:
+        _err.print(f"[bold red]grip:[/bold red] {escape(verdict)}")
     sys.exit(1)
 
 
-def _check(git: Git, cfg: Config, mode: str, rev_range: str | None) -> str | None:
+def _hook_scopes(git: Git) -> tuple[str, ...]:
+    """What the installed hooks quiz: ``staged`` for pre-commit, ``unpushed`` for pre-push.
+
+    ``("staged",)`` when neither hook is installed.
+    """
+    found = tuple(
+        scope
+        for stage, scope in ((Stage.PRE_COMMIT, "staged"), (Stage.PRE_PUSH, "unpushed"))
+        if status(git, stage).active
+    )
+    return found or ("staged",)
+
+
+def _scope_name(mode: str | None, rev_range: str | None) -> str:
+    """What ``grip check`` looked at, as said back: ``unpushed commits``, ``main..HEAD``."""
+    if rev_range:
+        return rev_range
+    return {"unpushed": "unpushed commits", "branch": "the branch"}.get(
+        mode or "", "staged changes"
+    )
+
+
+def _check(git: Git, cfg: Config, mode: str | None, rev_range: str | None) -> str | None:
     """``None`` when the diff may go through, otherwise why it may not."""
     diff = _select_diff(git, cfg, mode, rev_range)
     if diff.is_empty:
         return None
     if PassMemory(git.git_dir(), cfg.remember_passes_hours).has_passed(diff.digest):
         return None
-    what = {"unpushed": "unpushed commits", "branch": "branch's commits"}.get(
-        mode, "staged changes"
-    )
-    return f"the {what} have not passed a grip quiz yet ({len(diff.files)} files)."
+    if rev_range:
+        subject = f"the range {rev_range} has"
+    else:
+        what = {"unpushed": "unpushed commits", "branch": "branch's commits"}.get(
+            mode or "", "staged changes"
+        )
+        subject = f"the {what} have"
+    return f"{subject} not passed a grip quiz yet ({_files(diff)})."
 
 
 @cli.command(name="agent-hook")
