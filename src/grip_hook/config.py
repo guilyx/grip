@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pathlib import Path
@@ -78,6 +78,7 @@ def auto_provider() -> str:
 
 
 HOOK_MODES = ("quiz", "whiteboard")
+RETRY_QUESTIONS = ("same", "new")
 
 _DIFFICULTY_RANK = {d: i for i, d in enumerate(Difficulty)}
 """``easy`` < ``normal`` < ``hard``: the order in which the enum is declared."""
@@ -206,6 +207,12 @@ class Config:
     is quizzed again, so a retry after a failed quiz costs one grading call. ``0`` asks
     the model every time; ``--fresh`` does so once."""
 
+    retry_questions: str = "same"
+    """What a retry after a failed quiz asks: ``same`` reuses the questions (or board)
+    written for the diff, within ``cache_hours``; ``new`` forgets them on a failure, so
+    the next try on the same diff gets new ones from the model. Either way the grading
+    feedback says where to look, not what the rubric expected."""
+
     hook_mode: str = "quiz"
     """What the git hook asks for: ``quiz`` (questions in the terminal) or ``whiteboard``
     (defend a board of the change in the browser, as ``grip whiteboard --defend`` does).
@@ -284,6 +291,11 @@ class Config:
                     f"passing_score in [[paths]] {', '.join(rule.match)} must be between "
                     f"0 and 100, got {rule.passing_score}"
                 )
+        if self.retry_questions not in RETRY_QUESTIONS:
+            allowed = ", ".join(RETRY_QUESTIONS)
+            raise ConfigError(
+                f"retry_questions must be one of {allowed}, got {self.retry_questions!r}"
+            )
         return self
 
     @property
@@ -359,7 +371,7 @@ def _coerce(name: str, value: Any) -> Any:  # noqa: PLR0911 - one branch per fie
             return float(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"{name} must be a number, got {value!r}") from exc
-    if name == "hook_mode":
+    if name in {"hook_mode", "retry_questions"}:
         return str(value).strip().lower()
     if name in {"require_tty", "fail_open"}:
         if isinstance(value, bool):
@@ -386,6 +398,80 @@ def _read_toml(path: Path) -> dict[str, Any]:
         raise ConfigError(f"could not parse {path}: {exc}") from exc
 
 
+DEFAULT_SOURCE = "default"
+_FLAGS = {"cache_hours": "--fresh"}
+"""Options whose command-line flag is not ``--`` plus the dashed option name."""
+
+
+@dataclass(frozen=True, slots=True)
+class Resolved:
+    """The effective :class:`Config`, and where each of its values came from."""
+
+    config: Config
+    sources: dict[str, str]
+    """Option name to the layer that set it last: ``default``, ``pyproject.toml``,
+    ``.grip.toml``, ``env GRIP_<NAME>`` or ``flag --<name>``."""
+    files: tuple[Path, ...]
+    """The configuration files that were read, lowest precedence first."""
+
+
+def resolve_config(
+    root: Path | None,
+    *,
+    env: dict[str, str] | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> Resolved:
+    """Build the effective :class:`Config` for a repository and record each value's source.
+
+    Args:
+        root: Repository root (where ``.grip.toml`` / ``pyproject.toml`` live), or ``None``.
+        env: Environment mapping. Defaults to :data:`os.environ`.
+        overrides: Values from command-line flags. ``None`` entries are ignored.
+    """
+    cfg = Config()
+    sources = dict.fromkeys(_FIELD_NAMES, DEFAULT_SOURCE)
+    files: list[Path] = []
+
+    def layer(raw: dict[str, Any], where: str, label: Callable[[str], str]) -> None:
+        nonlocal cfg
+        cfg = _apply(cfg, raw, where)
+        for key in raw:
+            sources[key.replace("-", "_")] = label(key)
+
+    if root is not None:
+        pyproject = root / "pyproject.toml"
+        if pyproject.is_file():
+            tool = _read_toml(pyproject).get("tool", {})
+            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
+                files.append(pyproject)
+                layer(tool["grip"], str(pyproject), lambda _: "pyproject.toml")
+        grip_toml = root / ".grip.toml"
+        if grip_toml.is_file():
+            files.append(grip_toml)
+            layer(_read_toml(grip_toml), str(grip_toml), lambda _: ".grip.toml")
+
+    environ = os.environ if env is None else env
+    env_keys = {
+        key[len(ENV_PREFIX) :].lower(): key
+        for key in environ
+        if key.startswith(ENV_PREFIX)
+        and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES - _FILE_ONLY
+    }
+    layer(
+        {name: environ[key] for name, key in env_keys.items()},
+        "environment",
+        lambda name: f"env {env_keys[name]}",
+    )
+
+    if overrides:
+        layer(
+            {k: v for k, v in overrides.items() if v is not None},
+            "command line",
+            lambda name: f"flag {_FLAGS.get(name, '--' + name.replace('_', '-'))}",
+        )
+    return Resolved(cfg.validate(), sources, tuple(files))
+
+
 def load_config(
     root: Path | None,
     *,
@@ -399,29 +485,7 @@ def load_config(
         env: Environment mapping. Defaults to :data:`os.environ`.
         overrides: Values from command-line flags. ``None`` entries are ignored.
     """
-    cfg = Config()
-    if root is not None:
-        pyproject = root / "pyproject.toml"
-        if pyproject.is_file():
-            tool = _read_toml(pyproject).get("tool", {})
-            if isinstance(tool, dict) and isinstance(tool.get("grip"), dict):
-                cfg = _apply(cfg, tool["grip"], str(pyproject))
-        grip_toml = root / ".grip.toml"
-        if grip_toml.is_file():
-            cfg = _apply(cfg, _read_toml(grip_toml), str(grip_toml))
-
-    environ = os.environ if env is None else env
-    env_raw = {
-        key[len(ENV_PREFIX) :].lower(): value
-        for key, value in environ.items()
-        if key.startswith(ENV_PREFIX)
-        and key[len(ENV_PREFIX) :].lower() in _FIELD_NAMES - _FILE_ONLY
-    }
-    cfg = _apply(cfg, env_raw, "environment")
-
-    if overrides:
-        cfg = _apply(cfg, {k: v for k, v in overrides.items() if v is not None}, "command line")
-    return cfg.validate()
+    return resolve_config(root, env=env, overrides=overrides).config
 
 
 TEMPLATE = """\
@@ -441,6 +505,7 @@ provider = "{provider}"
 # hook_mode = "quiz"           # quiz | whiteboard (defend a board in the browser)
 # remember_passes_hours = 24   # a passed diff is not quizzed again for this long
 # cache_hours = 24             # a retry reuses the questions written for the same diff
+# retry_questions = "same"     # same | new (after a failed quiz, ask new questions)
 # fail_open = false            # let the commit through when the provider is down
 """
 
@@ -484,13 +549,17 @@ __all__ = [
     "DEFAULT_EXCLUDES",
     "DEFAULT_MODEL",
     "DEFAULT_PASSING_SCORE",
+    "DEFAULT_SOURCE",
     "HOOK_MODES",
+    "RETRY_QUESTIONS",
     "TEMPLATE",
     "Config",
     "PathRule",
+    "Resolved",
     "auto_provider",
     "describe",
     "load_config",
     "path_matches",
     "render_template",
+    "resolve_config",
 ]

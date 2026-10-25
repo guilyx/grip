@@ -30,12 +30,13 @@ To upgrade: `pipx upgrade grip-hook` (or `uv tool upgrade grip-hook`).
 ## 2. Give it a model
 
 Already have Claude Code, Codex or Gemini CLI installed and signed in? grip uses it
-automatically, no key needed: with no provider configured, it picks the first of the three
-it finds. `grip init` (step 3) asks which one to use and writes it down:
+automatically, no key needed: with `provider = "auto"` (the default, and what `grip init`
+writes in step 3), it picks the first of the three it finds on each machine. To pin one
+for the whole team instead:
 
 ```toml
 # .grip.toml at the root of your repository
-provider = "claude-code"   # or "codex", "gemini", or "auto"
+provider = "claude-code"   # or "codex", "gemini"
 ```
 
 With none of them installed, grip uses Anthropic's API:
@@ -68,8 +69,8 @@ cd your-repo
 grip init
 ```
 
-It writes a commented `.grip.toml` (picking `claude-code`, `codex` or `gemini` as the
-provider when that CLI is installed, `anthropic` otherwise), installs the pre-push hook,
+It writes a commented `.grip.toml` with `provider = "auto"` (and says whether that means
+`claude-code`, `codex`, `gemini` or `anthropic` on your machine), installs the pre-push hook,
 and writes the rule file for every [coding agent](agents.md) found on your machine. Commit
 what it wrote and the team shares it. Flags: `--provider`, `--passing-score`,
 `--difficulty`, `--stage`, `--no-hook`, `--no-agents`, `--force`.
@@ -117,7 +118,8 @@ To do it by hand, choose one of the two approaches.
 ## 4. Try it
 
 ```bash
-grip quiz --provider fake   # offline dry run with a dummy grader
+git add .grip.toml          # the quiz covers staged changes; stage something first
+grip quiz --provider fake   # offline dry run; the dummy grader only checks length
 grip quiz                   # quiz your staged changes for real
 grip status                 # what is installed, effective configuration
 ```
@@ -131,4 +133,5 @@ difficulty = "normal"   # easy | normal | hard
 ```
 
 Commit that file so the whole team shares the same bar. Everything else is optional; see
-[Configuration](configuration.md).
+[Configuration](configuration.md). Bringing it to a whole team? Start with
+[Rolling out to a team](team-rollout.md).

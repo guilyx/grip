@@ -38,5 +38,6 @@ with headings), or `--short` (a one-line subject only).
 
 - `grip last` without `--json` shows the same quiz in a readable form; use it when the
   developer wants to reread what they wrote.
+- Work only from `grip last --json`. Never read or open files under `.git/grip/`.
 - If the quiz failed, say so once and still draft: a message written from a failed quiz
   is a prompt to go back and read, not a ticket to push.

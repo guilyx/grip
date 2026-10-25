@@ -14,7 +14,15 @@ class ConfigError(GripError):
 
 
 class GitError(GripError):
-    """A git command failed or we are not inside a repository."""
+    """A git command failed or we are not inside a repository.
+
+    The message is one plain line; ``detail`` keeps the full git command and its output
+    for ``GRIP_DEBUG=1``.
+    """
+
+    def __init__(self, message: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.detail = detail
 
 
 class ProviderError(GripError):

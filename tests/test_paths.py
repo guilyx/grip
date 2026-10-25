@@ -253,3 +253,23 @@ def test_ask_and_grade_use_the_bar_of_the_files(
     assert result.exit_code == 1, result.output
     graded = json.loads(result.output)
     assert (graded["score"], graded["passing_score"]) == (50, 90)
+
+
+def test_a_remembered_pass_must_clear_the_bar_of_its_files(
+    runner: CliRunner,
+    in_repo: Path,
+    stage_change: Callable[[str, str], None],
+    terminal: Callable[[list[str]], FakeTerminalFactory],
+) -> None:
+    # Passed at 50 before the payments rule existed; the rule now asks for 90.
+    (in_repo / ".grip.toml").write_text('provider = "fake"\nmodel = "fake"\npassing_score = 40\n')
+    stage_change("services/payments/charge.py", "y = 2\n")
+    terminal(SHORT)
+    assert runner.invoke(cli, ["quiz"]).exit_code == 0
+    assert runner.invoke(cli, ["check", "--staged"]).exit_code == 0
+
+    (in_repo / ".grip.toml").write_text(MONOREPO)
+    result = runner.invoke(cli, ["check", "--staged"])
+    assert result.exit_code == 1, result.output  # the hook would ask again, so check does
+    status = " ".join(runner.invoke(cli, ["status"]).output.split())
+    assert "does not count (below the pass mark of 90)" in status
