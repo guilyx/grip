@@ -127,7 +127,8 @@ without a browser.
 - The `Host` header must be `127.0.0.1:PORT`, and `POST` requires a matching `Origin`. This
   blocks DNS rebinding and other sites posting to the server.
 - One page, all CSS and JS inline, a strict Content-Security-Policy with a hash for the one
-  script, no network requests, system fonts with brand fallbacks.
+  script, no network requests beyond this server. Its three fonts are bundled with grip and
+  served from `/TOKEN/fonts/` (`font-src 'self'`); an export carries them inline.
 - Routes: `GET /TOKEN/` the page, `GET /TOKEN/board.json` the board **without rubrics**,
   `POST /TOKEN/answers` grade once and return the sheet.
 - The server exits after grading, on Ctrl-C, or after 20 idle minutes. Nothing is recorded
@@ -205,4 +206,5 @@ Taken as proposed for 0.2.0; each can be revisited.
 2. Should `--export` ever include rubrics, for a reviewer who runs the session elsewhere?
    No; use `--interview` on the reviewer's machine.
 3. Five pins always, or four to six by diff size? Five, to keep scores comparable.
-4. Brand fonts embedded in the binary (about 150 KB) or system fonts? System fonts.
+4. Brand fonts embedded in the package or system fonts? Embedded, after all: subset to Latin
+   they come to about 85 KB, and the board is hard to read in fallback fonts.

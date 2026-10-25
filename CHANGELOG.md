@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The whiteboard is readable on real changes. The board is drawn at full size or larger in
+  a window you can drag, scroll and zoom (Ctrl + scroll, pinch, or the buttons; **Fit**
+  shows it all), and takes the height of the screen on a desktop. Box labels wrap onto two
+  lines and boxes grow to fit, arrows bow around boxes instead of running through them,
+  edge labels sit on a patch of board and move apart instead of overlapping, and changed
+  boxes are tinted. The page now loads its fonts (Archivo, Instrument Sans, JetBrains
+  Mono), which ship with grip under the SIL Open Font License; an export embeds them.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

@@ -369,8 +369,9 @@ injection may have shaped:
 - a random port, and a 128-bit random token in every path;
 - only a `Host` of `127.0.0.1:PORT` or `localhost:PORT` is accepted, against DNS
   rebinding, and on `POST` only an `Origin` of the same, against cross-site posts;
-- one self-contained page whose Content-Security-Policy allows exactly its own inline
-  style and script, by hash, and no network access beyond this server;
+- one page whose Content-Security-Policy allows exactly its own inline style and script, by
+  hash, the three fonts bundled in `grip_hook/fonts` (`font-src 'self'`), and no network
+  access beyond this server; an export embeds the fonts so it stays one file;
 - the board is embedded as JSON with `<` escaped, so no label can close the script tag,
   and the page only ever writes text with `textContent`;
 - request bodies are capped at 64 kB, grading happens at most once (requests run on
