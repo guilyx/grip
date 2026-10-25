@@ -29,6 +29,11 @@ All notable changes to this project are documented here. The format follows
   `--unpushed`, and `everything since the first commit` instead of the empty tree's hash
   for a first push. When the diff is over `max_diff_bytes` it also says how much the model
   saw: `grip saw the first 200 KB of a 790 KB change (max_diff_bytes)`.
+- `grip --help` lists the core commands first (init, quiz, whiteboard, status, skip,
+  resume, last), groups the rest, and ends with examples. The Keep A Grip commands moved
+  under `grip platform` (`grip platform login`, `solve`, `submit`, …); the old top-level
+  names still work and print a one-line note that they moved. `hook`, `agent-hook`,
+  `statusline`, `ask` and `grade` are no longer listed in the help but work as before.
 
 ### Fixed
 
