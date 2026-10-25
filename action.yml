@@ -1,0 +1,206 @@
+name: grip
+description: >-
+  Write five questions about a pull request's diff and post them as one PR comment, for the
+  author or reviewer to answer in review. Nothing is graded in CI.
+author: Erwin L.
+branding:
+  icon: help-circle
+  color: orange
+
+inputs:
+  provider:
+    description: >-
+      Model that writes the questions: anthropic, openai, ollama or fake (offline, for
+      testing). The coding-agent providers need a signed-in CLI and do not fit CI.
+    default: anthropic
+  model:
+    description: Model identifier. Empty uses the provider's default.
+    default: ""
+  api-key:
+    description: >-
+      API key for the provider, e.g. secrets.ANTHROPIC_API_KEY. Not needed for fake or a
+      keyless ollama server.
+    default: ""
+  base-url:
+    description: >-
+      Provider API base URL (a gateway, an OpenAI-compatible server, ollama). Empty uses the
+      provider's default. A base_url in the pull request's .grip.toml is ignored, so the
+      key only ever goes where this workflow says.
+    default: ""
+  difficulty:
+    description: easy, normal or hard. Empty uses the repository's .grip.toml.
+    default: ""
+  post-comment:
+    description: >-
+      Post the questions as a PR comment, or update grip's earlier comment. Skipped on pull
+      requests from forks, whose token cannot write.
+    default: "true"
+  export-board:
+    description: >-
+      Also draw the whiteboard (one more model call), upload it as a workflow artifact and
+      link it from the comment.
+    default: "false"
+  github-token:
+    description: Token used to post the comment. Needs pull-requests write.
+    default: ${{ github.token }}
+  package:
+    description: >-
+      What to pip install. grip-hook from PyPI by default; pin it (grip-hook==0.5.0) or
+      point at a local checkout.
+    default: grip-hook
+  python-version:
+    description: Python used to run grip.
+    default: "3.12"
+
+outputs:
+  status:
+    description: "questions, nothing-to-quiz, or skipped (no key on a fork's pull request)."
+    value: ${{ steps.ask.outputs.status }}
+  questions-file:
+    description: Path of the `grip ask` JSON (summary and questions, no rubrics).
+    value: ${{ steps.ask.outputs.file }}
+  comment-url:
+    description: URL of the PR comment, when one was posted or updated.
+    value: ${{ steps.comment.outputs.url }}
+  board-url:
+    description: URL of the uploaded whiteboard artifact, when export-board is on.
+    value: ${{ steps.board-upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install grip
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+      run: python -m pip install --quiet --disable-pip-version-check "$PACKAGE" && grip --version
+
+    - name: Find the pull request's range
+      id: range
+      shell: bash
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+      run: |
+        if [ -z "$BASE" ] || [ -z "$HEAD" ]; then
+          echo "::error::grip's action runs on pull_request events; no pull request found."
+          exit 1
+        fi
+        # The merge base is what `main...feature` means: only the pull request's own changes.
+        for sha in "$BASE" "$HEAD"; do
+          git cat-file -e "$sha^{commit}" 2>/dev/null || git fetch --quiet --no-tags origin "$sha"
+        done
+        if ! merge_base="$(git merge-base "$BASE" "$HEAD" 2>/dev/null)"; then
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --quiet --no-tags --unshallow origin
+          fi
+          merge_base="$(git merge-base "$BASE" "$HEAD")"
+        fi
+        echo "range=$merge_base..$HEAD" >> "$GITHUB_OUTPUT"
+
+    - name: Ask grip for the questions
+      id: ask
+      shell: bash
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
+        DIFFICULTY: ${{ inputs.difficulty }}
+        RANGE: ${{ steps.range.outputs.range }}
+        FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        GRIP_ACTION_API_KEY: ${{ inputs.api-key }}
+        GRIP_BASE_URL: ${{ inputs.base-url }}
+        OUT: ${{ runner.temp }}/grip-questions.json
+      run: |
+        echo "file=$OUT" >> "$GITHUB_OUTPUT"
+        # Set even when empty: it outranks a base_url in the pull request's .grip.toml.
+        export GRIP_BASE_URL="${GRIP_BASE_URL:-}"
+        if [ -n "$GRIP_ACTION_API_KEY" ]; then
+          export GRIP_API_KEY_ENV=GRIP_ACTION_API_KEY
+        elif [ "$PROVIDER" = "anthropic" ] || [ "$PROVIDER" = "openai" ]; then
+          if [ "$FORK" = "true" ]; then
+            echo "::notice::grip: no API key. Secrets are not passed to pull requests from forks, so no questions this time."
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::grip: provider $PROVIDER needs an API key: pass a secret as api-key (secrets.ANTHROPIC_API_KEY, for example)."
+          exit 1
+        fi
+        args=(ask --range "$RANGE" --provider "$PROVIDER")
+        if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+        if [ -n "$DIFFICULTY" ]; then args+=(--difficulty "$DIFFICULTY"); fi
+        grip "${args[@]}" > "$OUT"
+        status="$(python "$GITHUB_ACTION_PATH/scripts/action/comment.py" --status "$OUT")"
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        echo "grip: $status"
+
+    - name: Draw the whiteboard
+      id: board
+      if: inputs.export-board == 'true' && steps.ask.outputs.status == 'questions'
+      shell: bash
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
+        DIFFICULTY: ${{ inputs.difficulty }}
+        RANGE: ${{ steps.range.outputs.range }}
+        GRIP_ACTION_API_KEY: ${{ inputs.api-key }}
+        GRIP_BASE_URL: ${{ inputs.base-url }}
+        BOARD: ${{ runner.temp }}/grip-board/board.html
+      run: |
+        export GRIP_BASE_URL="${GRIP_BASE_URL:-}"
+        if [ -n "$GRIP_ACTION_API_KEY" ]; then export GRIP_API_KEY_ENV=GRIP_ACTION_API_KEY; fi
+        args=(whiteboard --range "$RANGE" --provider "$PROVIDER" --export "$BOARD")
+        if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+        if [ -n "$DIFFICULTY" ]; then args+=(--difficulty "$DIFFICULTY"); fi
+        grip "${args[@]}"
+        echo "path=$BOARD" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the whiteboard
+      id: board-upload
+      if: steps.board.outputs.path != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: grip-board-pr-${{ github.event.pull_request.number }}
+        path: ${{ steps.board.outputs.path }}
+        if-no-files-found: error
+
+    - name: Write the comment
+      id: render
+      if: steps.ask.outputs.status == 'questions'
+      shell: bash
+      env:
+        QUESTIONS: ${{ steps.ask.outputs.file }}
+        BOARD_URL: ${{ steps.board-upload.outputs.artifact-url }}
+        BODY: ${{ runner.temp }}/grip-comment.md
+      run: |
+        python "$GITHUB_ACTION_PATH/scripts/action/comment.py" "$QUESTIONS" \
+          --board-url "$BOARD_URL" --out "$BODY"
+        cat "$BODY" >> "$GITHUB_STEP_SUMMARY"
+        echo "body=$BODY" >> "$GITHUB_OUTPUT"
+
+    - name: Post or update the PR comment
+      id: comment
+      if: >-
+        inputs.post-comment == 'true' && steps.render.outputs.body != '' &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ github.event.pull_request.number }}
+        BODY: ${{ steps.render.outputs.body }}
+      run: |
+        marker="$(python "$GITHUB_ACTION_PATH/scripts/action/comment.py" --marker)"
+        existing="$(gh api --paginate "repos/$REPO/issues/$NUMBER/comments" \
+          --jq ".[] | select(.body | contains(\"$marker\")) | .id" | sed -n 1p)"
+        if [ -n "$existing" ]; then
+          url="$(gh api --method PATCH "repos/$REPO/issues/comments/$existing" -F "body=@$BODY" --jq .html_url)"
+        else
+          url="$(gh api --method POST "repos/$REPO/issues/$NUMBER/comments" -F "body=@$BODY" --jq .html_url)"
+        fi
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+        echo "grip: $url"

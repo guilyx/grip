@@ -81,6 +81,7 @@ nav:
   - Guides:
       - The whiteboard: whiteboard.md
       - Coding agents: agents.md
+      - GitHub Action: github-action.md
       - Configuration: configuration.md
       - Providers: providers.md
       - Keep A Grip: keepagrip.md

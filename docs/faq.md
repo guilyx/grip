@@ -30,7 +30,10 @@ you do.
 
 ## Does it run in CI?
 
-No. When `CI` is set grip exits immediately. CI should run your tests, not quiz a robot.
+The hooks do not: when `CI` is set they exit immediately, because nobody is there to
+answer. The [GitHub Action](github-action.md) does something else in CI: it posts the
+five questions on the pull request for the author or a reviewer to answer in review, and
+grades nothing.
 
 ## Why do I keep getting the same questions?
 
