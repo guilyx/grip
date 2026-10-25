@@ -13,6 +13,12 @@ All notable changes to this project are documented here. The format follows
   `git add` them first; 2 unpushed commits: try `grip quiz --unpushed` or `--branch`".
   `grip ask` adds the same as data in a `hint` field. The "Try it" line at the end of
   `grip init` suggests a command that has something to quiz in that repository.
+- `grip init` writes `provider = "auto"` instead of this machine's coding agent, so the
+  committed `.grip.toml` works for teammates without that tool. It prints what `auto`
+  means on this machine, lists `auto` first in its menu, and writes a concrete provider
+  only when you pick one. It now also asks for the difficulty (default `normal`) and says
+  "wrote AGENTS.md for any coding agent that reads it" instead of "for AGENTS.md
+  readers". `--provider auto` is accepted on every command.
 
 ### Fixed
 

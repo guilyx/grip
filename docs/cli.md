@@ -114,12 +114,17 @@ Sets a repository up in one go: writes a commented `.grip.toml`, installs the pr
 (chaining after an existing hook rather than failing) and runs `grip agents` for the
 coding agents it detects.
 
-In a terminal it asks three questions, each with a default picked for this machine: which
-model writes and grades the questions (an installed coding agent first, else
-`anthropic`), the pass mark, and whether to quiz before pushes, commits or both. Press
-Enter to keep a default. A flag answers its question up front, `--yes` takes every
-default without asking, and outside a terminal (scripts, CI) nothing is asked. It then
-says what is still missing for the chosen provider, such as `ANTHROPIC_API_KEY`.
+In a terminal it asks four questions: which model writes and grades the questions, the
+pass mark, the difficulty (`easy`, `normal` or `hard`), and whether to quiz before
+pushes, commits or both. Press Enter to keep a default. A flag answers its question up
+front, `--yes` takes every default without asking, and outside a terminal (scripts, CI)
+nothing is asked.
+
+The provider defaults to `auto`, and `.grip.toml` is meant to be committed, so each
+teammate gets the coding agent they have installed (Claude Code, Codex or Gemini CLI),
+else `anthropic`. `grip init` prints what `auto` resolves to on your machine. It writes a
+concrete provider only when you pick one in the menu or pass `--provider`. It then says
+what is still missing for that provider, such as `ANTHROPIC_API_KEY`.
 
 ```bash
 grip init                                   # ask, write, install

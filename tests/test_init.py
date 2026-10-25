@@ -19,6 +19,11 @@ def _none(_: str) -> str | None:
     return None
 
 
+def _flat(text: str) -> str:
+    """Output with rich's line wrapping undone."""
+    return " ".join(text.split())
+
+
 @pytest.fixture
 def in_repo(repo: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.chdir(repo)
@@ -53,6 +58,8 @@ def test_init_writes_everything(in_repo: Path) -> None:
     assert (in_repo / ".git" / "hooks" / "pre-push").exists()
     assert not (in_repo / ".git" / "hooks" / "pre-commit").exists()
     assert (in_repo / "AGENTS.md").exists()
+    assert "wrote AGENTS.md for any coding agent that reads it" in _flat(result.output)
+    assert "AGENTS.md readers" not in result.output
     # Nothing is staged and the files init wrote are untracked: a bare quiz would be empty.
     assert (
         "Try it: stage a change with `git add` (the files above will do), then grip quiz "
@@ -94,19 +101,34 @@ def test_init_keeps_existing_toml_unless_forced(in_repo: Path) -> None:
     assert load_config(in_repo).passing_score == 70
 
 
-def test_init_picks_an_installed_agent(in_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_init_writes_auto_and_says_what_it_picks_here(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The team file must not carry this machine's agent: a teammate may not have Codex.
     monkeypatch.setattr(
         integrations.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None
     )
     result = CliRunner().invoke(cli, ["init", "--no-hook", "--no-agents"])
     assert result.exit_code == 0, result.output
-    assert load_config(in_repo).provider == "codex"
+    assert load_config(in_repo).provider == "auto"
+    assert "provider auto, which is codex on this machine" in _flat(result.output)
 
 
-def test_init_defaults_to_anthropic(in_repo: Path) -> None:
+def test_init_without_an_agent_still_writes_auto(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     result = CliRunner().invoke(cli, ["init", "--no-hook", "--no-agents"])
     assert result.exit_code == 0, result.output
-    assert load_config(in_repo).provider == "anthropic"
+    assert load_config(in_repo).provider == "auto"
+    assert "which is anthropic on this machine" in _flat(result.output)
+    assert "ANTHROPIC_API_KEY" in result.output
+
+
+def test_init_accepts_provider_auto(in_repo: Path) -> None:
+    result = CliRunner().invoke(cli, ["init", "--provider", "AUTO", "--no-hook", "--no-agents"])
+    assert result.exit_code == 0, result.output
+    assert load_config(in_repo).provider == "auto"
 
 
 def test_init_appends_to_a_foreign_hook(in_repo: Path) -> None:
@@ -132,13 +154,45 @@ def test_init_asks_in_a_terminal(in_repo: Path, monkeypatch: pytest.MonkeyPatch)
         integrations.shutil, "which", lambda name: "/usr/bin/claude" if name == "claude" else None
     )
     monkeypatch.setattr(cli_module, "_interactive", lambda: True)
-    result = CliRunner().invoke(cli, ["init", "--no-agents"], input="\n85\nboth\n")
+    result = CliRunner().invoke(cli, ["init", "--no-agents"], input="\n85\n\nboth\n")
     assert result.exit_code == 0, result.output
     assert "Which model asks and grades the questions?" in result.output
+    menu = result.output.split("Which model asks and grades the questions?")[1]
+    assert menu.split()[0] == "auto"  # listed first, with what it means on this machine
+    assert "here: claude-code" in _flat(menu)
+    assert "How demanding should the questions be? (easy, normal, hard)" in result.output
     cfg = load_config(in_repo)
-    assert (cfg.provider, cfg.passing_score) == ("claude-code", 85)  # Enter kept the default
+    # Enter kept the defaults: auto, not the agent found here, and normal difficulty.
+    assert (cfg.provider, cfg.passing_score, cfg.difficulty.value) == ("auto", 85, "normal")
     hooks = in_repo / ".git" / "hooks"
     assert (hooks / "pre-commit").exists() and (hooks / "pre-push").exists()
+
+
+def test_init_writes_a_provider_picked_in_the_menu(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        integrations.shutil, "which", lambda name: "/usr/bin/claude" if name == "claude" else None
+    )
+    monkeypatch.setattr(cli_module, "_interactive", lambda: True)
+    answers = "claude-code\n\nhard\npush\n"
+    result = CliRunner().invoke(cli, ["init", "--no-agents"], input=answers)
+    assert result.exit_code == 0, result.output
+    cfg = load_config(in_repo)
+    assert (cfg.provider, cfg.passing_score, cfg.difficulty.value) == ("claude-code", 70, "hard")
+    assert "(provider claude-code)" in result.output
+
+
+def test_init_does_not_ask_what_a_flag_answered(
+    in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli_module, "_interactive", lambda: True)
+    args = ["init", "--no-agents", "--no-hook", "--provider", "fake", "--difficulty", "easy"]
+    result = CliRunner().invoke(cli, args, input="\n")
+    assert result.exit_code == 0, result.output
+    assert "Which model" not in result.output and "How demanding" not in result.output
+    cfg = load_config(in_repo)
+    assert (cfg.provider, cfg.difficulty.value) == ("fake", "easy")
 
 
 def test_init_yes_takes_the_defaults_without_asking(
@@ -149,8 +203,8 @@ def test_init_yes_takes_the_defaults_without_asking(
     result = CliRunner().invoke(cli, ["init", "--yes", "--no-hook", "--no-agents"])
     assert result.exit_code == 0, result.output
     assert "Which model" not in result.output
-    assert load_config(in_repo).provider == "anthropic"
-    assert "ANTHROPIC_API_KEY" in result.output or "ant auth login" in result.output
+    assert load_config(in_repo).provider == "auto"
+    assert "ANTHROPIC_API_KEY" in result.output
 
 
 def test_install_says_which_model_auto_picked(

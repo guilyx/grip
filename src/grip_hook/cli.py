@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import sys
 import webbrowser
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -123,6 +123,11 @@ def _stage_choice() -> click.Choice[str]:
     return click.Choice([s.value for s in INSTALLABLE_STAGES])
 
 
+def _provider_choice() -> click.Choice[str]:
+    """Every provider name, ``auto`` included, as the configuration accepts them."""
+    return click.Choice(sorted({*REGISTRY, AUTO_PROVIDER}), case_sensitive=False)
+
+
 def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
     """Options shared by every command that can run a quiz."""
     decorators = [
@@ -134,9 +139,9 @@ def quiz_options(fn: Callable[..., Any]) -> Callable[..., Any]:
         ),
         click.option(
             "--provider",
-            type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+            type=_provider_choice(),
             default=None,
-            help="LLM provider.",
+            help="LLM provider. auto: an installed coding agent, else anthropic.",
         ),
         click.option("--model", default=None, help="Model identifier for the provider."),
         click.option(
@@ -955,16 +960,11 @@ def _push_diff(git: Git, cfg: Config, hook_args: tuple[str, ...]) -> Diff:
     return git.push_diff(refs, remote, cfg.exclude, cfg.max_diff_bytes)
 
 
-def _default_provider() -> str:
-    """The provider ``grip init`` picks: a signed-in coding agent when there is one."""
-    return auto_provider()
-
-
 _PROVIDER_HINTS = {
+    "auto": "each machine's coding agent, else anthropic",
     "claude-code": "Claude Code, already signed in: no key, no extra bill",
     "codex": "Codex CLI, already signed in: no key, no extra bill",
     "gemini": "Gemini CLI, already signed in: no key, no extra bill",
-    "auto": "each teammate's installed coding agent, else anthropic",
     "anthropic": "Anthropic API: needs ANTHROPIC_API_KEY or `ant auth login`",
     "ollama": "a local model through Ollama: free, set `model` in .grip.toml",
     "openai": "any OpenAI-compatible API: set `base_url` and OPENAI_API_KEY",
@@ -975,8 +975,21 @@ _PROVIDER_HINTS = {
 class _InitChoices:
     provider: str
     passing_score: int
+    difficulty: str
     stages: tuple[str, ...]
     agents: bool
+
+
+def _agent_names(agents: Iterable[str]) -> str:
+    """Who an agent file is for, without the generic "AGENTS.md readers" entry as a name."""
+    generic = {a.name for a in AGENTS if a.always}
+    names = list(agents)
+    named = [name for name in names if name not in generic]
+    if len(named) == len(names):
+        return ", ".join(named)
+    if named:
+        return f"{', '.join(named)} and other agents that read it"
+    return "any coding agent that reads it"
 
 
 def _init_wizard(
@@ -984,6 +997,7 @@ def _init_wizard(
     *,
     ask_provider: bool,
     ask_score: bool,
+    ask_difficulty: bool,
     ask_stages: bool,
     ask_agents: bool,
 ) -> _InitChoices:
@@ -992,10 +1006,13 @@ def _init_wizard(
     provider = defaults.provider
     if ask_provider:
         installed = [name for name, command in AGENT_PROVIDERS if shutil.which(command)]
-        options = [*installed, "auto", "anthropic", "ollama", "openai"]
+        options = [AUTO_PROVIDER, *installed, "anthropic", "ollama", "openai"]
         _out.print("[bold]Which model asks and grades the questions?[/bold]")
         for name in options:
-            _out.print(f"  [cyan]{name:<12}[/cyan] {_PROVIDER_HINTS[name]}")
+            hint = _PROVIDER_HINTS[name]
+            if name == AUTO_PROVIDER:
+                hint += f" (here: {auto_provider()})"
+            _out.print(f"  [cyan]{name:<12}[/cyan] {hint}")
         provider = click.prompt(
             "Provider", type=click.Choice(options), default=defaults.provider, show_choices=False
         )
@@ -1004,6 +1021,13 @@ def _init_wizard(
         score = click.prompt(
             f"\nPass mark, out of {MAX_SCORE}", type=click.IntRange(0, MAX_SCORE), default=score
         )
+    difficulty = defaults.difficulty
+    if ask_difficulty:
+        difficulty = click.prompt(
+            "\nHow demanding should the questions be?",
+            type=click.Choice([d.value for d in Difficulty], case_sensitive=False),
+            default=difficulty,
+        ).lower()
     stages = defaults.stages
     if ask_stages:
         when = click.prompt(
@@ -1022,7 +1046,7 @@ def _init_wizard(
             default=True,
         )
     _out.print()
-    return _InitChoices(provider, score, stages, agents)
+    return _InitChoices(provider, score, difficulty, stages, agents)
 
 
 def _interactive() -> bool:
@@ -1048,9 +1072,9 @@ def _provider_tip(provider: str) -> str | None:
 @cli.command(name="init")
 @click.option(
     "--provider",
-    type=click.Choice(sorted(REGISTRY), case_sensitive=False),
+    type=_provider_choice(),
     default=None,
-    help="Provider for .grip.toml. Defaults to an installed coding agent, else anthropic.",
+    help="Provider for .grip.toml. Defaults to auto: each machine's coding agent, else anthropic.",
 )
 @click.option(
     "--passing-score",
@@ -1088,19 +1112,20 @@ def init_cmd(
 ) -> None:
     """Set a repository up in one go: .grip.toml, the git hook and the agent rule files.
 
-    In a terminal it asks which model to use, the pass mark and when to quiz, with
-    defaults picked for this machine; flags answer a question up front and --yes takes
-    every default. It picks a provider you will not need a key for when Claude Code, Codex
-    or Gemini CLI is installed. Everything it writes is meant to be committed so the whole
-    team shares it.
+    In a terminal it asks which model to use, the pass mark, the difficulty and when to
+    quiz; flags answer a question up front and --yes takes every default. The provider
+    defaults to auto, so each teammate uses the coding agent they have (Claude Code, Codex
+    or Gemini CLI), else anthropic. Everything it writes is meant to be committed so the
+    whole team shares it.
     """
     git = Git()
     root = git.root()
     toml_path = root / ".grip.toml"
     writing = force or not toml_path.exists()
     choices = _InitChoices(
-        provider=(provider or _default_provider()).lower(),
+        provider=(provider or AUTO_PROVIDER).lower(),
         passing_score=DEFAULT_PASSING_SCORE if passing_score is None else passing_score,
+        difficulty=(difficulty or Difficulty.NORMAL.value).lower(),
         stages=stages or (Stage.PRE_PUSH.value,),
         agents=not no_agents,
     )
@@ -1109,6 +1134,7 @@ def init_cmd(
             choices,
             ask_provider=writing and provider is None,
             ask_score=writing and passing_score is None,
+            ask_difficulty=writing and difficulty is None,
             ask_stages=not no_hook and not stages,
             ask_agents=not no_agents,
         )
@@ -1120,12 +1146,13 @@ def init_cmd(
         text = render_template(
             provider=choices.provider,
             passing_score=choices.passing_score,
-            difficulty=difficulty or Difficulty.NORMAL.value,
+            difficulty=choices.difficulty,
         )
         toml_path.write_text(text, "utf-8")
-        _out.print(
-            f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {choices.provider})"
-        )
+        which = choices.provider
+        if which == AUTO_PROVIDER:
+            which = f"{AUTO_PROVIDER}, which is {auto_provider()} on this machine"
+        _out.print(f"[green]grip:[/green] wrote {_pretty_path(toml_path)} (provider {which})")
         if tip := _provider_tip(choices.provider):
             _out.print(f"[yellow]grip:[/yellow] {tip}")
     if not no_hook:
@@ -1140,7 +1167,7 @@ def init_cmd(
             if change.action in past:
                 _out.print(
                     f"[green]grip:[/green] {past[change.action]} {_pretty_path(change.path)} "
-                    f"for {', '.join(change.agents)}"
+                    f"for {_agent_names(change.agents)}"
                 )
     _out.print(
         f"\n[dim]Try it: {_try_it(git)}. Commit the files above so your team gets "
