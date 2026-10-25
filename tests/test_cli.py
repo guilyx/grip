@@ -297,6 +297,57 @@ def test_main_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert exc.value.code == 2
 
 
+@pytest.mark.parametrize("command", [["status"], ["quiz"], ["init", "--yes"], ["ask"]])
+def test_outside_a_repo_is_one_plain_line(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    result = runner.invoke(cli, command)
+    assert result.exit_code == 2
+    assert result.output == (
+        "grip error: not inside a git repository (run grip from your project)\n"
+    )
+
+
+def test_grip_debug_shows_the_git_command(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GRIP_DEBUG", "1")
+    result = runner.invoke(cli, ["quiz"])
+    assert result.exit_code == 2
+    assert "not inside a git repository" in result.output
+    assert "$ git rev-parse --show-toplevel" in result.output
+    assert "fatal: not a git repository" in result.output
+
+
+def test_unknown_revision_in_a_range(
+    runner: CliRunner, in_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    for command in ("quiz", "ask", "check", "whiteboard"):
+        result = runner.invoke(cli, [command, "--range", "nope..HEAD"])
+        assert result.exit_code == 2
+        assert result.output == "grip error: unknown revision 'nope'\n"
+
+
+def test_a_repository_with_no_commits(
+    runner: CliRunner, empty_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(empty_repo)
+    monkeypatch.delenv("GRIP_DEBUG", raising=False)
+    (empty_repo / ".grip.toml").write_text('provider = "fake"\n')
+    for command in (["quiz", "--unpushed"], ["quiz", "--branch"], ["check", "--unpushed"]):
+        result = runner.invoke(cli, command)
+        assert result.exit_code == 2
+        assert result.output == "grip error: this repository has no commits yet\n"
+    status = runner.invoke(cli, ["status"])
+    assert status.exit_code == 0, status.output
+    assert "no commits yet" in status.output
+    assert "could not check" not in status.output
+
+
 def test_last_shows_the_graded_quiz(
     runner: CliRunner,
     in_repo: Path,
