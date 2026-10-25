@@ -59,7 +59,10 @@ ones is a design intent backed by the rubric prompt, not a measurement. The pass
 - **Cost.** A quiz is two model calls over the diff. Tokens are not counted by the harness;
   with `provider = "claude-code"` the calls ride an existing subscription.
 - **Gaming by the agent.** Nothing stops a coding agent from answering for you if you tell
-  it to. The skill forbids it and the rubrics never reach it; that is the extent of it.
+  it to. The skills forbid it. The rubrics are stored locally under `.git/grip/`; the
+  skills never show them or point to them and tell the agent not to read those files, but
+  an agent with file access could. It is an honour system, and that is the extent of it.
+  See [Coding agents](agents.md#honour-system).
 
 ## Where grip gets in the way
 

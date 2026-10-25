@@ -86,7 +86,8 @@ grip check --unpushed && git push
 
 Claude Code `PreToolUse` hook. Reads the hook payload from stdin and denies `git push`
 (and `git commit` with `--gate both`) until the diff has passed a quiz. Installed by the
-[plugin](agents.md#claude-code-plugin).
+[plugin](agents.md#claude-code-plugin). Like the git hooks, it lets the command through
+when `GRIP_SKIP=1` is set for it (`GRIP_SKIP=1 git push`), after `grip skip`, or in CI.
 
 ## `grip init`
 
