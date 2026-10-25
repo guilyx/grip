@@ -6,11 +6,16 @@
 <meta name="referrer" content="no-referrer">
 <title>grip whiteboard</title>
 <style>
+/* Fonts bundled with grip (SIL Open Font License), subset to Latin. An export carries them
+   inline; if they are missing, the system fonts below stand in. */
+@font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 800; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 400 800; font-display: swap; }
 :root {
   --page: #f1ece8; --board: #fdfbf7; --dot: #ded8d4; --ink: #201e1c; --muted: #655f5b;
   --line: #c8c1bc; --node: #ffffff; --panel: #fdfbf7; --accent: #ff8644; --accent-ink: #9f3d00;
   --on-accent: #201e1c; --pass: #008f5f; --pass-soft: #bdffd6; --warn: #706000; --warn-soft: #ffecb3;
-  --fail: #a62168; --fail-soft: #ffe4f0; --zone: #fff3f8; --zone-line: #c83683;
+  --fail: #a62168; --fail-soft: #ffe4f0; --zone: #fff3f8; --zone-line: #c83683; --changed: #fff1e6;
   --display: "Archivo", "Arial Black", "Helvetica Neue", system-ui, sans-serif;
   --text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -20,7 +25,7 @@
   --page: #140f0c; --board: #201e1c; --dot: #332f2d; --ink: #f9f6f4; --muted: #b3aba6;
   --line: #4c4643; --node: #332f2d; --panel: #201e1c; --accent: #ff8644; --accent-ink: #ffac80;
   --on-accent: #140f0c; --pass: #6ddda2; --pass-soft: #003b26; --warn: #e1c046; --warn-soft: #383100;
-  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; color-scheme: dark;
+  --fail: #ffa1cd; --fail-soft: #590a33; --zone: #370b1f; --zone-line: #ff75ba; --changed: #3d2b20; color-scheme: dark;
 } }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -41,22 +46,38 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: 999px; padding: 4px 10px; color: var(--muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-.board { border: 1px solid var(--line); border-radius: 18px; overflow-x: auto;
-  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / 20px 20px, var(--board); }
-.board svg { display: block; width: 100%; min-width: 620px; height: auto; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 16px 12px; font-size: 12.5px; color: var(--muted); }
+.board { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--board); }
+/* The board is drawn at full size or larger and moves inside this window: drag or scroll to
+   pan, Ctrl + scroll or pinch to zoom. On a wide screen it takes the height of the window. */
+.viewport { --z: 1; flex: 1 1 auto; min-height: 0; display: flex; overflow: auto; cursor: grab; touch-action: pan-x pan-y;
+  background: radial-gradient(var(--dot) 1.1px, transparent 1.2px) 0 0 / calc(20px * var(--z)) calc(20px * var(--z)), var(--board);
+  background-attachment: local; }
+.viewport.panning { cursor: grabbing; }
+.board svg { display: block; flex: none; margin: auto; user-select: none; -webkit-user-select: none; }
+@media (min-width: 901px) { .board { position: sticky; top: 14px; height: calc(100vh - 76px); height: calc(100dvh - 76px); min-height: 360px; } }
+@media (max-width: 900px) { .viewport { max-height: 62vh; } }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--muted); }
+.tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.tools .how { margin-right: 6px; font-size: 12px; }
+@media (pointer: coarse) { .tools .how { display: none; } }
+.tool { min-width: 32px; height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  font: 700 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+.tool:hover { border-color: var(--accent); }
 .legend i { display: inline-block; width: 18px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--line); }
+.legend i.chg { background: var(--changed); }
 .legend i.ext { border-style: dashed; }
 .legend i.zone { background: var(--zone); border-color: var(--zone-line); border-style: dashed; }
 .legend i.pin { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 0; }
-.legend .keys { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+.legend .keys { font-family: var(--mono); font-size: 11.5px; }
 @media (pointer: coarse) { .legend .keys { display: none; } }
 svg text { font-family: var(--text); fill: var(--ink); }
 .arrowhead { fill: var(--muted); }
 .n rect.box { fill: var(--node); stroke: var(--line); stroke-width: 1.5; }
 .n.ext rect.box { stroke-dasharray: 6 4; }
 .n.ctx rect.box { fill: transparent; }
-.n .label { font: 700 14.5px var(--mono); }
+.n.chg rect.box { fill: var(--changed); }
+.n .label { font: 700 13px var(--mono); }
 .n .role { font-size: 12px; fill: var(--muted); }
 .n .tag { font: 700 9.5px var(--mono); letter-spacing: .12em; fill: var(--muted); }
 .n .lid { stroke: var(--line); stroke-width: 1.5; }
@@ -69,7 +90,8 @@ svg text { font-family: var(--text); fill: var(--ink); }
 .n.sel rect.box { stroke: var(--accent); stroke-width: 2.5; }
 .e path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
 .e.trust path { stroke: var(--zone-line); }
-.e text { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--board); stroke-width: 5px; stroke-linejoin: round; }
+.e text { font-size: 12px; fill: var(--muted); }
+.e rect.bg { fill: var(--board); fill-opacity: .94; }
 .zone rect { fill: var(--zone); stroke: var(--zone-line); stroke-dasharray: 7 5; stroke-width: 1.5; }
 .zone text { font: 700 10.5px var(--mono); letter-spacing: .14em; fill: var(--zone-line); }
 .p circle.dot { fill: var(--accent); stroke: var(--board); stroke-width: 3; }
@@ -139,13 +161,22 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 </header>
 <main class="layout">
   <section class="board" aria-label="The change as a whiteboard">
-    <svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg>
+    <div class="viewport" id="viewport">
+      <svg id="board" role="group" aria-label="Parts of the change and how they connect"></svg>
+    </div>
     <div class="legend">
-      <span><i></i>changed in this diff</span>
+      <span><i class="chg"></i>changed in this diff</span>
       <span><i class="ext"></i>outside the diff</span>
       <span><i class="zone"></i>untrusted input</span>
       <span><i class="pin"></i>question pinned here</span>
       <span class="keys" aria-hidden="true">1–5 questions · ←→ pins · Esc back</span>
+      <div class="tools" role="group" aria-label="Zoom">
+        <span class="how">drag to move · Ctrl + scroll to zoom</span>
+        <button type="button" class="tool" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+        <button type="button" class="tool" id="zoom-level" aria-label="Zoom to 100%" title="Zoom to 100%">100%</button>
+        <button type="button" class="tool" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+        <button type="button" class="tool" id="zoom-fit" title="Show the whole board">Fit</button>
+      </div>
     </div>
   </section>
   <div class="side">
@@ -168,7 +199,7 @@ textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid v
 // Everything in DATA came from a language model reading the developer's diff. It is
 // untrusted: it is only ever placed with textContent or as attribute values, never as markup.
 const DATA = JSON.parse(document.getElementById("board-data").textContent);
-const MODE = DATA.mode, PPQ = DATA.points_per_question, W = DATA.node.width, H = DATA.node.height;
+const MODE = DATA.mode, PPQ = DATA.points_per_question;
 const NS = "http://www.w3.org/2000/svg";
 const SVG_TAGS = new Set(["svg", "g", "rect", "path", "text", "tspan", "title", "circle", "defs", "marker"]);
 const byId = Object.fromEntries(DATA.nodes.map((n) => [n.id, n]));
@@ -215,28 +246,52 @@ const activate = (fn, keys = {}) => ({ click: fn, keydown: (ev) => {
 } });
 
 const KIND_TEXT = (n) => n.trust === "untrusted" ? "untrusted" : { component: "changed in this diff", store: "data, changed in this diff", external: "outside the diff", context: "outside the diff, called by it" }[n.kind];
-const centre = (n) => ({ x: n.x + W / 2, y: n.y + H / 2 });
+const centre = (n) => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 });
 function exitPoint(n, toward) {
   const c = centre(n), dx = toward.x - c.x, dy = toward.y - c.y;
-  const t = Math.min(dx ? (W / 2 + 6) / Math.abs(dx) : Infinity, dy ? (H / 2 + 6) / Math.abs(dy) : Infinity);
+  const t = Math.min(dx ? (n.w / 2 + 6) / Math.abs(dx) : Infinity, dy ? (n.h / 2 + 6) / Math.abs(dy) : Infinity);
   return { x: c.x + dx * t, y: c.y + dy * t };
 }
+// An arrow is a quadratic curve from s to t through control point c: straight when c is on
+// the line, bowed otherwise. along(g, u) is the point a fraction u of the way.
+function along(g, u) {
+  const v = 1 - u;
+  return { x: v * v * g.s.x + 2 * v * u * g.c.x + u * u * g.t.x, y: v * v * g.s.y + 2 * v * u * g.c.y + u * u * g.t.y };
+}
+// An arrow goes straight from box to box unless that runs through another box; then it bows
+// out, further each try, to the first curve that clears every box (or the one that crosses
+// least), and never off the board. The routes depend only on the layout, so they are kept.
+const BOWS = [0, 44, -44, 88, -88, 136, -136, 190, -190];
+const ROUTES = {};
 function edgeGeometry(e) {
-  const a = centre(byId[e.source]), b = centre(byId[e.target]);
+  if (ROUTES[e.id]) return ROUTES[e.id];
+  const A = byId[e.source], B = byId[e.target], a = centre(A), b = centre(B);
   const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
   const sx = horizontal ? 0 : e.offset, sy = horizontal ? e.offset : 0;
-  const p = exitPoint(byId[e.source], b), q = exitPoint(byId[e.target], a);
-  const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
-  return { s, t, mid: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }, horizontal };
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const others = DATA.nodes.filter((n) => n !== A && n !== B);
+  const blocked = (q) => others.some((n) => q.x > n.x - 8 && q.x < n.x + n.w + 8 && q.y > n.y - 8 && q.y < n.y + n.h + 8);
+  let best = null, least = Infinity;
+  for (const bow of BOWS) {
+    const apex = { x: (a.x + b.x) / 2 + nx * bow, y: (a.y + b.y) / 2 + ny * bow };
+    const p = exitPoint(A, apex), q = exitPoint(B, apex);
+    const s = { x: p.x + sx, y: p.y + sy }, t = { x: q.x + sx, y: q.y + sy };
+    const g = { s, t, c: { x: 2 * (apex.x + sx) - (s.x + t.x) / 2, y: 2 * (apex.y + sy) - (s.y + t.y) / 2 }, horizontal };
+    let hits = apex.y < 12 || apex.y > DATA.size.height - 12 || apex.x < 12 || apex.x > DATA.size.width - 12 ? 1000 : 0;
+    for (let u = 0.04; u < 1; u += 0.04) if (blocked(along(g, u))) hits++;
+    if (hits < least) { best = g; least = hits; }
+    if (!hits) break;
+  }
+  best.mid = along(best, 0.5);
+  return (ROUTES[e.id] = best);
 }
 // Pins sharing a box line up leftwards along its top edge; pins sharing an arrow spread
 // out along it from the middle. Each one stays visible and clickable.
 function pinAnchor(pin) {
   const same = DATA.pins.filter((p) => p.on === pin.on), k = same.indexOf(pin);
-  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + W - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
-  const g = edgeGeometry(edgeById[pin.on]);
+  if (byId[pin.on]) { const n = byId[pin.on]; return { x: n.x + n.w - 4 - 34 * (same.length - 1 - k), y: n.y + 4 }; }
   const at = 0.5 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.22;
-  return { x: g.s.x + (g.t.x - g.s.x) * at, y: g.s.y + (g.t.y - g.s.y) * at };  // on the wire
+  return along(edgeGeometry(edgeById[pin.on]), at);  // on the wire
 }
 function band(score) { return score >= PPQ * 0.8 ? "pass" : score >= PPQ * 0.4 ? "warn" : "fail"; }
 function answered(i) { return MODE === "interview" ? state.ticks[i].some(Boolean) : state.answers[i].trim() !== ""; }
@@ -251,8 +306,9 @@ function pinTarget(p) {
   return `${byId[e.source].label} → ${byId[e.target].label}`;
 }
 
-// Text is fitted once it is on screen, where it can be measured: a long label or role in a
-// box ends in an ellipsis (the full text is in its tooltip and the side panel), and a long
+// Text is fitted once it is on screen, where it can be measured. grip has already broken a
+// box's label into lines and left room for its role on one or two; a line that still does
+// not fit ends in an ellipsis (the full text is in its tooltip and the side panel). A long
 // edge label wraps onto a second line, growing away from its arrow.
 function ellipsize(t, width) {
   const full = t.textContent;
@@ -265,10 +321,10 @@ function ellipsize(t, width) {
   }
   t.textContent = full.slice(0, lo).trimEnd() + "…";
 }
-function wrapLabel(t, width) {
+function wrapLabel(t, width, dy = 14) {
   if (t.getComputedTextLength() <= width) return 0;
   const words = t.textContent.split(" ");
-  const first = el("tspan", {}), second = el("tspan", { dy: 14 });
+  const x = t.getAttribute("x"), first = el("tspan", { x }), second = el("tspan", { x, dy });
   t.replaceChildren(first, second);
   let k = 1;
   while (k < words.length) {
@@ -282,39 +338,47 @@ function wrapLabel(t, width) {
   ellipsize(second, width);
   return 1;
 }
-// Each label goes at the middle of its arrow unless that covers a box, a pin or a label
-// already placed; then it slides along the arrow to the first spot that is clear, or the
-// one that covers least.
+// Each label goes at the middle of its arrow, on its usual side, unless that covers a box,
+// a pin or a label already placed; then it tries the other side, then slides along the arrow,
+// to the first spot that is clear, or the one that covers least. Each sits on a patch of
+// board, so an arrow passing under it does not cross out its words.
 const SPOTS = [0.5, 0.36, 0.64, 0.24, 0.76, 0.14, 0.86];
 function placeLabels(svg, labels) {
-  const box = (b, pad = 3) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
+  const box = (b, pad = 4) => ({ x0: b.x - pad, y0: b.y - pad, x1: b.x + b.width + pad, y1: b.y + b.height + pad });
   const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
   const taken = [...svg.querySelectorAll(".n rect.box")].map((r) => box(r.getBBox(), 1));
   for (const p of DATA.pins) { const at = pinAnchor(p); taken.push(box({ x: at.x - 15, y: at.y - 15, width: 30, height: 30 }, 1)); }
+  const patches = el("g", { class: "e" });
+  svg.insertBefore(patches, labels);
   // Straight arrows first: sliding along a slanted one moves its label off the others' rows.
   const slant = (t) => Math.abs(t.fit.g.t.y - t.fit.g.s.y);
   for (const t of [...labels.children].sort((a, b) => slant(a) - slant(b))) {
     const f = t.fit, lines = wrapLabel(t, f.width);
-    const put = (at) => {
-      const x = f.g.s.x + (f.g.t.x - f.g.s.x) * at + f.dx;
-      const y = f.g.s.y + (f.g.t.y - f.g.s.y) * at + f.dy + 14 * f.grow * lines;
+    // A label pushed off its arrow moves away from it, a line at a time.
+    const put = (at, side, away = 0) => {
+      const pt = along(f.g, at);
+      const x = pt.x + side.dx + side.ax * away, y = pt.y + side.dy + side.ay * away + 14 * side.grow * lines;
+      t.setAttribute("text-anchor", side.anchor);
       t.setAttribute("x", x); t.setAttribute("y", y);
       for (const span of t.children) span.setAttribute("x", x);
       return box(t.getBBox());
     };
-    let best = SPOTS[0], least = Infinity;
-    for (const at of SPOTS) {
-      const b = put(at), covered = taken.reduce((sum, o) => sum + overlap(b, o), 0);
-      if (covered < least) { best = at; least = covered; }
-      if (!covered) break;
+    let best = [SPOTS[0], f.sides[0], 0], least = Infinity;
+    search: for (const away of [0, 1, 2]) for (const at of SPOTS) for (const side of f.sides) {
+      const b = put(at, side, away), covered = taken.reduce((sum, o) => sum + overlap(b, o), 0);
+      if (covered < least) { best = [at, side, away]; least = covered; }
+      if (!covered) break search;
     }
-    taken.push(put(best));
+    taken.push(put(...best));
+    const b = t.getBBox();
+    patches.append(el("rect", { class: "bg", x: b.x - 4, y: b.y - 1, width: b.width + 8, height: b.height + 2, rx: 4 }));
   }
 }
 
 function drawBoard() {
   const svg = document.getElementById("board");
   svg.setAttribute("viewBox", `0 0 ${DATA.size.width} ${DATA.size.height}`);
+  svg.setAttribute("width", DATA.size.width * view.z); svg.setAttribute("height", DATA.size.height * view.z);
   svg.replaceChildren(el("defs", {}, el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
     el("path", { d: "M0 0 L10 5 L0 10 z", class: "arrowhead" }))));
   if (DATA.zone) {
@@ -326,34 +390,43 @@ function drawBoard() {
   for (const e of DATA.edges) {
     const g = edgeGeometry(e);
     const below = e.offset > 0, room = DATA.pins.some((p) => p.on === e.id) ? 13 : 0;
-    const label = el("text", { "text-anchor": g.horizontal ? "middle" : "start", text: e.label });
+    const label = el("text", { text: e.label });
+    // Where the label may go: above or below a level arrow, right or left of an upright one,
+    // its usual side first.
+    const above = { anchor: "middle", dx: 0, dy: -8 - room, grow: -1, ax: 0, ay: -15 };
+    const under = { anchor: "middle", dx: 0, dy: 17 + room, grow: 0, ax: 0, ay: 15 };
+    const right = { anchor: "start", dx: 10 + room, dy: 4, grow: -0.5, ax: 14, ay: 0 };
+    const left = { anchor: "end", dx: -10 - room, dy: 4, grow: -0.5, ax: -14, ay: 0 };
     label.fit = {
-      g, width: g.horizontal ? Math.max(Math.abs(g.t.x - g.s.x) - 10, 90) : 170,
-      grow: g.horizontal ? (below ? 0 : -1) : -0.5,
-      dx: g.horizontal ? 0 : 10 + room, dy: g.horizontal ? (below ? 17 + room : -8 - room) : 4,
+      g, width: g.horizontal ? Math.max(Math.abs(g.t.x - g.s.x) + 20, 110) : 170,
+      sides: g.horizontal ? (below ? [under, above] : [above, under]) : [right, left],
     };
     labels.append(label);
     svg.append(el("g", { class: "e" + (e.crosses_trust ? " trust" : "") },
-      el("path", { d: `M${g.s.x} ${g.s.y} L${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" })));
+      el("path", { d: `M${g.s.x} ${g.s.y} Q${g.c.x} ${g.c.y} ${g.t.x} ${g.t.y}`, "marker-end": "url(#arrow)" })));
   }
   const per = state.result ? state.result.grades : null;
   for (const n of DATA.nodes) {
     const pins = DATA.pins.map((p, i) => [p, i]).filter(([p]) => p.on === n.id);
-    let cls = "n" + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "");
+    const changed = n.kind === "component" || n.kind === "store";
+    let cls = "n" + (changed ? " chg" : "") + (n.kind === "external" ? " ext" : "") + (n.kind === "context" ? " ext ctx" : "") + (state.sel && state.sel.node === n.id ? " sel" : "");
     if (per && pins.length) cls += " " + band(Math.min(...pins.map(([, i]) => per[i].score)));
     const tag = n.kind === "store" ? "DATA" : n.trust === "untrusted" ? (n.kind === "external" ? "ACTOR" : "UNTRUSTED") : n.kind === "external" ? "EXTERNAL" : n.kind === "context" ? "CONTEXT" : "CHANGED";
     const asked = pins.length ? `, ${pins.length} question${pins.length === 1 ? "" : "s"}` : "";
     const g = el("g", { class: cls, tabindex: 0, role: "button", "data-key": `node-${n.id}`, "aria-current": state.sel && state.sel.node === n.id ? "true" : null,
       "aria-label": `${n.label}: ${n.role}. ${KIND_TEXT(n)}${asked}`, on: activate(() => select({ node: n.id })) },
       el("title", { text: `${n.label}: ${n.role}` }),
-      el("rect", { class: "ring", x: n.x - 5, y: n.y - 5, width: W + 10, height: H + 10, rx: 16 }),
-      el("rect", { class: "box", x: n.x, y: n.y, width: W, height: H, rx: 12 }),
+      el("rect", { class: "ring", x: n.x - 5, y: n.y - 5, width: n.w + 10, height: n.h + 10, rx: 16 }),
+      el("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 12 }),
       el("text", { class: "tag", x: n.x + 14, y: n.y + 17, text: tag }),
-      el("text", { class: "label", x: n.x + 14, y: n.y + 37, text: n.label }),
-      el("text", { class: "role", x: n.x + 14, y: n.y + 55, text: n.role }));
-    if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + W - 10}` }));
+      el("text", { class: "label", x: n.x + 14, y: n.y + 37 },
+        n.lines.map((line, k) => el("tspan", { x: n.x + 14, dy: k ? 17 : 0, text: line }))),
+      el("text", { class: "role", x: n.x + 14, y: n.y + 55 + 17 * (n.lines.length - 1), text: n.role }));
+    if (n.kind === "store") g.append(el("path", { class: "lid", d: `M${n.x + 10} ${n.y + 5} H${n.x + n.w - 10}` }));
     svg.append(g);
-    g.querySelectorAll(".label, .role").forEach((t) => ellipsize(t, W - 28));
+    g.querySelectorAll(".label tspan").forEach((t) => ellipsize(t, n.w - 28));
+    const role = g.querySelector(".role");
+    if (n.role_lines > 1) wrapLabel(role, n.w - 28, 15); else ellipsize(role, n.w - 28);
   }
   svg.append(labels);
   placeLabels(svg, labels);
@@ -362,12 +435,13 @@ function drawBoard() {
     let cls = "p" + (state.sel && state.sel.pin === i ? " sel" : "");
     if (per) cls += " " + band(per[i].score); else if (answered(i)) cls += " done";
     const said = pinState(i);
-    // Arrow keys step through the pins in question order, wrapping at either end.
-    const step = (d) => () => focusKey(`pin-${(i + d + DATA.pins.length) % DATA.pins.length}`);
+    // Arrow keys step through the pins in question order, wrapping at either end, and pan
+    // the board to the one they land on.
+    const step = (d) => () => focusPin((i + d + DATA.pins.length) % DATA.pins.length);
     svg.append(el("g", { class: cls, tabindex: 0, role: "button", "data-key": `pin-${i}`, "aria-current": state.sel && state.sel.pin === i ? "true" : null,
       "aria-label": `Question ${i + 1}, ${p.kind}${said ? ", " + said : ""}`,
       on: activate((ev) => { ev.stopPropagation(); select({ pin: i }); },
-        { ArrowRight: step(1), ArrowDown: step(1), ArrowLeft: step(-1), ArrowUp: step(-1), Home: () => focusKey("pin-0"), End: () => focusKey(`pin-${DATA.pins.length - 1}`) }) },
+        { ArrowRight: step(1), ArrowDown: step(1), ArrowLeft: step(-1), ArrowUp: step(-1), Home: () => focusPin(0), End: () => focusPin(DATA.pins.length - 1) }) },
       el("circle", { class: "ring", cx: at.x, cy: at.y, r: 20 }),
       el("circle", { class: "dot", cx: at.x, cy: at.y, r: 15 }), el("text", { x: at.x, y: at.y + 1, text: String(i + 1) })));
   });
@@ -569,6 +643,10 @@ function focusKey(key) {
   target.focus({ preventScroll: true });
   return true;
 }
+// Focus a pin from the keyboard and pan the board to it: focusing never scrolls by itself.
+function focusPin(i) {
+  if (focusKey(`pin-${i}`)) reveal(pinAnchor(DATA.pins[i]));
+}
 function select(sel) {
   const prev = state.sel;
   state.sel = sel;
@@ -578,7 +656,84 @@ function select(sel) {
   else if (prev && prev.pin != null) next = [`item-${prev.pin}`];  // back where you left the list
   else if (prev && prev.node) next = [`node-${prev.node}`];
   render(next);
+  if (sel) reveal(sel.pin != null ? pinAnchor(DATA.pins[sel.pin]) : centre(byId[sel.node]));
 }
+
+
+// ------------------------------------------------------------------ moving around the board
+// The board is drawn at a zoom of at least 1 (more when it has room), so its text is never
+// smaller than written. It pans by scrolling, by dragging with the mouse, or with a finger;
+// Ctrl + scroll (a trackpad pinch), a two-finger pinch, and the buttons zoom it.
+const viewport = document.getElementById("viewport");
+const view = { z: 1, mode: "auto" };  // auto: as large as fits, from 1 to 1.25; fit; or manual
+const ZOOM_MIN = 0.2, ZOOM_MAX = 3;
+function fitZoom() {
+  const room = parseFloat(getComputedStyle(viewport).maxHeight) || viewport.clientHeight;
+  return Math.min((viewport.clientWidth - 24) / DATA.size.width, (room - 24) / DATA.size.height);
+}
+const autoZoom = () => Math.min(1.25, Math.max(1, fitZoom()));
+function setZoom(z, at) {
+  z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  const svg = document.getElementById("board"), r = viewport.getBoundingClientRect();
+  const ax = at ? at.x : r.left + viewport.clientWidth / 2, ay = at ? at.y : r.top + viewport.clientHeight / 2;
+  const before = svg.getBoundingClientRect(), bx = (ax - before.left) / view.z, by = (ay - before.top) / view.z;
+  view.z = z;
+  svg.setAttribute("width", DATA.size.width * z); svg.setAttribute("height", DATA.size.height * z);
+  viewport.style.setProperty("--z", z);
+  // Keep the point under the cursor (or the middle) where it was.
+  const after = svg.getBoundingClientRect();
+  viewport.scrollLeft += after.left + bx * z - ax;
+  viewport.scrollTop += after.top + by * z - ay;
+  document.getElementById("zoom-level").textContent = `${Math.round(z * 100)}%`;
+}
+function reveal(pt) {
+  const svg = document.getElementById("board"), s = svg.getBoundingClientRect(), r = viewport.getBoundingClientRect();
+  const x = s.left + pt.x * view.z - r.left, y = s.top + pt.y * view.z - r.top, m = 56;
+  const dx = x < m ? x - m : x > viewport.clientWidth - m ? x - viewport.clientWidth + m : 0;
+  const dy = y < m ? y - m : y > viewport.clientHeight - m ? y - viewport.clientHeight + m : 0;
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (dx || dy) viewport.scrollBy({ left: dx, top: dy, behavior: smooth ? "smooth" : "auto" });
+}
+const zoomBy = (k) => { view.mode = "manual"; setZoom(view.z * k); };
+document.getElementById("zoom-in").addEventListener("click", () => zoomBy(1.25));
+document.getElementById("zoom-out").addEventListener("click", () => zoomBy(0.8));
+document.getElementById("zoom-level").addEventListener("click", () => { view.mode = "manual"; setZoom(1); });
+document.getElementById("zoom-fit").addEventListener("click", () => { view.mode = "fit"; setZoom(fitZoom()); });
+viewport.addEventListener("wheel", (ev) => {
+  if (!ev.ctrlKey && !ev.metaKey) return;  // a plain wheel scrolls
+  ev.preventDefault();
+  view.mode = "manual";
+  setZoom(view.z * Math.exp(-ev.deltaY * 0.0025), { x: ev.clientX, y: ev.clientY });
+}, { passive: false });
+// Drag with the mouse to pan. A drag that moved is not a click, so it does not select.
+let drag = null;
+viewport.addEventListener("pointerdown", (ev) => {
+  if (ev.pointerType === "mouse" && ev.button === 0) drag = { x: ev.clientX, y: ev.clientY, left: viewport.scrollLeft, top: viewport.scrollTop, moved: false };
+});
+viewport.addEventListener("pointermove", (ev) => {
+  if (!drag || !(ev.buttons & 1)) return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+  if (!drag.moved) { drag.moved = true; viewport.setPointerCapture(ev.pointerId); viewport.classList.add("panning"); }
+  viewport.scrollLeft = drag.left - dx; viewport.scrollTop = drag.top - dy;
+});
+const endDrag = () => { viewport.classList.remove("panning"); if (drag && !drag.moved) drag = null; };
+viewport.addEventListener("pointerup", endDrag);
+viewport.addEventListener("pointercancel", () => { drag = null; viewport.classList.remove("panning"); });
+viewport.addEventListener("click", (ev) => { if (drag && drag.moved) { ev.stopPropagation(); ev.preventDefault(); } drag = null; }, true);
+// Two fingers pinch to zoom; one finger scrolls the board, and the page past its edges.
+let pinch = null;
+const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+viewport.addEventListener("touchstart", (ev) => { if (ev.touches.length === 2) pinch = { d: spread(ev.touches), z: view.z }; }, { passive: true });
+viewport.addEventListener("touchmove", (ev) => {
+  if (!pinch || ev.touches.length !== 2) return;
+  if (ev.cancelable) ev.preventDefault();
+  view.mode = "manual";
+  const [a, b] = ev.touches;
+  setZoom(pinch.z * spread(ev.touches) / pinch.d, { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+}, { passive: false });
+viewport.addEventListener("touchend", (ev) => { if (ev.touches.length < 2) pinch = null; });
+window.addEventListener("resize", () => { if (view.mode !== "manual") setZoom(view.mode === "fit" ? fitZoom() : autoZoom()); });
 function render(focusOn) {
   const had = document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-key]");
   drawBoard();
@@ -607,6 +762,11 @@ document.getElementById("mode-chip").textContent = { defend: "Defend", interview
 document.getElementById("copy-answers").addEventListener("click", copyAnswers);
 if (MODE !== "export") { loadDraft(); setInterval(heartbeat, HEARTBEAT_MS); }
 render();
+setZoom(autoZoom());
+viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+viewport.scrollLeft = 0;
+// Labels are fitted by measuring them, so fit them again once the fonts have arrived.
+if (document.fonts && document.fonts.status !== "loaded") document.fonts.ready.then(() => drawBoard());
 </script>
 </body>
 </html>

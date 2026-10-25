@@ -23,7 +23,9 @@ from grip_hook.git import Diff
 from grip_hook.models import Difficulty
 from grip_hook.providers.fake import FakeProvider, load_script
 from grip_hook.whiteboard import (
+    LABEL_CHARS,
     MARGIN,
+    NODE_W,
     Board,
     BoardError,
     Edge,
@@ -31,15 +33,19 @@ from grip_hook.whiteboard import (
     Pin,
     PinKind,
     board_data,
+    box_width,
     check_board,
     generate_board,
+    label_lines,
     layout,
 )
 from grip_hook.whiteboard_server import (
+    FONTS,
     HEARTBEAT_PATH,
     MAX_BODY,
     WhiteboardServer,
     content_security_policy,
+    font,
     render_page,
 )
 
@@ -263,6 +269,55 @@ def test_replies_do_not_push_columns_and_a_feeder_sits_beside_its_target() -> No
     assert y["users"] < y["limiter"]
 
 
+@pytest.mark.parametrize(
+    ("label", "chars", "lines"),
+    [
+        ("handle()", 21, ["handle()"]),
+        ("route() and every real endpoint", 21, ["route() and every", "real endpoint"]),
+        (
+            "handle_incoming_request_with_limits()",
+            21,
+            ["handle_incoming_", "request_with_limits()"],
+        ),
+        (
+            "TokenBucketRateLimiter._allow_or_wait()",
+            23,
+            ["TokenBucketRateLimiter.", "_allow_or_wait()"],
+        ),
+        ("x" * 40, 21, ["x" * 21, "x" * 19]),
+        ("a" * 15 + " " + "b" * 30, 21, ["a" * 15 + " " + "b" * 5, "b" * 20 + "…"]),
+    ],
+)
+def test_labels_wrap_onto_two_lines_at_a_break(label: str, chars: int, lines: list[str]) -> None:
+    assert label_lines(label, chars) == lines
+    assert all(len(line) <= chars for line in lines)
+
+
+def _long_labels(board: Board) -> Board:
+    long = _mutate(board)
+    long.nodes[3].label = "TokenBucketRateLimiter._allow_or_wait()"  # allow, a column of its own
+    long.nodes[1].role = "entry point for every request on every public route"
+    return long
+
+
+def test_boxes_are_sized_to_their_text(board: Board) -> None:
+    placed = layout(_long_labels(board))
+    assert placed.widths["allow"] == box_width(23) > NODE_W  # its column widened to fit
+    assert placed.widths["route"] == placed.widths["allow"]  # the same column
+    assert placed.widths["handle"] == NODE_W == box_width(LABEL_CHARS)
+    assert placed.heights["allow"] > placed.heights["clock"]  # two lines of label
+    assert placed.heights["handle"] > placed.heights["clock"]  # two lines of role
+    x = {i: p[0] for i, p in placed.positions.items()}
+    assert x["buckets"] - x["allow"] == placed.widths["allow"] + (x["allow"] - x["handle"]) - NODE_W
+    assert placed.width == x["buckets"] + NODE_W + MARGIN
+
+
+def test_boxes_in_a_row_share_a_middle_line(board: Board) -> None:
+    placed = layout(_long_labels(board))
+    middle = {i: p[1] + placed.heights[i] / 2 for i, p in placed.positions.items()}
+    assert abs(middle["handle"] - middle["route"]) <= 0.5  # so the arrow between them is level
+
+
 # -- what the page receives ------------------------------------------------------------
 
 
@@ -277,6 +332,15 @@ def test_rubrics_reach_the_page_only_in_interview_mode(board: Board) -> None:
         assert board.pins[1].rubric[1] not in page
     interview = _data(board, "interview")
     assert interview["pins"][1]["rubric"] == board.pins[1].rubric
+
+
+def test_nodes_carry_their_box_and_lines(board: Board) -> None:
+    nodes = {n["id"]: n for n in _data(_long_labels(board))["nodes"]}
+    assert nodes["allow"]["lines"] == ["TokenBucketRateLimiter.", "_allow_or_wait()"]
+    assert nodes["allow"]["w"] == box_width(23)
+    assert nodes["handle"]["role_lines"] == 2
+    assert nodes["clock"]["lines"] == ["time.monotonic()"]
+    assert nodes["clock"]["role_lines"] == 1
 
 
 def test_opposite_edges_are_drawn_side_by_side(board: Board) -> None:
@@ -326,7 +390,25 @@ def test_csp_allows_exactly_the_inline_style_and_script(board: Board) -> None:
     assert "unsafe-inline" not in csp
     assert csp.count("'sha256-") == 2
     assert "connect-src 'self'" in csp
+    assert "font-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+
+
+def test_fonts_are_bundled_with_their_licenses() -> None:
+    folder = ROOT / "src" / "grip_hook" / "fonts"
+    for name in FONTS:
+        assert font(name)[:4] == b"wOF2"
+    for family in ("Archivo", "InstrumentSans", "JetBrainsMono"):
+        assert "SIL OPEN FONT LICENSE" in (folder / f"{family}-OFL.txt").read_text("utf-8")
+    assert sum(len(font(name)) for name in FONTS) < 150_000  # subset, not whole families
+
+
+def test_a_standalone_page_carries_its_fonts(board: Board) -> None:
+    served = render_page(_data(board))
+    assert all(f'url("fonts/{name}")' in served for name in FONTS)
+    standalone = render_page(_data(board, "export"), embed_fonts=True)
+    assert 'url("fonts/' not in standalone
+    assert standalone.count('url("data:font/woff2;base64,') == len(FONTS)
 
 
 # -- the server ------------------------------------------------------------------------
@@ -395,6 +477,20 @@ def test_server_serves_the_page_only_behind_the_token(
     assert response.getheader("X-Content-Type-Options") == "nosniff"
     assert running.request("GET", "/")[0] == 404
     assert running.request("GET", f"/{running.server.token}x/")[0] == 404
+
+
+def test_server_serves_the_bundled_fonts_and_nothing_else(
+    served: tuple[_Running, list[dict[str, Any]]],
+) -> None:
+    running, _ = served
+    token = running.server.token
+    status, body, response = running.request("GET", f"/{token}/fonts/{FONTS[0]}")
+    assert status == 200
+    assert body == font(FONTS[0])
+    assert response.getheader("Content-Type") == "font/woff2"
+    assert running.request("GET", f"/fonts/{FONTS[0]}")[0] == 404  # behind the token
+    assert running.request("GET", f"/{token}/fonts/Archivo-OFL.txt")[0] == 404
+    assert running.request("GET", f"/{token}/fonts/../whiteboard.html")[0] == 404
 
 
 def test_server_rejects_other_hosts_and_origins(
@@ -598,6 +694,7 @@ def test_whiteboard_export_writes_a_page_without_rubrics(
     page = out.read_text("utf-8")  # not the platform default: cp1252 cannot decode it
     assert '"mode": "export"' in page
     assert "Every new key starts with a full bucket" not in page
+    assert 'url("data:font/woff2;base64,' in page  # one file: the fonts travel with it
 
 
 def test_whiteboard_with_nothing_staged(in_repo: Path) -> None:

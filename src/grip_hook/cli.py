@@ -984,7 +984,8 @@ def whiteboard_cmd(
             passing_score=cfg.passing_score,
             description=diff.description,
             files=list(diff.files),
-        )
+        ),
+        embed_fonts=export_path is not None,  # an export is one file, with nothing to serve fonts
     )
     if export_path is not None:
         export_path.parent.mkdir(parents=True, exist_ok=True)

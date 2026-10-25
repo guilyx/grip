@@ -51,8 +51,11 @@ Code push gate let it through.
 
 ## Reading the board
 
-- **Solid boxes** are code the diff changes. **Dashed boxes** are outside it: callers,
-  services, the code it calls.
+- **Solid, tinted boxes** are code the diff changes. **Dashed boxes** are outside it:
+  callers, services, the code it calls. Long names wrap onto two lines and boxes grow to
+  fit them.
+- The board is drawn at full size, never shrunk to fit. Drag it or scroll to move around,
+  Ctrl + scroll (or pinch) to zoom, and **Fit** to see all of it at once.
 - The **pink area** holds untrusted input. Arrows crossing into it are where the
   malicious-actor question usually sits.
 - **Numbered pins** are the questions. After you hand in, each pin and the box it sits on
@@ -111,7 +114,9 @@ conversation; the agent reports the score at the end. See [coding agents](agents
 - grip lays the board out itself, so the same board always looks the same.
 - The page is served on `127.0.0.1` on a random port, behind a random token. It accepts only
   its own address as `Host` and `Origin`, and its Content-Security-Policy allows nothing but
-  its own inline script and style. Rubrics never reach the page in defend mode.
+  its own inline script and style and the fonts that ship with grip (Archivo, Instrument
+  Sans and JetBrains Mono, all under the SIL Open Font License). Rubrics never reach the
+  page in defend mode.
 - Everything the model wrote is shown as text, never as markup, so a diff that tries to
   inject a script into the drawing only gets a strange label.
 - Like the terminal quiz, it cannot stop someone on your machine from answering for you: a

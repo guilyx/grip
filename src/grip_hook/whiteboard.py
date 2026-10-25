@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -262,9 +263,114 @@ def generate_board(provider: Provider, diff: Diff, difficulty: Difficulty) -> Bo
 
 # --------------------------------------------------------------------------- layout
 
-NODE_W, NODE_H = 184, 66
 GAP_X, GAP_Y = 150, 54  # room for an edge label between two columns
 MARGIN = 40
+NODE_H = 66  # a box with one line of label and one of role
+LABEL_LINE, ROLE_LINE = 17, 15  # what each extra line adds to a box
+PAD_X = 14  # inside a box, left and right
+CHAR_W = 7.8
+"""Labels are set in JetBrains Mono at 13px, whose characters are all 0.6em wide, so a
+label's width is known here exactly and boxes can be sized to fit it."""
+LABEL_CHARS, MAX_LABEL_CHARS = 21, 30
+"""Characters per line of label: every box takes 21, two lines of which hold most labels; a
+column widens, up to 30, when a label in it breaks into two lines no shorter than that."""
+_BREAK_AFTER = set("._/-(:,>")
+
+
+def box_width(chars: int) -> int:
+    """The width of a box whose label lines hold ``chars`` characters."""
+    return 2 * PAD_X + math.ceil(chars * CHAR_W)
+
+
+def chars_in(width: int) -> int:
+    """How many label characters fit on a line of a box ``width`` wide."""
+    return int((width - 2 * PAD_X) // CHAR_W)
+
+
+NODE_W = box_width(LABEL_CHARS)
+"""The narrowest box."""
+
+
+def _splits(label: str) -> list[tuple[str, str]]:
+    """Every way to put ``label`` on two lines without breaking a word.
+
+    That is at a space, after ``.``, ``_``, ``/`` and the like, or between a lowercase
+    letter and a capital.
+    """
+    out: list[tuple[str, str]] = []
+    for cut in range(1, len(label)):
+        if label[cut] == " ":
+            first, rest = label[:cut].rstrip(), label[cut + 1 :].strip()
+        elif label[cut - 1] in _BREAK_AFTER or (label[cut - 1].islower() and label[cut].isupper()):
+            first, rest = label[:cut], label[cut:]
+        else:
+            continue
+        if first.strip() and rest:
+            out.append((first, rest))
+    return out
+
+
+def label_chars(label: str) -> int:
+    """How many characters a line of ``label`` needs.
+
+    That is its two lines as evenly split as the breaks allow, from :data:`LABEL_CHARS` to
+    :data:`MAX_LABEL_CHARS`.
+    """
+    if len(label) <= LABEL_CHARS:
+        return LABEL_CHARS
+    even = min((max(len(a), len(b)) for a, b in _splits(label)), default=MAX_LABEL_CHARS)
+    return max(LABEL_CHARS, min(even, MAX_LABEL_CHARS))
+
+
+def label_lines(label: str, chars: int = LABEL_CHARS) -> list[str]:
+    """``label`` on at most two lines of ``chars`` characters.
+
+    It breaks at the last place that does not split a word and leaves two lines that fit;
+    failing that, in the middle of a word. What still does not fit ends in an ellipsis.
+    """
+    if len(label) <= chars:
+        return [label]
+    fits = [(a, b) for a, b in _splits(label) if len(a) <= chars and len(b) <= chars]
+    if fits:
+        return list(fits[-1])
+    first, rest = label[:chars], label[chars:].strip()
+    if len(rest) > chars:
+        rest = rest[: chars - 1].rstrip() + "…"
+    return [first, rest]
+
+
+def _role_width(role: str) -> float:
+    """About how wide ``role`` is in Instrument Sans at 12px, a few percent over, not under."""
+    em = 0.0
+    for ch in role:
+        if ch in " .,:;'!|()[]{}ijlrtfI":
+            em += 0.29
+        elif ch in "mwMW@%":
+            em += 0.88
+        elif ch.isupper():
+            em += 0.68
+        elif ch.isdigit():
+            em += 0.57
+        else:
+            em += 0.58
+    return em * 12
+
+
+def role_lines(role: str, width: int = NODE_W) -> int:
+    """How many lines to leave for ``role`` in a box ``width`` wide: one if it fits, else two.
+
+    The page measures the role and wraps it into the lines it is given.
+    """
+    return 1 if _role_width(role) <= width - 2 * PAD_X else 2
+
+
+def node_height(node: Node, width: int = NODE_W) -> int:
+    """The height of ``node``'s box when it is ``width`` wide.
+
+    The box holds a tag, then its label and its role, each on as many lines as they need.
+    """
+    extra_label = len(label_lines(node.label, chars_in(width))) - 1
+    return NODE_H + extra_label * LABEL_LINE + (role_lines(node.role, width) - 1) * ROLE_LINE
 
 
 @dataclass(frozen=True)
@@ -272,6 +378,11 @@ class Placement:
     """Where every node goes, in board pixels."""
 
     positions: dict[str, tuple[int, int]]
+    """The top-left corner of every box."""
+    widths: dict[str, int]
+    """The width of every box: the same down a column, enough for its longest label."""
+    heights: dict[str, int]
+    """The height of every box."""
     width: int
     height: int
     zone: tuple[int, int, int, int] | None
@@ -378,22 +489,34 @@ def _rows(board: Board, col: dict[str, int]) -> dict[int, list[str]]:
 
 
 def layout(board: Board) -> Placement:
-    """A deterministic layered layout: same board, same picture."""
+    """A deterministic layered layout: same board, same picture.
+
+    Every box sits in a slot as tall as the tallest box, centred in it, so boxes in the
+    same row share a middle line and an arrow between them stays level.
+    """
     col = _columns(board)
     by_col = _rows(board, col)
+    nodes = {n.id: n for n in board.nodes}
+    chars = {c: max(label_chars(nodes[i].label) for i in ids) for c, ids in by_col.items()}
+    widths = {i: box_width(chars[col[i]]) for i in nodes}
+    heights = {i: node_height(nodes[i], widths[i]) for i in nodes}
+    lefts = [MARGIN]
+    for c in range(1, max(by_col) + 2):
+        lefts.append(lefts[-1] + box_width(chars[c - 1]) + GAP_X)
+    slot = max(heights.values())
     rows = max(len(ids) for ids in by_col.values())
-    height = MARGIN * 2 + rows * NODE_H + (rows - 1) * GAP_Y + 24
+    height = MARGIN * 2 + rows * slot + (rows - 1) * GAP_Y + 24
     positions: dict[str, tuple[int, int]] = {}
     for c, ids in by_col.items():
-        top = MARGIN + 24 + ((rows - len(ids)) * (NODE_H + GAP_Y)) // 2
+        top = MARGIN + 24 + ((rows - len(ids)) * (slot + GAP_Y)) // 2
         for r, node_id in enumerate(ids):
-            positions[node_id] = (MARGIN + c * (NODE_W + GAP_X), top + r * (NODE_H + GAP_Y))
-    columns = max(col.values()) + 1
-    width = MARGIN * 2 + columns * NODE_W + (columns - 1) * GAP_X
+            y = top + r * (slot + GAP_Y) + (slot - heights[node_id]) // 2
+            positions[node_id] = (lefts[c], y)
+    width = lefts[-1] - GAP_X + MARGIN
     zone = None
     if board.untrusted():
-        zone = (MARGIN - 20, MARGIN - 10, NODE_W + 40, height - 2 * MARGIN + 20)
-    return Placement(positions, width, height, zone)
+        zone = (MARGIN - 20, MARGIN - 10, box_width(chars[0]) + 40, height - 2 * MARGIN + 20)
+    return Placement(positions, widths, heights, width, height, zone)
 
 
 # --------------------------------------------------------------------------- the page data
@@ -425,17 +548,20 @@ def board_data(
         "points_per_question": POINTS_PER_QUESTION,
         "size": {"width": placed.width, "height": placed.height},
         "zone": list(placed.zone) if placed.zone else None,
-        "node": {"width": NODE_W, "height": NODE_H},
         "nodes": [
             {
                 "id": n.id,
                 "label": n.label,
+                "lines": label_lines(n.label, chars_in(placed.widths[n.id])),
                 "role": n.role,
+                "role_lines": role_lines(n.role, placed.widths[n.id]),
                 "kind": n.kind,
                 "trust": n.trust,
                 "files": n.files,
                 "x": placed.positions[n.id][0],
                 "y": placed.positions[n.id][1],
+                "w": placed.widths[n.id],
+                "h": placed.heights[n.id],
             }
             for n in board.nodes
         ],
@@ -479,7 +605,10 @@ __all__ = [
     "PinKind",
     "Placement",
     "board_data",
+    "box_width",
     "check_board",
     "generate_board",
+    "label_lines",
     "layout",
+    "node_height",
 ]
