@@ -10,7 +10,7 @@ mode, sends the same prompts the API providers use, and asks for JSON back.
 
 Every agent runs with tools disabled where the CLI allows it, in an empty scratch
 directory, so it cannot read the repository, run commands, or pick up project-level
-instructions and hooks. It only ever sees the diff and the answers.
+instructions and hooks. It only ever sees the diff, its commit messages and the answers.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
 
@@ -28,15 +29,18 @@ from pydantic import BaseModel, ValidationError
 from grip_hook.config import Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 from grip_hook.prompts import (
+    APPEAL_SYSTEM_PROMPT,
     BOARD_SYSTEM_PROMPT,
     GRADING_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    appeal_prompt,
     board_prompt,
     grading_prompt,
     question_prompt,
 )
+from grip_hook.providers.base import CallLog
 from grip_hook.whiteboard import Board
 
 T = TypeVar("T", bound=BaseModel)
@@ -85,8 +89,12 @@ def extract_json(text: str) -> Any:
         raise ProviderError(f"the agent returned invalid JSON: {exc}") from exc
 
 
-class AgentCLIProvider:
-    """Common machinery: build a command, run it, validate the JSON it returns."""
+class AgentCLIProvider(CallLog):
+    """Common machinery: build a command, run it, validate the JSON it returns.
+
+    Requests are timed; the CLIs do not report token usage in a form grip relies on, so
+    their calls carry none.
+    """
 
     name: str = "agent"
     executable: ClassVar[str] = ""
@@ -100,6 +108,7 @@ class AgentCLIProvider:
         self.model = cfg.model
         self._timeout = cfg.timeout
         self._binary = shutil.which(self.executable)
+        self.model_calls = []
 
     # -- to implement per agent -------------------------------------------------------
 
@@ -127,6 +136,7 @@ class AgentCLIProvider:
             )
         schema = _schema(output)
         prompt = self._prompt(system, user, schema)
+        started = time.perf_counter()
         with tempfile.TemporaryDirectory(prefix="grip-agent-") as tmp:
             workdir = Path(tmp)
             cmd = [self._binary, *self.command(schema, workdir)]
@@ -157,11 +167,13 @@ class AgentCLIProvider:
                 raise ProviderError(f"{self.executable} exited with {proc.returncode}: {detail}")
             payload = self.parse_output(proc.stdout, workdir)
         try:
-            return output.model_validate(payload)
+            result = output.model_validate(payload)
         except ValidationError as exc:
             raise ProviderError(
                 f"{self.executable} returned output that does not match the schema: {exc}"
             ) from exc
+        self._log_call(output, started)
+        return result
 
     def generate_questions(self, diff: Diff, difficulty: Difficulty) -> QuestionSet:
         """Write the question set for ``diff``."""
@@ -184,6 +196,22 @@ class AgentCLIProvider:
         return self._run(
             GRADING_SYSTEM_PROMPT, grading_prompt(diff, questions, answers, difficulty), GradeSheet
         )
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Grade one answer again, given the developer's case against ``grade``."""
+        prompt = appeal_prompt(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
+        return self._run(APPEAL_SYSTEM_PROMPT, prompt, QuestionGrade)
 
 
 class ClaudeCodeProvider(AgentCLIProvider):

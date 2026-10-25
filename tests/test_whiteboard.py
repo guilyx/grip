@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import re
 import threading
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, ClassVar
@@ -39,6 +41,7 @@ from grip_hook.whiteboard import (
 )
 from grip_hook.whiteboard_server import (
     FONTS,
+    HEARTBEAT_PATH,
     MAX_BODY,
     WhiteboardServer,
     content_security_policy,
@@ -346,6 +349,16 @@ def test_opposite_edges_are_drawn_side_by_side(board: Board) -> None:
     assert offsets["handle->allow"] == 0
 
 
+def test_the_digest_names_one_board_in_one_mode(board: Board) -> None:
+    digest = _data(board)["digest"]
+    assert re.fullmatch(r"[0-9a-f]{16}", digest)
+    assert _data(board)["digest"] == digest
+    assert _data(board, "interview")["digest"] != digest
+    changed = _mutate(board)
+    changed.pins[0].question = "Why not a sliding log?"
+    assert _data(changed)["digest"] != digest
+
+
 def test_hostile_labels_cannot_escape_the_data_block(board: Board) -> None:
     hostile = _mutate(board)
     hostile.summary = "</script><script>alert(1)</script><!--"
@@ -357,6 +370,17 @@ def test_hostile_labels_cannot_escape_the_data_block(board: Board) -> None:
     assert "<" not in block.group(1)
     assert json.loads(block.group(1)) == data
     assert page.count("<script") == 2  # the data block and grip's own script, nothing else
+
+
+def test_the_page_has_a_heading_a_skip_link_and_a_small_live_region(board: Board) -> None:
+    page = render_page(_data(board))
+    assert re.search(r'<h1 class="sr-only" id="title">', page)
+    assert '<a class="skip" id="skip" href="#panel">' in page
+    # Only the status line is live: the panel would re-read every question on each click.
+    assert re.findall(r'<[^>]*(?:aria-live|role="(?:status|alert)")[^>]*>', page) == [
+        '<p class="sr-only" id="status" role="status">'
+    ]
+    assert ":focus-visible .ring" in page
 
 
 def test_csp_allows_exactly_the_inline_style_and_script(board: Board) -> None:
@@ -517,6 +541,53 @@ def test_server_stops_when_idle(board: Board) -> None:
     assert server.serve() is None
 
 
+def test_heartbeat_is_behind_the_token_and_the_host(
+    served: tuple[_Running, list[dict[str, Any]]],
+) -> None:
+    running, seen = served
+    token = running.server.token
+    status, body, _ = running.request("GET", f"/{token}/{HEARTBEAT_PATH}")
+    assert (status, body) == (204, b"")
+    assert running.request("GET", f"/{HEARTBEAT_PATH}")[0] == 404
+    assert running.request("GET", f"/{token}x/{HEARTBEAT_PATH}")[0] == 404
+    evil_host = {"Host": f"evil.example:{running.server.port}"}
+    assert running.request("GET", f"/{token}/{HEARTBEAT_PATH}", headers=evil_host)[0] == 403
+    assert seen == []
+    assert running.thread.is_alive()
+
+
+def _keep_pinging(running: _Running, path: str, seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and running.thread.is_alive():
+        running.request("GET", path)
+        time.sleep(0.1)
+
+
+def test_heartbeats_keep_an_idle_server_running(board: Board) -> None:
+    running = _Running(WhiteboardServer(render_page(_data(board)), lambda p: p, idle_seconds=1))
+    _keep_pinging(running, f"/{running.server.token}/{HEARTBEAT_PATH}", 2.5)
+    assert running.thread.is_alive()  # 2.5 s without an answer, but the page is open
+    running.thread.join(timeout=5)  # the pings stop, as when the tab closes
+    assert not running.thread.is_alive()
+    assert running.outcome is None
+
+
+def test_requests_without_the_token_do_not_keep_it_running(board: Board) -> None:
+    running = _Running(WhiteboardServer(render_page(_data(board)), lambda p: p, idle_seconds=1))
+    with contextlib.suppress(OSError):  # the server stopped between two pings, as it should
+        _keep_pinging(running, f"/{HEARTBEAT_PATH}", 4)
+    running.thread.join(timeout=5)
+    assert not running.thread.is_alive()
+    assert running.outcome is None
+
+
+def test_the_page_pings_and_keeps_a_draft(board: Board) -> None:
+    page = render_page(_data(board))
+    assert f'fetch("{HEARTBEAT_PATH}"' in page
+    assert "sessionStorage" in page
+    assert "grip stopped: your answers are below, copy them" in page
+
+
 # -- the command -----------------------------------------------------------------------
 
 
@@ -583,6 +654,22 @@ def test_whiteboard_fail_exits_one_and_records_no_pass(
     assert result.exit_code == 1
     assert "below the pass mark" in result.output
     assert CliRunner().invoke(cli, ["check"]).exit_code == 1
+
+
+@pytest.mark.parametrize(("retry", "redrawn"), [("same", False), ("new", True)])
+def test_whiteboard_retry_after_a_failure(
+    in_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_git: Callable[..., str],
+    retry: str,
+    redrawn: bool,
+) -> None:
+    monkeypatch.setenv("GRIP_RETRY_QUESTIONS", retry)
+    run_git("add", "api/handlers.py")
+    assert _run(monkeypatch, {"answers": [""] * 5}).exit_code == 1
+    again = _run(monkeypatch, {"answers": [""] * 5})
+    assert again.exit_code == 1
+    assert ("same diff as" not in again.stderr) is redrawn
 
 
 def test_whiteboard_interview_scores_ticks_and_records_nothing(
