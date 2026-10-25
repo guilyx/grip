@@ -30,6 +30,10 @@ All notable changes to this project are documented here. The format follows
   `--branch`, `--range`), up to 4 KB, as delimited data next to the diff, so questions can
   ask why and grading can weigh what the developer said they meant. Rewording a commit gets
   new questions. `include_commit_messages = false` sends the diff alone.
+- `grip appeal <question> "<why my answer was right>"` has one question of the last graded
+  quiz graded again by the same provider, with the justification as data. It never lowers
+  a grade, allows one appeal per question per quiz, is saved in the report and the history
+  and shown by `grip last`, and records a pass when the new score reaches the pass mark.
 
 ### Changed
 

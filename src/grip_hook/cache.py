@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 
 if TYPE_CHECKING:
     from grip_hook.providers.base import Provider
@@ -188,6 +188,21 @@ class CachedProvider:
     ) -> GradeSheet:
         """Always graded fresh: the answers are what changed."""
         return self.inner.grade(diff, questions, answers, difficulty)
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Always graded fresh, like :meth:`grade`."""
+        return self.inner.appeal(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
 
 
 __all__ = ["CachedProvider", "GenerationCache"]

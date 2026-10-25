@@ -10,8 +10,9 @@ only while ``fake`` is the configured provider. ``--passing-score 0`` or ``--pro
 fake`` can pass a quiz, but that pass does not open the hook. Entries written by older
 versions (digest to timestamp only) cannot be checked that way, so they never count.
 
-The same directory holds ``last-report.json`` (the most recent report), ``history.jsonl``
-(one line per graded quiz, appended forever; ``grip study export`` reads it) and
+The same directory holds ``last-report.json`` (the most recent report), ``last-diff.json``
+(the diff it was graded on, for ``grip appeal``), ``history.jsonl`` (one line per graded
+quiz, appended forever, and once more for each appeal; ``grip study export`` reads it) and
 ``skip.json`` (a one-off or timed pause set by ``grip skip``).
 """
 
@@ -26,6 +27,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from grip_hook.config import Config
+from grip_hook.git import Diff
 from grip_hook.models import Report
 
 FAKE_PROVIDER = "fake"
@@ -59,6 +61,7 @@ class PassMemory:
         self.dir = git_dir / "grip"
         self.path = self.dir / "passed.json"
         self.report_path = self.dir / "last-report.json"
+        self.diff_path = self.dir / "last-diff.json"
         self.history_path = self.dir / "history.jsonl"
         self.ttl = timedelta(hours=ttl_hours)
 
@@ -162,6 +165,39 @@ class PassMemory:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.report_path.write_text(report.model_dump_json(indent=2), "utf-8")
         return self.report_path
+
+    def save_diff(self, diff: Diff) -> Path:
+        """Keep the diff the last report was graded on, so ``grip appeal`` can grade again."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        data = {
+            "digest": diff.digest,
+            "description": diff.description,
+            "stat": diff.stat,
+            "patch": diff.patch,
+            "files": list(diff.files),
+            "truncated": diff.truncated,
+            "context": diff.context,
+            "commits": diff.commits,
+        }
+        self.diff_path.write_text(json.dumps(data), "utf-8")
+        return self.diff_path
+
+    def load_diff(self, digest: str) -> Diff | None:
+        """The diff kept by :meth:`save_diff`, if it is the one with ``digest``."""
+        try:
+            data = json.loads(self.diff_path.read_text("utf-8"))
+            diff = Diff(
+                description=str(data["description"]),
+                stat=str(data["stat"]),
+                patch=str(data["patch"]),
+                files=tuple(str(f) for f in data["files"]),
+                truncated=bool(data["truncated"]),
+                context=str(data.get("context", "")),
+                commits=str(data.get("commits", "")),
+            )
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        return diff if diff.digest == digest else None
 
     def append_history(self, report: Report) -> Path:
         """Append ``report`` as one JSON line to ``history.jsonl`` and return its path."""

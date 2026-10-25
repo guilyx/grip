@@ -455,7 +455,8 @@ with no rubrics and no grading, for sharing a board.
 | The diff, after exclusions and truncation | Sent to the provider | Yes, to the provider you configured |
 | The messages of the commits being quizzed, up to 4 KB | Sent to the provider with the diff | Yes, unless `include_commit_messages = false` |
 | Your answers | Sent to the provider for grading | Yes, to the same provider |
-| The latest report: questions, rubrics, answers, grades | `.git/grip/last-report.json` | No |
+| The latest report: questions, rubrics, answers, grades, appeals | `.git/grip/last-report.json` | No |
+| The diff the latest report was graded on, for `grip appeal` | `.git/grip/last-diff.json` | No |
 | Every graded quiz | `.git/grip/history.jsonl` | No |
 | Passed digests, with score, pass mark and grader | `.git/grip/passed.json` | No |
 | A quiz waiting for an agent | `.git/grip/pending.json` | No |

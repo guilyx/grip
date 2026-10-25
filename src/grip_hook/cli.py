@@ -35,6 +35,7 @@ from grip_hook.agent import (
     questions_payload,
     report_payload,
 )
+from grip_hook.appeal import appeal
 from grip_hook.cache import CachedProvider, GenerationCache
 from grip_hook.config import (
     AGENT_PROVIDERS,
@@ -410,7 +411,13 @@ def _run(
     finally:
         term.close()
     return _decide(
-        git, memory, outcome.report, report_path, "Re-read your change and try again.", cfg=cfg
+        git,
+        memory,
+        outcome.report,
+        report_path,
+        "Re-read your change and try again.",
+        cfg=cfg,
+        diff=diff,
     )
 
 
@@ -433,9 +440,13 @@ def _decide(
     retry_hint: str,
     *,
     cfg: Config,
+    diff: Diff | None = None,
 ) -> int:
-    """Record a graded quiz; exit 0 on a pass, raise :class:`QuizFailed` below the mark."""
-    saved = _record(git, memory, report)
+    """Record a graded quiz; exit 0 on a pass, raise :class:`QuizFailed` below the mark.
+
+    ``diff`` is what was graded, kept for ``grip appeal``; ``None`` keeps the one on record.
+    """
+    saved = _record(git, memory, report, diff)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report.model_dump_json(indent=2), "utf-8")
@@ -499,18 +510,27 @@ def _run_whiteboard(
     except ProviderError as exc:
         return _provider_failed(cfg, exc)
     code = _decide(
-        git, memory, report, report_path, "The page shows where each answer fell short.", cfg=cfg
+        git,
+        memory,
+        report,
+        report_path,
+        "The page shows where each answer fell short.",
+        cfg=cfg,
+        diff=diff,
     )
     _err.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
     return code
 
 
-def _record(git: Git, memory: PassMemory, report: Report) -> Path:
+def _record(git: Git, memory: PassMemory, report: Report, diff: Diff | None = None) -> Path:
     """Persist a graded quiz: last-report.json, history.jsonl and the study registry.
 
+    ``diff``, the change that was graded, is kept next to the report for ``grip appeal``.
     Returns the path of ``last-report.json``. The registry lives in the user's data
     directory, so a failure to write it (read-only home, sandbox) never blocks the quiz.
     """
+    if diff is not None:
+        memory.save_diff(diff)
     saved = memory.save_report(report)
     memory.append_history(report)
     with contextlib.suppress(OSError):
@@ -873,7 +893,7 @@ def grade_cmd(answers_path: Path, report_path: Path | None, **overrides: Any) ->
     answers = parse_answers(text)
     report = grade(pending, answers, cfg, get_provider(cfg))
     memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
-    saved = _record(git, memory, report)
+    saved = _record(git, memory, report, pending.diff)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report.model_dump_json(indent=2), "utf-8")
@@ -977,7 +997,13 @@ def whiteboard_cmd(
         board, diff, cfg, provider, Stage.MANUAL, port=port, open_browser=not no_open, page=page
     )
     _decide(
-        git, memory, report, report_path, "The page shows where each answer fell short.", cfg=cfg
+        git,
+        memory,
+        report,
+        report_path,
+        "The page shows where each answer fell short.",
+        cfg=cfg,
+        diff=diff,
     )
     _out.print(f"[green]grip:[/green] Grip Score {report.score}/{MAX_SCORE}. Defended.")
 
@@ -1964,6 +1990,16 @@ def last_cmd(as_json: bool) -> None:
             a.text for a in sorted(report.answers, key=lambda a: a.question_index)
         ]
         payload["questions"] = [q.question for q in report.questions]
+        payload["appeals"] = [
+            {
+                "index": a.question_index + 1,
+                "old_score": a.old_score,
+                "new_score": a.new_score,
+                "justification": a.justification,
+                "feedback": a.feedback,
+            }
+            for a in report.appeals
+        ]
         payload["at"] = report.created_at.isoformat()
         _emit(payload)
         return
@@ -1981,8 +2017,87 @@ def last_cmd(as_json: bool) -> None:
         answer = by_index.get(grade_.question_index, "") or "(no answer)"
         indented = escape(answer).replace("\n", "\n    ")
         _out.print(f"  [bold]>[/bold] {indented}")
-        _out.print(f"  {grade_.score}/{POINTS_PER_QUESTION}: {escape(grade_.feedback)}\n")
+        _out.print(f"  {grade_.score}/{POINTS_PER_QUESTION}: {escape(grade_.feedback)}")
+        for item in report.appeals:
+            if item.question_index == grade_.question_index:
+                outcome = "upheld" if item.upheld else "not upheld"
+                _out.print(
+                    f"  [dim]appealed, {outcome} ({item.old_score} -> {item.new_score}): "
+                    f"{escape(item.justification)}[/dim]"
+                )
+        _out.print()
     _out.print(report.verdict)
+    if not report.passed:
+        _out.print(
+            "[dim]A grade you think is wrong: grip appeal <question> "
+            '"why your answer was right".[/dim]'
+        )
+
+
+@cli.command(name="appeal")
+@click.argument("question", type=click.IntRange(1, QUESTION_COUNT))
+@click.argument("justification")
+def appeal_cmd(question: int, justification: str) -> None:
+    r"""Have one question of the last graded quiz graded again, with your case for it.
+
+    QUESTION is its number in `grip last`; JUSTIFICATION says why your answer was right.
+    The provider that graded the quiz grades your original answer again with it. What
+    only the justification says earns nothing, an appeal never lowers a grade, and each
+    question can be appealed once per quiz. When the new score reaches the pass mark, the
+    pass is remembered as if the quiz had passed.
+
+    \b
+    grip appeal 3 "the retry loop is bounded by max_attempts, so it cannot spin forever"
+    """
+    git = Git()
+    cfg = _config(git)
+    memory = PassMemory(git.git_dir(), cfg.remember_passes_hours)
+    report = memory.last_report()
+    if report is None:
+        raise GripError("no quiz has been graded in this repository yet")
+    diff = memory.load_diff(report.diff_digest)
+    if diff is None:
+        raise GripError(
+            "the diff the last quiz was graded on is not on record any more, so it cannot be "
+            "graded again; take the quiz again"
+        )
+    index = question - 1
+    # The same provider and model as the quiz, whatever the configuration says now.
+    cfg = _config(git, provider=report.provider, model=report.model or None)
+    with _err.status("grip is reading your appeal..."):
+        updated = appeal(
+            report,
+            index,
+            justification,
+            diff=diff,
+            provider=get_provider(cfg),
+            difficulty=cfg.for_files(diff.files).difficulty,  # as [[paths]] set it for the quiz
+        )
+    record = updated.appeals[-1]
+    focus = escape(report.questions[index].focus)
+    if record.upheld:
+        _out.print(
+            f"[green]grip:[/green] appeal upheld. Q{question} ({focus}): "
+            f"{record.old_score} -> {record.new_score}/{POINTS_PER_QUESTION}."
+        )
+    else:
+        _out.print(
+            f"[yellow]grip:[/yellow] appeal not upheld. Q{question} ({focus}) stays at "
+            f"{record.old_score}/{POINTS_PER_QUESTION}."
+        )
+    _out.print(f"  {escape(record.feedback)}")
+    verdict = "[green]PASS[/green]" if updated.passed else "[red]FAIL[/red]"
+    _out.print(
+        f"Grip Score {report.score} -> {updated.score}/{MAX_SCORE} {verdict} "
+        f"[dim](pass mark {updated.passing_score})[/dim]"
+    )
+    if report.passed:
+        # Already passed and remembered: an appeal must not restart that clock.
+        _record(git, memory, updated)
+        return
+    _decide(git, memory, updated, None, "Appeal another question, or take the quiz again.", cfg=cfg)
+    if updated.passed:
+        _out.print("[green]grip:[/green] passed on appeal; the commit or push can go through.")
 
 
 @cli.command()
@@ -2252,7 +2367,7 @@ def submit_cmd(no_tests: bool, dry_run: bool, report_path: Path | None, **overri
         outcome = run_quiz(diff=diff, cfg=cfg, provider=provider, term=term, stage=Stage.MANUAL)
     finally:
         term.close()
-    _record(git, PassMemory(git.git_dir(), cfg.remember_passes_hours), outcome.report)
+    _record(git, PassMemory(git.git_dir(), cfg.remember_passes_hours), outcome.report, diff)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(outcome.report.model_dump_json(indent=2), "utf-8")
