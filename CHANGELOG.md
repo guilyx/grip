@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `grip appeal <question> "<why my answer was right>"` has one question of the last graded
+  quiz graded again by the same provider, with the justification as data. It never lowers
+  a grade, allows one appeal per question per quiz, is saved in the report and the history
+  and shown by `grip last`, and records a pass when the new score reaches the pass mark.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed

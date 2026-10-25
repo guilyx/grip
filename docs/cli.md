@@ -190,8 +190,44 @@ Prints the effective configuration after merging files, environment and defaults
 
 Shows the last graded quiz in this repository: each question with its focus, your answer,
 the points and the feedback, then the verdict. Rubrics are not shown. `--json` prints the
-same payload as `grip grade` plus `summary`, `questions`, `answers` and `at`; the
-`/grip-explain` skill builds a commit message from it.
+same payload as `grip grade` plus `summary`, `questions`, `answers`, `appeals` and `at`;
+the `/grip-explain` skill builds a commit message from it.
+
+## `grip appeal`
+
+A grade can be wrong: the model misread the code, or the rubric missed a correct answer.
+`grip appeal` has one question of the last graded quiz graded again, with your case for it.
+
+```bash
+grip appeal 3 "the loop is bounded by max_attempts, so it cannot spin forever"
+```
+
+The number is the question's number in `grip last`. The provider and model that graded the
+quiz grade your original answer again, with the diff, the rubric, the first grade and your
+justification; the justification goes to the model as data, like your answers.
+
+- What only the justification says earns nothing: it can explain what your answer meant,
+  or show that the rubric misread the code, but you have seen the feedback by now.
+- An appeal never lowers a grade.
+- Each question can be appealed once per quiz. A new quiz on the same diff can be appealed
+  again.
+- When the new score reaches the quiz's pass mark, the pass is remembered exactly as a
+  passed quiz is, and the push hook lets the diff through. Appealing a quiz that already
+  passed updates its score but does not restart the time its pass is remembered.
+
+```text
+grip: appeal upheld. Q3 (edge case): 6 -> 18/20.
+  The answer names the bound; the first grade missed that max_attempts caps the loop.
+Grip Score 58 -> 70/100 PASS (pass mark 70)
+grip: passed on appeal; the commit or push can go through.
+```
+
+The appeal (question, old and new score, justification and feedback) is saved in
+`.git/grip/last-report.json` and appended to the history, and `grip last` shows it under
+the question. Exit codes: `0` the quiz now passes, `1` it still fails, `2` error (no graded
+quiz, a question appealed already, an empty justification). Appeals need the diff the quiz
+was graded on, which grip keeps in `.git/grip/last-diff.json`; a quiz graded before this
+version cannot be appealed.
 
 ## `grip forget`
 

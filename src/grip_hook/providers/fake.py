@@ -14,6 +14,9 @@ Two modes:
 Without a script, the whiteboard is drawn from the changed files: an untrusted caller, one
 box per file in order, and the five whiteboard questions pinned across them.
 
+An appeal (``grip appeal``) is upheld with full marks when the justification says
+``because``, or with a scripted rule's score when one matches it and beats the first grade.
+
 ``GRIP_FAKE_DELAY`` (seconds, float) makes each call sleep, so the spinner is visible.
 """
 
@@ -187,6 +190,28 @@ class FakeProvider:
         if self.script is not None:
             return GradeSheet(grades=grades, verdict=self.script.verdict_for(total))
         return GradeSheet(grades=grades, verdict=f"Fake verdict: {total} points.")
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Uphold an appeal that says ``because`` (or matches a scripted rule), else keep it."""
+        self._pause()
+        index = answer.question_index
+        score, feedback = grade.score, "Appeal not upheld: the first grade stands."
+        if self.script is not None:
+            scripted, why = self.script.questions[index].grade(justification)
+            if scripted > score:
+                score, feedback = scripted, f"Appeal upheld. {why}"
+        elif "because" in justification.lower():
+            score, feedback = POINTS_PER_QUESTION, "Appeal upheld: the answer was right."
+        return QuestionGrade(question_index=index, score=score, feedback=feedback)
 
 
 def _board_from_files(files: list[str]) -> Board:

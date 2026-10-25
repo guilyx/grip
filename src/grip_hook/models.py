@@ -116,6 +116,27 @@ class GradeSheet(BaseModel):
         return min(sum(g.score for g in self.grades), MAX_SCORE)
 
 
+class Appeal(BaseModel):
+    """A developer's appeal against the grade of one question, and how it ended."""
+
+    question_index: int
+    """Zero-based index of the appealed question."""
+    justification: str
+    """Why the developer says their answer was right, as they wrote it."""
+    old_score: int
+    """Points before the appeal."""
+    new_score: int
+    """Points after it: never lower than ``old_score``."""
+    feedback: str
+    """What the second grading said about the appeal."""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def upheld(self) -> bool:
+        """Whether the appeal raised the score."""
+        return self.new_score > self.old_score
+
+
 class Report(BaseModel):
     """Everything about one quiz run, persisted as JSON for later inspection."""
 
@@ -133,6 +154,8 @@ class Report(BaseModel):
     answers: list[Answer]
     grades: list[QuestionGrade]
     verdict: str
+    appeals: list[Appeal] = Field(default_factory=list)
+    """``grip appeal`` re-grades, oldest first; at most one per question."""
 
     @property
     def max_score(self) -> int:

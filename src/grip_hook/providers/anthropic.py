@@ -11,11 +11,13 @@ from pydantic import BaseModel
 from grip_hook.config import DEFAULT_MODEL, Config
 from grip_hook.errors import ProviderError
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 from grip_hook.prompts import (
+    APPEAL_SYSTEM_PROMPT,
     BOARD_SYSTEM_PROMPT,
     GRADING_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    appeal_prompt,
     board_prompt,
     grading_prompt,
     question_prompt,
@@ -140,6 +142,22 @@ class AnthropicProvider:
         return self._parse(
             GRADING_SYSTEM_PROMPT, grading_prompt(diff, questions, answers, difficulty), GradeSheet
         )
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Grade one answer again, given the developer's case against ``grade``."""
+        prompt = appeal_prompt(
+            diff, question, answer, grade, justification=justification, difficulty=difficulty
+        )
+        return self._parse(APPEAL_SYSTEM_PROMPT, prompt, QuestionGrade)
 
 
 __all__ = ["AnthropicProvider"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from grip_hook.git import Diff
-from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionSet
+from grip_hook.models import Answer, Difficulty, GradeSheet, Question, QuestionGrade, QuestionSet
 
 if TYPE_CHECKING:
     from grip_hook.whiteboard import Board
@@ -39,6 +39,19 @@ class Provider(Protocol):
         difficulty: Difficulty,
     ) -> GradeSheet:
         """Grade every answer in one go."""
+        ...
+
+    def appeal(
+        self,
+        diff: Diff,
+        question: Question,
+        answer: Answer,
+        grade: QuestionGrade,
+        *,
+        justification: str,
+        difficulty: Difficulty,
+    ) -> QuestionGrade:
+        """Grade one answer again, given the developer's case against ``grade``."""
         ...
 
 
