@@ -2071,7 +2071,7 @@ def appeal_cmd(question: int, justification: str) -> None:
             justification,
             diff=diff,
             provider=get_provider(cfg),
-            difficulty=cfg.difficulty,
+            difficulty=cfg.for_files(diff.files).difficulty,  # as [[paths]] set it for the quiz
         )
     record = updated.appeals[-1]
     focus = escape(report.questions[index].focus)

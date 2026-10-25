@@ -177,6 +177,7 @@ class PassMemory:
             "files": list(diff.files),
             "truncated": diff.truncated,
             "context": diff.context,
+            "commits": diff.commits,
         }
         self.diff_path.write_text(json.dumps(data), "utf-8")
         return self.diff_path
@@ -192,6 +193,7 @@ class PassMemory:
                 files=tuple(str(f) for f in data["files"]),
                 truncated=bool(data["truncated"]),
                 context=str(data.get("context", "")),
+                commits=str(data.get("commits", "")),
             )
         except (OSError, ValueError, KeyError, TypeError):
             return None

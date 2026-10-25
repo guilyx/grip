@@ -300,3 +300,67 @@ def test_a_quiz_graded_through_ask_and_grade_can_be_appealed(
     result = runner.invoke(cli, ["appeal", "1", WHY])
     assert result.exit_code == 0, result.output
     assert runner.invoke(cli, ["check"]).exit_code == 0
+
+
+def test_the_appeal_sees_the_commit_messages_of_the_quiz(
+    in_repo: Path,
+    runner: CliRunner,
+    run_git: Callable[..., str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = run_git("rev-parse", "HEAD").strip()
+    (in_repo / "a.py").write_text("x = 1\n")
+    run_git("add", "a.py")
+    run_git("commit", "-q", "-m", "Bound the retry loop", "-m", "It could spin forever.")
+    seen: list[str] = []
+
+    class Recording(FakeProvider):
+        def appeal(self, diff: Diff, *args: Any, **kwargs: Any) -> QuestionGrade:
+            seen.append(diff.commits)
+            return super().appeal(diff, *args, **kwargs)
+
+    monkeypatch.setattr(cli_module, "get_provider", Recording)
+    monkeypatch.setattr(cli_module, "open_terminal", FakeTerminalFactory([SHORT] * 5))
+    assert runner.invoke(cli, ["quiz", "--range", f"{base}..HEAD"]).exit_code == 1
+    report = _memory(in_repo).last_report()
+    assert report is not None
+    kept = _memory(in_repo).load_diff(report.diff_digest)
+    assert kept is not None and "It could spin forever." in kept.commits
+
+    result = runner.invoke(cli, ["appeal", "1", WHY])
+    assert result.exit_code == 0, result.output
+    assert len(seen) == 1 and "Bound the retry loop" in seen[0]
+    assert "<commits>" in appeal_prompt(
+        kept,
+        Question(focus="behaviour", question="q", rubric="r"),
+        Answer(question_index=0, text="a"),
+        QuestionGrade(question_index=0, score=10, feedback="f"),
+        justification=WHY,
+        difficulty=Difficulty.NORMAL,
+    )
+    assert "<commits>" in APPEAL_SYSTEM_PROMPT
+
+
+def test_the_appeal_grades_at_the_difficulty_of_the_files(
+    in_repo: Path,
+    runner: CliRunner,
+    stage_change: Callable[[str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (in_repo / ".grip.toml").write_text(
+        'provider = "fake"\nmodel = "fake"\npassing_score = 60\n\n'
+        '[[paths]]\nmatch = "core/**"\ndifficulty = "hard"\n'
+    )
+    stage_change("core/a.py", "x = 1\n")
+    seen: list[Difficulty] = []
+
+    class Recording(FakeProvider):
+        def appeal(self, *args: Any, difficulty: Difficulty, **kwargs: Any) -> QuestionGrade:
+            seen.append(difficulty)
+            return super().appeal(*args, difficulty=difficulty, **kwargs)
+
+    monkeypatch.setattr(cli_module, "get_provider", Recording)
+    monkeypatch.setattr(cli_module, "open_terminal", FakeTerminalFactory([SHORT] * 5))
+    assert runner.invoke(cli, ["quiz"]).exit_code == 1
+    assert runner.invoke(cli, ["appeal", "1", WHY]).exit_code == 0
+    assert seen == [Difficulty.HARD]
