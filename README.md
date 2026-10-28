@@ -135,8 +135,8 @@ button reads [CITATION.cff](https://github.com/guilyx/grip/blob/main/CITATION.cf
 
 <a href="https://star-history.com/#guilyx/grip&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=guilyx/grip&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=guilyx/grip&type=Date" />
-    <img alt="Star history of guilyx/grip" src="https://api.star-history.com/svg?repos=guilyx/grip&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=guilyx/grip&type=Date&logscale&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=guilyx/grip&type=Date&logscale" />
+    <img alt="Star history of guilyx/grip" src="https://api.star-history.com/svg?repos=guilyx/grip&type=Date&logscale" />
   </picture>
 </a>
